@@ -41,8 +41,7 @@ repos:
         name: eslint (frontend)
         entry: npx eslint --max-warnings=0
         language: system
-        files: \.(js|ts|svelte)$
-        exclude: ^(node_modules|build|static)/
+        files: ^src/.*\.(js|ts|svelte)$
       - id: prettier-check
         name: prettier (frontend)
         entry: npx prettier --check
