@@ -1,0 +1,134 @@
+name: CI
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+jobs:
+  # ──────────────────────────────────────────────
+  # VALIDATE (PR only)
+  # ──────────────────────────────────────────────
+
+  validate-branch-name:
+    name: Branch name
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Check branch naming convention
+        run: |
+          BRANCH="${{ github.head_ref }}"
+          echo "Branch: $BRANCH"
+          echo "$BRANCH" | grep -qE "^(feat|fix|chore|refactor|docs|test)/" || {
+            echo ""
+            echo "ERROR: Branch '$BRANCH' does not follow naming convention."
+            echo "  Allowed: feat/, fix/, chore/, refactor/, docs/, test/"
+            echo "  Example: feat/backend/auto-routing"
+            exit 1
+          }
+
+  validate-pr-title:
+    name: PR title
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Check Conventional Commits format
+        run: |
+          TITLE="${{ github.event.pull_request.title }}"
+          echo "PR title: $TITLE"
+          echo "$TITLE" | grep -qE "^(feat|fix|chore|refactor|docs|test|ci|perf|style|build|revert)(\(.+\))?: .+" || {
+            echo ""
+            echo "ERROR: PR title does not follow Conventional Commits format."
+            echo "  Format: <type>(<scope>): <description>"
+            echo "  Examples:"
+            echo "    feat(backend): add auto-routing endpoint"
+            echo "    fix(frontend): model selector overflow"
+            exit 1
+          }
+
+  validate-version-drift:
+    name: Version consistency
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check package.json vs package-lock.json version
+        run: |
+          PKG=$(node -e "console.log(require('./package.json').version)")
+          LOCK=$(node -e "console.log(require('./package-lock.json').version)")
+          echo "package.json:      $PKG"
+          echo "package-lock.json: $LOCK"
+          [ "$PKG" = "$LOCK" ] || {
+            echo "ERROR: version mismatch — run: npm install --package-lock-only"
+            exit 1
+          }
+
+  # ──────────────────────────────────────────────
+  # LINT
+  # ──────────────────────────────────────────────
+
+  lint-frontend:
+    name: Lint frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx eslint . --max-warnings=0
+      - run: npx prettier --check "src/**/*.{js,ts,svelte,css,json}"
+
+  lint-backend:
+    name: Lint backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install ruff
+      - run: ruff check backend/
+      - run: ruff format --check backend/
+
+  # ──────────────────────────────────────────────
+  # TYPE CHECK
+  # ──────────────────────────────────────────────
+
+  check-svelte:
+    name: Svelte type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+
+  # ──────────────────────────────────────────────
+  # BUILD
+  # ──────────────────────────────────────────────
+
+  build-docker:
+    name: Build Docker image
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
+    needs: [lint-frontend, lint-backend, check-svelte]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build image (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          build-args: |
+            BUILD_HASH=${{ github.sha }}
+          tags: gpthub:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
