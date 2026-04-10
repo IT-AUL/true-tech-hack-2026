@@ -1,9 +1,8 @@
-import re
 import os
+import re
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
-from typing import Dict
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -13,7 +12,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
-def set_security_headers() -> Dict[str, str]:
+def set_security_headers() -> dict[str, str]:
     """
     Sets security headers based on environment variables.
 

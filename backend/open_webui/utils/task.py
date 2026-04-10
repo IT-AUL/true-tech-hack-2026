@@ -1,14 +1,12 @@
 import logging
 import math
 import re
-from datetime import datetime
-from typing import Optional, Any
 import uuid
-
-
-from open_webui.utils.misc import get_last_user_message, get_messages_content
+from datetime import datetime
+from typing import Any
 
 from open_webui.config import DEFAULT_RAG_TEMPLATE
+from open_webui.utils.misc import get_last_user_message, get_messages_content
 
 log = logging.getLogger(__name__)
 
@@ -35,7 +33,7 @@ def prompt_variables_template(template: str, variables: dict[str, str]) -> str:
     return template
 
 
-def prompt_template(template: str, user: Optional[Any] = None) -> str:
+def prompt_template(template: str, user: Any | None = None) -> str:
     USER_VARIABLES = {}
 
     if user:
@@ -55,7 +53,7 @@ def prompt_template(template: str, user: Optional[Any] = None) -> str:
 
                     today = datetime.now()
                     age = today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
-                except Exception as e:
+                except Exception:
                     pass
 
             USER_VARIABLES = {
@@ -178,7 +176,7 @@ def apply_content_filter(messages: list[dict], filter_str: str) -> list[dict]:
     return result
 
 
-def replace_messages_variable(template: str, messages: Optional[list[dict]] = None) -> str:
+def replace_messages_variable(template: str, messages: list[dict] | None = None) -> str:
     def replacement_function(match):
         # Groups: (1) filter for bare MESSAGES
         #         (2) START count, (3) filter for START
@@ -282,7 +280,7 @@ def rag_template(template: str, context: str, query: str):
     return template
 
 
-def title_generation_template(template: str, messages: list[dict], user: Optional[Any] = None) -> str:
+def title_generation_template(template: str, messages: list[dict], user: Any | None = None) -> str:
     prompt = get_last_user_message(messages)
     template = replace_prompt_variable(template, prompt)
     template = replace_messages_variable(template, messages)
@@ -292,7 +290,7 @@ def title_generation_template(template: str, messages: list[dict], user: Optiona
     return template
 
 
-def follow_up_generation_template(template: str, messages: list[dict], user: Optional[Any] = None) -> str:
+def follow_up_generation_template(template: str, messages: list[dict], user: Any | None = None) -> str:
     prompt = get_last_user_message(messages)
     template = replace_prompt_variable(template, prompt)
     template = replace_messages_variable(template, messages)
@@ -301,7 +299,7 @@ def follow_up_generation_template(template: str, messages: list[dict], user: Opt
     return template
 
 
-def tags_generation_template(template: str, messages: list[dict], user: Optional[Any] = None) -> str:
+def tags_generation_template(template: str, messages: list[dict], user: Any | None = None) -> str:
     prompt = get_last_user_message(messages)
     template = replace_prompt_variable(template, prompt)
     template = replace_messages_variable(template, messages)
@@ -310,7 +308,7 @@ def tags_generation_template(template: str, messages: list[dict], user: Optional
     return template
 
 
-def image_prompt_generation_template(template: str, messages: list[dict], user: Optional[Any] = None) -> str:
+def image_prompt_generation_template(template: str, messages: list[dict], user: Any | None = None) -> str:
     prompt = get_last_user_message(messages)
     template = replace_prompt_variable(template, prompt)
     template = replace_messages_variable(template, messages)
@@ -319,7 +317,7 @@ def image_prompt_generation_template(template: str, messages: list[dict], user: 
     return template
 
 
-def emoji_generation_template(template: str, prompt: str, user: Optional[Any] = None) -> str:
+def emoji_generation_template(template: str, prompt: str, user: Any | None = None) -> str:
     template = replace_prompt_variable(template, prompt)
     template = prompt_template(template, user)
 
@@ -329,9 +327,9 @@ def emoji_generation_template(template: str, prompt: str, user: Optional[Any] = 
 def autocomplete_generation_template(
     template: str,
     prompt: str,
-    messages: Optional[list[dict]] = None,
-    type: Optional[str] = None,
-    user: Optional[Any] = None,
+    messages: list[dict] | None = None,
+    type: str | None = None,
+    user: Any | None = None,
 ) -> str:
     template = template.replace('{{TYPE}}', type if type else '')
     template = replace_prompt_variable(template, prompt)
@@ -341,7 +339,7 @@ def autocomplete_generation_template(
     return template
 
 
-def query_generation_template(template: str, messages: list[dict], user: Optional[Any] = None) -> str:
+def query_generation_template(template: str, messages: list[dict], user: Any | None = None) -> str:
     prompt = get_last_user_message(messages)
     template = replace_prompt_variable(template, prompt)
     template = replace_messages_variable(template, messages)

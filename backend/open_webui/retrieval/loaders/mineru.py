@@ -1,12 +1,12 @@
-import os
-import time
-import requests
 import logging
+import os
 import tempfile
+import time
 import zipfile
-from typing import List, Optional
-from langchain_core.documents import Document
+
+import requests
 from fastapi import HTTPException, status
+from langchain_core.documents import Document
 
 log = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ class MinerULoader:
         api_url: str = 'http://localhost:8000',
         api_key: str = '',
         params: dict = None,
-        timeout: Optional[int] = 300,
+        timeout: int | None = 300,
     ):
         self.file_path = file_path
         self.api_mode = api_mode.lower()
@@ -52,7 +52,7 @@ class MinerULoader:
         if self.api_mode == 'cloud' and not self.api_key:
             raise ValueError('API key is required for Cloud API mode')
 
-    def load(self) -> List[Document]:
+    def load(self) -> list[Document]:
         """
         Main entry point for loading and parsing the document.
         Routes to Cloud or Local API based on api_mode.
@@ -66,7 +66,7 @@ class MinerULoader:
             log.error(f'Error loading document with MinerU: {e}')
             raise
 
-    def _load_local_api(self) -> List[Document]:
+    def _load_local_api(self) -> list[Document]:
         """
         Load document using Local API (synchronous).
         Posts file to /file_parse endpoint and gets immediate response.
@@ -172,7 +172,7 @@ class MinerULoader:
 
         return [Document(page_content=markdown_content, metadata=metadata)]
 
-    def _load_cloud_api(self) -> List[Document]:
+    def _load_cloud_api(self) -> list[Document]:
         """
         Load document using Cloud API (asynchronous).
         Uses batch upload endpoint to avoid need for public file URLs.
@@ -289,7 +289,7 @@ class MinerULoader:
         """
         Upload file to presigned URL (no authentication needed).
         """
-        log.info(f'Uploading file to presigned URL')
+        log.info('Uploading file to presigned URL')
 
         try:
             with open(self.file_path, 'rb') as f:
@@ -447,7 +447,6 @@ class MinerULoader:
 
                 # Find markdown file - search recursively for any .md file
                 markdown_content = None
-                found_md_path = None
 
                 # First, list all files in the ZIP for debugging
                 all_files = []
@@ -457,10 +456,9 @@ class MinerULoader:
                         all_files.append(full_path)
                         # Look for any .md file
                         if file.endswith('.md'):
-                            found_md_path = full_path
                             log.info(f'Found markdown file at: {full_path}')
                             try:
-                                with open(full_path, 'r', encoding='utf-8') as f:
+                                with open(full_path, encoding='utf-8') as f:
                                     markdown_content = f.read()
                                 if markdown_content:  # Use the first non-empty markdown file
                                     break

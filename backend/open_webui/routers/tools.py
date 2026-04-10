@@ -1,44 +1,39 @@
 import logging
-from pathlib import Path
-from typing import Optional
-import time
 import re
+import time
+from typing import Optional
+
 import aiohttp
-from open_webui.env import AIOHTTP_CLIENT_TIMEOUT
-from open_webui.models.groups import Groups
-from pydantic import BaseModel, HttpUrl
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy.orm import Session
+from open_webui.config import BYPASS_ADMIN_ACCESS_CONTROL, CACHE_DIR
+from open_webui.constants import ERROR_MESSAGES
+from open_webui.env import AIOHTTP_CLIENT_TIMEOUT
 from open_webui.internal.db import get_session
-
-
-from open_webui.models.oauth_sessions import OAuthSessions
+from open_webui.models.access_grants import AccessGrants
+from open_webui.models.groups import Groups
 from open_webui.models.tools import (
+    ToolAccessResponse,
     ToolForm,
     ToolModel,
     ToolResponse,
-    ToolUserResponse,
-    ToolAccessResponse,
     Tools,
+    ToolUserResponse,
 )
-from open_webui.models.access_grants import AccessGrants
+from open_webui.utils.access_control import (
+    filter_allowed_access_grants,
+    has_access,
+    has_permission,
+)
+from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.plugin import (
+    get_tool_module_from_cache,
     load_tool_module_by_id,
     replace_imports,
-    get_tool_module_from_cache,
     resolve_valves_schema_options,
 )
-from open_webui.utils.tools import get_tool_specs
-from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.utils.access_control import (
-    has_permission,
-    has_access,
-    filter_allowed_access_grants,
-)
-from open_webui.utils.tools import get_tool_servers
-
-from open_webui.config import CACHE_DIR, BYPASS_ADMIN_ACCESS_CONTROL
-from open_webui.constants import ERROR_MESSAGES
+from open_webui.utils.tools import get_tool_servers, get_tool_specs
+from pydantic import BaseModel, HttpUrl
+from sqlalchemy.orm import Session
 
 log = logging.getLogger(__name__)
 

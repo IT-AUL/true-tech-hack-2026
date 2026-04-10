@@ -1,54 +1,44 @@
 import asyncio
-import random
-
-import socketio
 import logging
+import random
 import sys
 import time
-from typing import Dict, Set
-from redis import asyncio as aioredis
+
 import pycrdt as Y
-
-from open_webui.models.users import Users, UserNameResponse
-from open_webui.models.channels import Channels
-from open_webui.models.chats import Chats
-from open_webui.models.notes import Notes, NoteUpdateForm
-from open_webui.utils.redis import (
-    get_sentinels_from_env,
-    get_sentinel_url_from_env,
-)
-
+import socketio
 from open_webui.config import (
     CORS_ALLOW_ORIGIN,
 )
-
 from open_webui.env import (
-    VERSION,
     ENABLE_WEBSOCKET_SUPPORT,
+    GLOBAL_LOG_LEVEL,
+    REDIS_KEY_PREFIX,
+    WEBSOCKET_EVENT_CALLER_TIMEOUT,
     WEBSOCKET_MANAGER,
-    WEBSOCKET_REDIS_URL,
     WEBSOCKET_REDIS_CLUSTER,
     WEBSOCKET_REDIS_LOCK_TIMEOUT,
-    WEBSOCKET_SENTINEL_PORT,
-    WEBSOCKET_SENTINEL_HOSTS,
-    REDIS_KEY_PREFIX,
     WEBSOCKET_REDIS_OPTIONS,
-    WEBSOCKET_SERVER_PING_TIMEOUT,
-    WEBSOCKET_SERVER_PING_INTERVAL,
-    WEBSOCKET_SERVER_LOGGING,
+    WEBSOCKET_REDIS_URL,
+    WEBSOCKET_SENTINEL_HOSTS,
+    WEBSOCKET_SENTINEL_PORT,
     WEBSOCKET_SERVER_ENGINEIO_LOGGING,
-    WEBSOCKET_EVENT_CALLER_TIMEOUT,
+    WEBSOCKET_SERVER_LOGGING,
+    WEBSOCKET_SERVER_PING_INTERVAL,
+    WEBSOCKET_SERVER_PING_TIMEOUT,
 )
-from open_webui.utils.auth import decode_token
+from open_webui.models.access_grants import AccessGrants
+from open_webui.models.channels import Channels
+from open_webui.models.chats import Chats
+from open_webui.models.notes import Notes, NoteUpdateForm
+from open_webui.models.users import UserNameResponse, Users
 from open_webui.socket.utils import RedisDict, RedisLock, YdocManager
 from open_webui.tasks import create_task, stop_item_tasks
-from open_webui.utils.redis import get_redis_connection
 from open_webui.utils.access_control import has_permission
-from open_webui.models.access_grants import AccessGrants
-
-
-from open_webui.env import (
-    GLOBAL_LOG_LEVEL,
+from open_webui.utils.auth import decode_token
+from open_webui.utils.redis import (
+    get_redis_connection,
+    get_sentinel_url_from_env,
+    get_sentinels_from_env,
 )
 
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
@@ -211,11 +201,10 @@ async def periodic_usage_pool_cleanup():
     try:
         while True:
             if not renew_func():
-                log.error(f'Unable to renew cleanup lock. Exiting usage pool cleanup.')
+                log.error('Unable to renew cleanup lock. Exiting usage pool cleanup.')
                 raise Exception('Unable to renew usage pool cleanup lock.')
 
             now = int(time.time())
-            send_usage = False
             for model_id, connections in list(USAGE_POOL.items()):
                 # Creating a list of sids to remove if they have timed out
                 expired_sids = [
@@ -231,7 +220,6 @@ async def periodic_usage_pool_cleanup():
                 else:
                     USAGE_POOL[model_id] = connections
 
-                send_usage = True
             await asyncio.sleep(TIMEOUT_DURATION)
     finally:
         release_func()
@@ -761,7 +749,7 @@ async def yjs_awareness_update(sid, data):
 @sio.event
 async def disconnect(sid):
     if sid in SESSION_POOL:
-        user = SESSION_POOL[sid]
+        SESSION_POOL[sid]
         del SESSION_POOL[sid]
 
         # Clean up USAGE_POOL entries for this session

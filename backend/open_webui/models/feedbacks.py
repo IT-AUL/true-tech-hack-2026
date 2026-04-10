@@ -1,14 +1,12 @@
 import logging
 import time
 import uuid
-from typing import Optional
 
-from sqlalchemy.orm import Session
-from open_webui.internal.db import Base, JSONField, get_db, get_db_context
+from open_webui.internal.db import Base, get_db_context
 from open_webui.models.users import User
-
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import BigInteger, Column, Text, JSON, Boolean
+from sqlalchemy import JSON, BigInteger, Column, Text
+from sqlalchemy.orm import Session
 
 log = logging.getLogger(__name__)
 
@@ -36,9 +34,9 @@ class FeedbackModel(BaseModel):
     user_id: str
     version: int
     type: str
-    data: Optional[dict] = None
-    meta: Optional[dict] = None
-    snapshot: Optional[dict] = None
+    data: dict | None = None
+    meta: dict | None = None
+    snapshot: dict | None = None
     created_at: int
     updated_at: int
 
@@ -55,8 +53,8 @@ class FeedbackResponse(BaseModel):
     user_id: str
     version: int
     type: str
-    data: Optional[dict] = None
-    meta: Optional[dict] = None
+    data: dict | None = None
+    meta: dict | None = None
     created_at: int
     updated_at: int
 
@@ -72,36 +70,36 @@ class LeaderboardFeedbackData(BaseModel):
     """Minimal feedback data for leaderboard computation (excludes snapshot/meta)."""
 
     id: str
-    data: Optional[dict] = None
+    data: dict | None = None
 
 
 class RatingData(BaseModel):
-    rating: Optional[str | int] = None
-    model_id: Optional[str] = None
-    sibling_model_ids: Optional[list[str]] = None
-    reason: Optional[str] = None
-    comment: Optional[str] = None
+    rating: str | int | None = None
+    model_id: str | None = None
+    sibling_model_ids: list[str] | None = None
+    reason: str | None = None
+    comment: str | None = None
     model_config = ConfigDict(extra='allow', protected_namespaces=())
 
 
 class MetaData(BaseModel):
-    arena: Optional[bool] = None
-    chat_id: Optional[str] = None
-    message_id: Optional[str] = None
-    tags: Optional[list[str]] = None
+    arena: bool | None = None
+    chat_id: str | None = None
+    message_id: str | None = None
+    tags: list[str] | None = None
     model_config = ConfigDict(extra='allow')
 
 
 class SnapshotData(BaseModel):
-    chat: Optional[dict] = None
+    chat: dict | None = None
     model_config = ConfigDict(extra='allow')
 
 
 class FeedbackForm(BaseModel):
     type: str
-    data: Optional[RatingData] = None
-    meta: Optional[dict] = None
-    snapshot: Optional[SnapshotData] = None
+    data: RatingData | None = None
+    meta: dict | None = None
+    snapshot: SnapshotData | None = None
     model_config = ConfigDict(extra='allow')
 
 
@@ -119,7 +117,7 @@ class UserResponse(BaseModel):
 
 
 class FeedbackUserResponse(FeedbackResponse):
-    user: Optional[UserResponse] = None
+    user: UserResponse | None = None
 
 
 class FeedbackListResponse(BaseModel):
@@ -140,8 +138,8 @@ class ModelHistoryResponse(BaseModel):
 
 class FeedbackTable:
     def insert_new_feedback(
-        self, user_id: str, form_data: FeedbackForm, db: Optional[Session] = None
-    ) -> Optional[FeedbackModel]:
+        self, user_id: str, form_data: FeedbackForm, db: Session | None = None
+    ) -> FeedbackModel | None:
         with get_db_context(db) as db:
             id = str(uuid.uuid4())
             feedback = FeedbackModel(
@@ -167,7 +165,7 @@ class FeedbackTable:
                 log.exception(f'Error creating a new feedback: {e}')
                 return None
 
-    def get_feedback_by_id(self, id: str, db: Optional[Session] = None) -> Optional[FeedbackModel]:
+    def get_feedback_by_id(self, id: str, db: Session | None = None) -> FeedbackModel | None:
         try:
             with get_db_context(db) as db:
                 feedback = db.query(Feedback).filter_by(id=id).first()
@@ -177,9 +175,7 @@ class FeedbackTable:
         except Exception:
             return None
 
-    def get_feedback_by_id_and_user_id(
-        self, id: str, user_id: str, db: Optional[Session] = None
-    ) -> Optional[FeedbackModel]:
+    def get_feedback_by_id_and_user_id(self, id: str, user_id: str, db: Session | None = None) -> FeedbackModel | None:
         try:
             with get_db_context(db) as db:
                 feedback = db.query(Feedback).filter_by(id=id, user_id=user_id).first()
@@ -189,7 +185,7 @@ class FeedbackTable:
         except Exception:
             return None
 
-    def get_feedbacks_by_chat_id(self, chat_id: str, db: Optional[Session] = None) -> list[FeedbackModel]:
+    def get_feedbacks_by_chat_id(self, chat_id: str, db: Session | None = None) -> list[FeedbackModel]:
         """Get all feedbacks for a specific chat."""
         try:
             with get_db_context(db) as db:
@@ -209,7 +205,7 @@ class FeedbackTable:
         filter: dict = {},
         skip: int = 0,
         limit: int = 30,
-        db: Optional[Session] = None,
+        db: Session | None = None,
     ) -> FeedbackListResponse:
         with get_db_context(db) as db:
             query = db.query(Feedback, User).join(User, Feedback.user_id == User.id)
@@ -262,14 +258,14 @@ class FeedbackTable:
 
             return FeedbackListResponse(items=feedbacks, total=total)
 
-    def get_all_feedbacks(self, db: Optional[Session] = None) -> list[FeedbackModel]:
+    def get_all_feedbacks(self, db: Session | None = None) -> list[FeedbackModel]:
         with get_db_context(db) as db:
             return [
                 FeedbackModel.model_validate(feedback)
                 for feedback in db.query(Feedback).order_by(Feedback.updated_at.desc()).all()
             ]
 
-    def get_all_feedback_ids(self, db: Optional[Session] = None) -> list[FeedbackIdResponse]:
+    def get_all_feedback_ids(self, db: Session | None = None) -> list[FeedbackIdResponse]:
         with get_db_context(db) as db:
             return [
                 FeedbackIdResponse(
@@ -288,7 +284,7 @@ class FeedbackTable:
                 .all()
             ]
 
-    def get_feedbacks_for_leaderboard(self, db: Optional[Session] = None) -> list[LeaderboardFeedbackData]:
+    def get_feedbacks_for_leaderboard(self, db: Session | None = None) -> list[LeaderboardFeedbackData]:
         """Fetch only id and data for leaderboard computation (excludes snapshot/meta)."""
         with get_db_context(db) as db:
             return [
@@ -296,15 +292,15 @@ class FeedbackTable:
             ]
 
     def get_model_evaluation_history(
-        self, model_id: str, days: int = 30, db: Optional[Session] = None
+        self, model_id: str, days: int = 30, db: Session | None = None
     ) -> list[ModelHistoryEntry]:
         """
         Get daily wins/losses for a specific model over the past N days.
         If days=0, returns all time data starting from first feedback.
         Returns: [{"date": "2026-01-08", "won": 5, "lost": 2}, ...]
         """
-        from datetime import datetime, timedelta
         from collections import defaultdict
+        from datetime import datetime, timedelta
 
         with get_db_context(db) as db:
             if days == 0:
@@ -358,14 +354,14 @@ class FeedbackTable:
 
         return result
 
-    def get_feedbacks_by_type(self, type: str, db: Optional[Session] = None) -> list[FeedbackModel]:
+    def get_feedbacks_by_type(self, type: str, db: Session | None = None) -> list[FeedbackModel]:
         with get_db_context(db) as db:
             return [
                 FeedbackModel.model_validate(feedback)
                 for feedback in db.query(Feedback).filter_by(type=type).order_by(Feedback.updated_at.desc()).all()
             ]
 
-    def get_feedbacks_by_user_id(self, user_id: str, db: Optional[Session] = None) -> list[FeedbackModel]:
+    def get_feedbacks_by_user_id(self, user_id: str, db: Session | None = None) -> list[FeedbackModel]:
         with get_db_context(db) as db:
             return [
                 FeedbackModel.model_validate(feedback)
@@ -373,8 +369,8 @@ class FeedbackTable:
             ]
 
     def update_feedback_by_id(
-        self, id: str, form_data: FeedbackForm, db: Optional[Session] = None
-    ) -> Optional[FeedbackModel]:
+        self, id: str, form_data: FeedbackForm, db: Session | None = None
+    ) -> FeedbackModel | None:
         with get_db_context(db) as db:
             feedback = db.query(Feedback).filter_by(id=id).first()
             if not feedback:
@@ -397,8 +393,8 @@ class FeedbackTable:
         id: str,
         user_id: str,
         form_data: FeedbackForm,
-        db: Optional[Session] = None,
-    ) -> Optional[FeedbackModel]:
+        db: Session | None = None,
+    ) -> FeedbackModel | None:
         with get_db_context(db) as db:
             feedback = db.query(Feedback).filter_by(id=id, user_id=user_id).first()
             if not feedback:
@@ -416,7 +412,7 @@ class FeedbackTable:
             db.commit()
             return FeedbackModel.model_validate(feedback)
 
-    def delete_feedback_by_id(self, id: str, db: Optional[Session] = None) -> bool:
+    def delete_feedback_by_id(self, id: str, db: Session | None = None) -> bool:
         with get_db_context(db) as db:
             feedback = db.query(Feedback).filter_by(id=id).first()
             if not feedback:
@@ -425,7 +421,7 @@ class FeedbackTable:
             db.commit()
             return True
 
-    def delete_feedback_by_id_and_user_id(self, id: str, user_id: str, db: Optional[Session] = None) -> bool:
+    def delete_feedback_by_id_and_user_id(self, id: str, user_id: str, db: Session | None = None) -> bool:
         with get_db_context(db) as db:
             feedback = db.query(Feedback).filter_by(id=id, user_id=user_id).first()
             if not feedback:
@@ -434,13 +430,13 @@ class FeedbackTable:
             db.commit()
             return True
 
-    def delete_feedbacks_by_user_id(self, user_id: str, db: Optional[Session] = None) -> bool:
+    def delete_feedbacks_by_user_id(self, user_id: str, db: Session | None = None) -> bool:
         with get_db_context(db) as db:
             result = db.query(Feedback).filter_by(user_id=user_id).delete()
             db.commit()
             return result > 0
 
-    def delete_all_feedbacks(self, db: Optional[Session] = None) -> bool:
+    def delete_all_feedbacks(self, db: Session | None = None) -> bool:
         with get_db_context(db) as db:
             result = db.query(Feedback).delete()
             db.commit()

@@ -1,22 +1,19 @@
-import json
 import time
-import uuid
-from typing import Any, Optional
+from typing import Any
 
-from sqlalchemy.orm import Session
 from open_webui.internal.db import Base, get_db_context
-
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Boolean,
     Column,
     ForeignKey,
-    Text,
-    JSON,
     Index,
+    Text,
     func,
 )
+from sqlalchemy.orm import Session
 
 ####################
 # Helpers
@@ -101,17 +98,17 @@ class ChatMessageModel(BaseModel):
     chat_id: str
     user_id: str
     role: str
-    parent_id: Optional[str] = None
-    content: Optional[Any] = None  # str or list of blocks
-    output: Optional[list] = None
-    model_id: Optional[str] = None
-    files: Optional[list] = None
-    sources: Optional[list] = None
-    embeds: Optional[list] = None
+    parent_id: str | None = None
+    content: Any | None = None  # str or list of blocks
+    output: list | None = None
+    model_id: str | None = None
+    files: list | None = None
+    sources: list | None = None
+    embeds: list | None = None
     done: bool = True
-    status_history: Optional[list] = None
-    error: Optional[dict | str] = None
-    usage: Optional[dict] = None
+    status_history: list | None = None
+    error: dict | str | None = None
+    usage: dict | None = None
     created_at: int
     updated_at: int
 
@@ -128,8 +125,8 @@ class ChatMessageTable:
         chat_id: str,
         user_id: str,
         data: dict,
-        db: Optional[Session] = None,
-    ) -> Optional[ChatMessageModel]:
+        db: Session | None = None,
+    ) -> ChatMessageModel | None:
         """Insert or update a chat message."""
         with get_db_context(db) as db:
             now = int(time.time())
@@ -205,12 +202,12 @@ class ChatMessageTable:
                 db.refresh(message)
                 return ChatMessageModel.model_validate(message)
 
-    def get_message_by_id(self, id: str, db: Optional[Session] = None) -> Optional[ChatMessageModel]:
+    def get_message_by_id(self, id: str, db: Session | None = None) -> ChatMessageModel | None:
         with get_db_context(db) as db:
             message = db.get(ChatMessage, id)
             return ChatMessageModel.model_validate(message) if message else None
 
-    def get_messages_by_chat_id(self, chat_id: str, db: Optional[Session] = None) -> list[ChatMessageModel]:
+    def get_messages_by_chat_id(self, chat_id: str, db: Session | None = None) -> list[ChatMessageModel]:
         with get_db_context(db) as db:
             messages = db.query(ChatMessage).filter_by(chat_id=chat_id).order_by(ChatMessage.created_at.asc()).all()
             return [ChatMessageModel.model_validate(message) for message in messages]
@@ -220,7 +217,7 @@ class ChatMessageTable:
         user_id: str,
         skip: int = 0,
         limit: int = 50,
-        db: Optional[Session] = None,
+        db: Session | None = None,
     ) -> list[ChatMessageModel]:
         with get_db_context(db) as db:
             messages = (
@@ -236,11 +233,11 @@ class ChatMessageTable:
     def get_messages_by_model_id(
         self,
         model_id: str,
-        start_date: Optional[int] = None,
-        end_date: Optional[int] = None,
+        start_date: int | None = None,
+        end_date: int | None = None,
         skip: int = 0,
         limit: int = 100,
-        db: Optional[Session] = None,
+        db: Session | None = None,
     ) -> list[ChatMessageModel]:
         with get_db_context(db) as db:
             query = db.query(ChatMessage).filter_by(model_id=model_id)
@@ -254,11 +251,11 @@ class ChatMessageTable:
     def get_chat_ids_by_model_id(
         self,
         model_id: str,
-        start_date: Optional[int] = None,
-        end_date: Optional[int] = None,
+        start_date: int | None = None,
+        end_date: int | None = None,
         skip: int = 0,
         limit: int = 50,
-        db: Optional[Session] = None,
+        db: Session | None = None,
     ) -> list[str]:
         """Get distinct chat_ids that used a specific model."""
 
@@ -284,7 +281,7 @@ class ChatMessageTable:
             )
             return [chat_id for chat_id, _ in chat_ids]
 
-    def delete_messages_by_chat_id(self, chat_id: str, db: Optional[Session] = None) -> bool:
+    def delete_messages_by_chat_id(self, chat_id: str, db: Session | None = None) -> bool:
         with get_db_context(db) as db:
             db.query(ChatMessage).filter_by(chat_id=chat_id).delete()
             db.commit()
@@ -293,14 +290,14 @@ class ChatMessageTable:
     # Analytics methods
     def get_message_count_by_model(
         self,
-        start_date: Optional[int] = None,
-        end_date: Optional[int] = None,
-        group_id: Optional[str] = None,
-        db: Optional[Session] = None,
+        start_date: int | None = None,
+        end_date: int | None = None,
+        group_id: str | None = None,
+        db: Session | None = None,
     ) -> dict[str, int]:
         with get_db_context(db) as db:
-            from sqlalchemy import func
             from open_webui.models.groups import GroupMember
+            from sqlalchemy import func
 
             query = db.query(ChatMessage.model_id, func.count(ChatMessage.id).label('count')).filter(
                 ChatMessage.role == 'assistant',
@@ -321,15 +318,15 @@ class ChatMessageTable:
 
     def get_token_usage_by_model(
         self,
-        start_date: Optional[int] = None,
-        end_date: Optional[int] = None,
-        group_id: Optional[str] = None,
-        db: Optional[Session] = None,
+        start_date: int | None = None,
+        end_date: int | None = None,
+        group_id: str | None = None,
+        db: Session | None = None,
     ) -> dict[str, dict]:
         """Aggregate token usage by model using database-level aggregation."""
         with get_db_context(db) as db:
-            from sqlalchemy import func, cast, Integer
             from open_webui.models.groups import GroupMember
+            from sqlalchemy import Integer, cast, func
 
             dialect = db.bind.dialect.name
 
@@ -383,15 +380,15 @@ class ChatMessageTable:
 
     def get_token_usage_by_user(
         self,
-        start_date: Optional[int] = None,
-        end_date: Optional[int] = None,
-        group_id: Optional[str] = None,
-        db: Optional[Session] = None,
+        start_date: int | None = None,
+        end_date: int | None = None,
+        group_id: str | None = None,
+        db: Session | None = None,
     ) -> dict[str, dict]:
         """Aggregate token usage by user using database-level aggregation."""
         with get_db_context(db) as db:
-            from sqlalchemy import func, cast, Integer
             from open_webui.models.groups import GroupMember
+            from sqlalchemy import Integer, cast, func
 
             dialect = db.bind.dialect.name
 
@@ -445,14 +442,14 @@ class ChatMessageTable:
 
     def get_message_count_by_user(
         self,
-        start_date: Optional[int] = None,
-        end_date: Optional[int] = None,
-        group_id: Optional[str] = None,
-        db: Optional[Session] = None,
+        start_date: int | None = None,
+        end_date: int | None = None,
+        group_id: str | None = None,
+        db: Session | None = None,
     ) -> dict[str, int]:
         with get_db_context(db) as db:
-            from sqlalchemy import func
             from open_webui.models.groups import GroupMember
+            from sqlalchemy import func
 
             query = db.query(ChatMessage.user_id, func.count(ChatMessage.id).label('count')).filter(
                 ~ChatMessage.user_id.like('shared-%')
@@ -471,14 +468,14 @@ class ChatMessageTable:
 
     def get_message_count_by_chat(
         self,
-        start_date: Optional[int] = None,
-        end_date: Optional[int] = None,
-        group_id: Optional[str] = None,
-        db: Optional[Session] = None,
+        start_date: int | None = None,
+        end_date: int | None = None,
+        group_id: str | None = None,
+        db: Session | None = None,
     ) -> dict[str, int]:
         with get_db_context(db) as db:
-            from sqlalchemy import func
             from open_webui.models.groups import GroupMember
+            from sqlalchemy import func
 
             query = db.query(ChatMessage.chat_id, func.count(ChatMessage.id).label('count')).filter(
                 ~ChatMessage.user_id.like('shared-%')
@@ -497,14 +494,15 @@ class ChatMessageTable:
 
     def get_daily_message_counts_by_model(
         self,
-        start_date: Optional[int] = None,
-        end_date: Optional[int] = None,
-        group_id: Optional[str] = None,
-        db: Optional[Session] = None,
+        start_date: int | None = None,
+        end_date: int | None = None,
+        group_id: str | None = None,
+        db: Session | None = None,
     ) -> dict[str, dict[str, int]]:
         """Get message counts grouped by day and model."""
         with get_db_context(db) as db:
             from datetime import datetime, timedelta
+
             from open_webui.models.groups import GroupMember
 
             query = db.query(ChatMessage.created_at, ChatMessage.model_id).filter(
@@ -545,9 +543,9 @@ class ChatMessageTable:
 
     def get_hourly_message_counts_by_model(
         self,
-        start_date: Optional[int] = None,
-        end_date: Optional[int] = None,
-        db: Optional[Session] = None,
+        start_date: int | None = None,
+        end_date: int | None = None,
+        db: Session | None = None,
     ) -> dict[str, dict[str, int]]:
         """Get message counts grouped by hour and model."""
         with get_db_context(db) as db:

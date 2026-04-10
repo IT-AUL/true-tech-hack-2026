@@ -239,6 +239,18 @@ select = [
   "Q",    # flake8-quotes
   "ICN",  # flake8-import-conventions
 ]
+ignore = [
+  "E501",   # line too long — upstream code, handled by formatter
+  "C901",   # function too complex — upstream code
+  "E402",   # module level import not at top — upstream pattern
+  "F403",   # star imports — upstream code
+  "F405",   # may be undefined from star import — upstream code
+  "F821",   # undefined name — false positives in upstream
+  "F811",   # redefinition of unused name — upstream pattern
+  "E721",   # type comparison — upstream pattern
+  "UP045",  # use X | None — upstream pattern
+  "ICN003", # datetime member imports — upstream pattern
+]
 
 # Plugin configs:
 flake8-import-conventions.banned-from = [ "ast", "datetime" ]

@@ -1,40 +1,35 @@
-import json
+import asyncio
 import logging
 from typing import Optional
-from sqlalchemy.orm import Session
-import asyncio
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
-
-
-from open_webui.utils.misc import get_message_list
-from open_webui.socket.main import get_event_emitter
-from open_webui.models.chats import (
-    ChatForm,
-    ChatImportForm,
-    ChatUsageStatsListResponse,
-    ChatsImportForm,
-    ChatResponse,
-    Chats,
-    ChatTitleIdResponse,
-    SharedChatResponse,
-    ChatStatsExport,
-    AggregateChatStats,
-    ChatBody,
-    ChatHistoryStats,
-    MessageStats,
-)
-from open_webui.models.tags import TagModel, Tags
-from open_webui.models.folders import Folders
-from open_webui.internal.db import get_session
-
 from open_webui.config import ENABLE_ADMIN_CHAT_ACCESS, ENABLE_ADMIN_EXPORT
 from open_webui.constants import ERROR_MESSAGES
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel
-
-
-from open_webui.utils.auth import get_admin_user, get_verified_user
+from open_webui.internal.db import get_session
+from open_webui.models.chats import (
+    AggregateChatStats,
+    ChatBody,
+    ChatForm,
+    ChatHistoryStats,
+    ChatImportForm,
+    ChatResponse,
+    Chats,
+    ChatsImportForm,
+    ChatStatsExport,
+    ChatTitleIdResponse,
+    ChatUsageStatsListResponse,
+    MessageStats,
+    SharedChatResponse,
+)
+from open_webui.models.folders import Folders
+from open_webui.models.tags import TagModel, Tags
+from open_webui.socket.main import get_event_emitter
 from open_webui.utils.access_control import has_permission
+from open_webui.utils.auth import get_admin_user, get_verified_user
+from open_webui.utils.misc import get_message_list
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 log = logging.getLogger(__name__)
 
@@ -51,9 +46,9 @@ router = APIRouter()
 @router.get('/list', response_model=list[ChatTitleIdResponse])
 def get_session_user_chat_list(
     user=Depends(get_verified_user),
-    page: Optional[int] = None,
-    include_pinned: Optional[bool] = False,
-    include_folders: Optional[bool] = False,
+    page: int | None = None,
+    include_pinned: bool | None = False,
+    include_folders: bool | None = False,
     db: Session = Depends(get_session),
 ):
     try:
@@ -89,8 +84,8 @@ def get_session_user_chat_list(
 
 @router.get('/stats/usage', response_model=ChatUsageStatsListResponse)
 def get_session_user_chat_usage_stats(
-    items_per_page: Optional[int] = 50,
-    page: Optional[int] = 1,
+    items_per_page: int | None = 50,
+    page: int | None = 1,
     user=Depends(get_verified_user),
     db: Session = Depends(get_session),
 ):
@@ -162,7 +157,7 @@ def get_session_user_chat_usage_stats(
                                     models[model] = 0
                                 models[model] += 1
 
-                            annotation = message.get('annotation', {})
+                            message.get('annotation', {})
 
                     chat_stats.append(
                         {
@@ -182,7 +177,7 @@ def get_session_user_chat_usage_stats(
                             'created_at': chat.created_at,
                         }
                     )
-                except Exception as e:
+                except Exception:
                     pass
 
         return ChatUsageStatsListResponse(items=chat_stats, total=total)
@@ -207,7 +202,7 @@ class ChatStatsExportList(BaseModel):
     page: int
 
 
-def _process_chat_for_export(chat) -> Optional[ChatStatsExport]:
+def _process_chat_for_export(chat) -> ChatStatsExport | None:
     try:
 
         def get_message_content_length(message):
@@ -392,8 +387,8 @@ def generate_chat_stats_jsonl_generator(user_id, filter):
 @router.get('/stats/export', response_model=ChatStatsExportList)
 async def export_chat_stats(
     request: Request,
-    updated_at: Optional[int] = None,
-    page: Optional[int] = 1,
+    updated_at: int | None = None,
+    page: int | None = 1,
     stream: bool = False,
     user=Depends(get_verified_user),
 ):
@@ -511,10 +506,10 @@ async def delete_all_user_chats(
 @router.get('/list/user/{user_id}', response_model=list[ChatTitleIdResponse])
 async def get_user_chat_list_by_user_id(
     user_id: str,
-    page: Optional[int] = None,
-    query: Optional[str] = None,
-    order_by: Optional[str] = None,
-    direction: Optional[str] = None,
+    page: int | None = None,
+    query: str | None = None,
+    order_by: str | None = None,
+    direction: str | None = None,
     user=Depends(get_admin_user),
     db: Session = Depends(get_session),
 ):
@@ -587,7 +582,7 @@ async def import_chats(
 @router.get('/search', response_model=list[ChatTitleIdResponse])
 def search_user_chats(
     text: str,
-    page: Optional[int] = None,
+    page: int | None = None,
     user=Depends(get_verified_user),
     db: Session = Depends(get_session),
 ):
@@ -635,7 +630,7 @@ async def get_chats_by_folder_id(folder_id: str, user=Depends(get_verified_user)
 @router.get('/folder/{folder_id}/list')
 async def get_chat_list_by_folder_id(
     folder_id: str,
-    page: Optional[int] = 1,
+    page: int | None = 1,
     user=Depends(get_verified_user),
     db: Session = Depends(get_session),
 ):
@@ -721,10 +716,10 @@ async def get_all_user_chats_in_db(user=Depends(get_admin_user), db: Session = D
 
 @router.get('/archived', response_model=list[ChatTitleIdResponse])
 async def get_archived_session_user_chat_list(
-    page: Optional[int] = None,
-    query: Optional[str] = None,
-    order_by: Optional[str] = None,
-    direction: Optional[str] = None,
+    page: int | None = None,
+    query: str | None = None,
+    order_by: str | None = None,
+    direction: str | None = None,
     user=Depends(get_verified_user),
     db: Session = Depends(get_session),
 ):
@@ -778,10 +773,10 @@ async def unarchive_all_chats(user=Depends(get_verified_user), db: Session = Dep
 
 @router.get('/shared', response_model=list[SharedChatResponse])
 async def get_shared_session_user_chat_list(
-    page: Optional[int] = None,
-    query: Optional[str] = None,
-    order_by: Optional[str] = None,
-    direction: Optional[str] = None,
+    page: int | None = None,
+    query: str | None = None,
+    order_by: str | None = None,
+    direction: str | None = None,
     user=Depends(get_verified_user),
     db: Session = Depends(get_session),
 ):
@@ -840,8 +835,8 @@ class TagForm(BaseModel):
 
 
 class TagFilterForm(TagForm):
-    skip: Optional[int] = 0
-    limit: Optional[int] = 50
+    skip: int | None = 0
+    limit: int | None = 50
 
 
 @router.post('/tags', response_model=list[ChatTitleIdResponse])
@@ -1084,7 +1079,7 @@ async def pin_chat_by_id(id: str, user=Depends(get_verified_user), db: Session =
 
 
 class CloneForm(BaseModel):
-    title: Optional[str] = None
+    title: str | None = None
 
 
 @router.post('/{id}/clone', response_model=Optional[ChatResponse])
@@ -1258,7 +1253,7 @@ async def delete_shared_chat_by_id(id: str, user=Depends(get_verified_user), db:
         result = Chats.delete_shared_chat_by_chat_id(id, db=db)
         update_result = Chats.update_chat_share_id_by_id(id, None, db=db)
 
-        return result and update_result != None
+        return result and update_result is not None
     else:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -1272,7 +1267,7 @@ async def delete_shared_chat_by_id(id: str, user=Depends(get_verified_user), db:
 
 
 class ChatFolderIdForm(BaseModel):
-    folder_id: Optional[str] = None
+    folder_id: str | None = None
 
 
 @router.post('/{id}/folder', response_model=Optional[ChatResponse])

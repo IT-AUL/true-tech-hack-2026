@@ -1,14 +1,9 @@
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Request
 
-from open_webui.models.prompts import (
-    PromptForm,
-    PromptUserResponse,
-    PromptAccessResponse,
-    PromptAccessListResponse,
-    PromptModel,
-    Prompts,
-)
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from open_webui.config import BYPASS_ADMIN_ACCESS_CONTROL
+from open_webui.constants import ERROR_MESSAGES
+from open_webui.internal.db import get_session
 from open_webui.models.access_grants import AccessGrants
 from open_webui.models.groups import Groups
 from open_webui.models.prompt_history import (
@@ -16,13 +11,17 @@ from open_webui.models.prompt_history import (
     PromptHistoryModel,
     PromptHistoryResponse,
 )
-from open_webui.constants import ERROR_MESSAGES
-from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.utils.access_control import has_permission, filter_allowed_access_grants
-from open_webui.config import BYPASS_ADMIN_ACCESS_CONTROL
-from open_webui.internal.db import get_session
-from sqlalchemy.orm import Session
+from open_webui.models.prompts import (
+    PromptAccessListResponse,
+    PromptAccessResponse,
+    PromptForm,
+    PromptModel,
+    Prompts,
+)
+from open_webui.utils.access_control import filter_allowed_access_grants, has_permission
+from open_webui.utils.auth import get_verified_user
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 
 class PromptVersionUpdateForm(BaseModel):
@@ -32,7 +31,7 @@ class PromptVersionUpdateForm(BaseModel):
 class PromptMetadataForm(BaseModel):
     name: str
     command: str
-    tags: Optional[list[str]] = None
+    tags: list[str] | None = None
 
 
 router = APIRouter()
@@ -72,12 +71,12 @@ async def get_prompt_tags(user=Depends(get_verified_user), db: Session = Depends
 
 @router.get('/list', response_model=PromptAccessListResponse)
 async def get_prompt_list(
-    query: Optional[str] = None,
-    view_option: Optional[str] = None,
-    tag: Optional[str] = None,
-    order_by: Optional[str] = None,
-    direction: Optional[str] = None,
-    page: Optional[int] = 1,
+    query: str | None = None,
+    view_option: str | None = None,
+    tag: str | None = None,
+    order_by: str | None = None,
+    direction: str | None = None,
+    page: int | None = 1,
     user=Depends(get_verified_user),
     db: Session = Depends(get_session),
 ):

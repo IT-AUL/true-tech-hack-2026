@@ -1,34 +1,28 @@
-import json
 import logging
 import time
-from typing import Optional
 import uuid
 
-from sqlalchemy.orm import Session
-from open_webui.internal.db import Base, JSONField, get_db, get_db_context
-
+from open_webui.internal.db import Base, get_db_context
+from open_webui.models.access_grants import AccessGrantModel, AccessGrants
 from open_webui.models.files import (
     File,
-    FileModel,
     FileMetadataResponse,
+    FileModel,
     FileModelResponse,
 )
 from open_webui.models.groups import Groups
-from open_webui.models.users import User, UserModel, Users, UserResponse
-from open_webui.models.access_grants import AccessGrantModel, AccessGrants
-
-
+from open_webui.models.users import User, UserModel, UserResponse, Users
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Column,
     ForeignKey,
-    String,
     Text,
-    JSON,
     UniqueConstraint,
     or_,
 )
+from sqlalchemy.orm import Session
 
 log = logging.getLogger(__name__)
 
@@ -63,7 +57,7 @@ class KnowledgeModel(BaseModel):
     name: str
     description: str
 
-    meta: Optional[dict] = None
+    meta: dict | None = None
 
     access_grants: list[AccessGrantModel] = Field(default_factory=list)
 
@@ -102,11 +96,11 @@ class KnowledgeFileModel(BaseModel):
 # Forms
 ####################
 class KnowledgeUserModel(KnowledgeModel):
-    user: Optional[UserResponse] = None
+    user: UserResponse | None = None
 
 
 class KnowledgeResponse(KnowledgeModel):
-    files: Optional[list[FileMetadataResponse | dict]] = None
+    files: list[FileMetadataResponse | dict] | None = None
 
 
 class KnowledgeUserResponse(KnowledgeUserModel):
@@ -116,11 +110,11 @@ class KnowledgeUserResponse(KnowledgeUserModel):
 class KnowledgeForm(BaseModel):
     name: str
     description: str
-    access_grants: Optional[list[dict]] = None
+    access_grants: list[dict] | None = None
 
 
 class FileUserResponse(FileModelResponse):
-    user: Optional[UserResponse] = None
+    user: UserResponse | None = None
 
 
 class KnowledgeListResponse(BaseModel):
@@ -134,14 +128,14 @@ class KnowledgeFileListResponse(BaseModel):
 
 
 class KnowledgeTable:
-    def _get_access_grants(self, knowledge_id: str, db: Optional[Session] = None) -> list[AccessGrantModel]:
+    def _get_access_grants(self, knowledge_id: str, db: Session | None = None) -> list[AccessGrantModel]:
         return AccessGrants.get_grants_by_resource('knowledge', knowledge_id, db=db)
 
     def _to_knowledge_model(
         self,
         knowledge: Knowledge,
-        access_grants: Optional[list[AccessGrantModel]] = None,
-        db: Optional[Session] = None,
+        access_grants: list[AccessGrantModel] | None = None,
+        db: Session | None = None,
     ) -> KnowledgeModel:
         knowledge_data = KnowledgeModel.model_validate(knowledge).model_dump(exclude={'access_grants'})
         knowledge_data['access_grants'] = (
@@ -150,8 +144,8 @@ class KnowledgeTable:
         return KnowledgeModel.model_validate(knowledge_data)
 
     def insert_new_knowledge(
-        self, user_id: str, form_data: KnowledgeForm, db: Optional[Session] = None
-    ) -> Optional[KnowledgeModel]:
+        self, user_id: str, form_data: KnowledgeForm, db: Session | None = None
+    ) -> KnowledgeModel | None:
         with get_db_context(db) as db:
             knowledge = KnowledgeModel(
                 **{
@@ -178,7 +172,7 @@ class KnowledgeTable:
                 return None
 
     def get_knowledge_bases(
-        self, skip: int = 0, limit: int = 30, db: Optional[Session] = None
+        self, skip: int = 0, limit: int = 30, db: Session | None = None
     ) -> list[KnowledgeUserModel]:
         with get_db_context(db) as db:
             all_knowledge = db.query(Knowledge).order_by(Knowledge.updated_at.desc()).all()
@@ -212,7 +206,7 @@ class KnowledgeTable:
         filter: dict,
         skip: int = 0,
         limit: int = 30,
-        db: Optional[Session] = None,
+        db: Session | None = None,
     ) -> KnowledgeListResponse:
         try:
             with get_db_context(db) as db:
@@ -280,7 +274,7 @@ class KnowledgeTable:
             return KnowledgeListResponse(items=[], total=0)
 
     def search_knowledge_files(
-        self, filter: dict, skip: int = 0, limit: int = 30, db: Optional[Session] = None
+        self, filter: dict, skip: int = 0, limit: int = 30, db: Session | None = None
     ) -> KnowledgeFileListResponse:
         """
         Scalable version: search files across all knowledge bases the user has
@@ -342,7 +336,7 @@ class KnowledgeTable:
             print('search_knowledge_files error:', e)
             return KnowledgeFileListResponse(items=[], total=0)
 
-    def check_access_by_user_id(self, id, user_id, permission='write', db: Optional[Session] = None) -> bool:
+    def check_access_by_user_id(self, id, user_id, permission='write', db: Session | None = None) -> bool:
         knowledge = self.get_knowledge_by_id(id, db=db)
         if not knowledge:
             return False
@@ -359,7 +353,7 @@ class KnowledgeTable:
         )
 
     def get_knowledge_bases_by_user_id(
-        self, user_id: str, permission: str = 'write', db: Optional[Session] = None
+        self, user_id: str, permission: str = 'write', db: Session | None = None
     ) -> list[KnowledgeUserModel]:
         knowledge_bases = self.get_knowledge_bases(db=db)
         user_group_ids = {group.id for group in Groups.get_groups_by_member_id(user_id, db=db)}
@@ -377,7 +371,7 @@ class KnowledgeTable:
             )
         ]
 
-    def get_knowledge_by_id(self, id: str, db: Optional[Session] = None) -> Optional[KnowledgeModel]:
+    def get_knowledge_by_id(self, id: str, db: Session | None = None) -> KnowledgeModel | None:
         try:
             with get_db_context(db) as db:
                 knowledge = db.query(Knowledge).filter_by(id=id).first()
@@ -386,8 +380,8 @@ class KnowledgeTable:
             return None
 
     def get_knowledge_by_id_and_user_id(
-        self, id: str, user_id: str, db: Optional[Session] = None
-    ) -> Optional[KnowledgeModel]:
+        self, id: str, user_id: str, db: Session | None = None
+    ) -> KnowledgeModel | None:
         knowledge = self.get_knowledge_by_id(id, db=db)
         if not knowledge:
             return None
@@ -407,7 +401,7 @@ class KnowledgeTable:
             return knowledge
         return None
 
-    def get_knowledges_by_file_id(self, file_id: str, db: Optional[Session] = None) -> list[KnowledgeModel]:
+    def get_knowledges_by_file_id(self, file_id: str, db: Session | None = None) -> list[KnowledgeModel]:
         try:
             with get_db_context(db) as db:
                 knowledges = (
@@ -436,7 +430,7 @@ class KnowledgeTable:
         filter: dict,
         skip: int = 0,
         limit: int = 30,
-        db: Optional[Session] = None,
+        db: Session | None = None,
     ) -> KnowledgeFileListResponse:
         try:
             with get_db_context(db) as db:
@@ -499,7 +493,7 @@ class KnowledgeTable:
             print(e)
             return KnowledgeFileListResponse(items=[], total=0)
 
-    def get_files_by_id(self, knowledge_id: str, db: Optional[Session] = None) -> list[FileModel]:
+    def get_files_by_id(self, knowledge_id: str, db: Session | None = None) -> list[FileModel]:
         try:
             with get_db_context(db) as db:
                 files = (
@@ -512,7 +506,7 @@ class KnowledgeTable:
         except Exception:
             return []
 
-    def get_file_metadatas_by_id(self, knowledge_id: str, db: Optional[Session] = None) -> list[FileMetadataResponse]:
+    def get_file_metadatas_by_id(self, knowledge_id: str, db: Session | None = None) -> list[FileMetadataResponse]:
         try:
             with get_db_context(db) as db:
                 files = self.get_files_by_id(knowledge_id, db=db)
@@ -525,8 +519,8 @@ class KnowledgeTable:
         knowledge_id: str,
         file_id: str,
         user_id: str,
-        db: Optional[Session] = None,
-    ) -> Optional[KnowledgeFileModel]:
+        db: Session | None = None,
+    ) -> KnowledgeFileModel | None:
         with get_db_context(db) as db:
             knowledge_file = KnowledgeFileModel(
                 **{
@@ -551,7 +545,7 @@ class KnowledgeTable:
             except Exception:
                 return None
 
-    def has_file(self, knowledge_id: str, file_id: str, db: Optional[Session] = None) -> bool:
+    def has_file(self, knowledge_id: str, file_id: str, db: Session | None = None) -> bool:
         """Check whether a file belongs to a knowledge base."""
         try:
             with get_db_context(db) as db:
@@ -559,7 +553,7 @@ class KnowledgeTable:
         except Exception:
             return False
 
-    def remove_file_from_knowledge_by_id(self, knowledge_id: str, file_id: str, db: Optional[Session] = None) -> bool:
+    def remove_file_from_knowledge_by_id(self, knowledge_id: str, file_id: str, db: Session | None = None) -> bool:
         try:
             with get_db_context(db) as db:
                 db.query(KnowledgeFile).filter_by(knowledge_id=knowledge_id, file_id=file_id).delete()
@@ -568,7 +562,7 @@ class KnowledgeTable:
         except Exception:
             return False
 
-    def reset_knowledge_by_id(self, id: str, db: Optional[Session] = None) -> Optional[KnowledgeModel]:
+    def reset_knowledge_by_id(self, id: str, db: Session | None = None) -> KnowledgeModel | None:
         try:
             with get_db_context(db) as db:
                 # Delete all knowledge_file entries for this knowledge_id
@@ -593,11 +587,11 @@ class KnowledgeTable:
         id: str,
         form_data: KnowledgeForm,
         overwrite: bool = False,
-        db: Optional[Session] = None,
-    ) -> Optional[KnowledgeModel]:
+        db: Session | None = None,
+    ) -> KnowledgeModel | None:
         try:
             with get_db_context(db) as db:
-                knowledge = self.get_knowledge_by_id(id=id, db=db)
+                self.get_knowledge_by_id(id=id, db=db)
                 db.query(Knowledge).filter_by(id=id).update(
                     {
                         **form_data.model_dump(exclude={'access_grants'}),
@@ -612,12 +606,10 @@ class KnowledgeTable:
             log.exception(e)
             return None
 
-    def update_knowledge_data_by_id(
-        self, id: str, data: dict, db: Optional[Session] = None
-    ) -> Optional[KnowledgeModel]:
+    def update_knowledge_data_by_id(self, id: str, data: dict, db: Session | None = None) -> KnowledgeModel | None:
         try:
             with get_db_context(db) as db:
-                knowledge = self.get_knowledge_by_id(id=id, db=db)
+                self.get_knowledge_by_id(id=id, db=db)
                 db.query(Knowledge).filter_by(id=id).update(
                     {
                         'data': data,
@@ -630,7 +622,7 @@ class KnowledgeTable:
             log.exception(e)
             return None
 
-    def delete_knowledge_by_id(self, id: str, db: Optional[Session] = None) -> bool:
+    def delete_knowledge_by_id(self, id: str, db: Session | None = None) -> bool:
         try:
             with get_db_context(db) as db:
                 AccessGrants.revoke_all_access('knowledge', id, db=db)
@@ -640,7 +632,7 @@ class KnowledgeTable:
         except Exception:
             return False
 
-    def delete_all_knowledge(self, db: Optional[Session] = None) -> bool:
+    def delete_all_knowledge(self, db: Session | None = None) -> bool:
         with get_db_context(db) as db:
             try:
                 knowledge_ids = [row[0] for row in db.query(Knowledge.id).all()]

@@ -1,37 +1,29 @@
+import datetime as dt
 import time
-from typing import Optional
-
-from sqlalchemy.orm import Session, defer
-from open_webui.internal.db import Base, JSONField, get_db, get_db_context
-
 
 from open_webui.env import DATABASE_USER_ACTIVE_STATUS_UPDATE_INTERVAL
-
-from open_webui.models.chats import Chats
-from open_webui.models.groups import Groups, GroupMember
+from open_webui.internal.db import Base, get_db_context
 from open_webui.models.channels import ChannelMember
-
+from open_webui.models.chats import Chats
+from open_webui.models.groups import GroupMember, Groups
 from open_webui.utils.misc import throttle
 from open_webui.utils.validate import validate_profile_image_url
-
-
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from sqlalchemy import (
-    BigInteger,
     JSON,
+    BigInteger,
     Column,
-    String,
-    Boolean,
-    Text,
     Date,
+    String,
+    Text,
+    case,
     exists,
+    func,
+    or_,
     select,
-    cast,
 )
-from sqlalchemy import or_, case, func
 from sqlalchemy.dialects.postgresql import JSONB
-
-import datetime
+from sqlalchemy.orm import Session, defer
 
 ####################
 # User DB Schema
@@ -41,7 +33,7 @@ import datetime
 
 
 class UserSettings(BaseModel):
-    ui: Optional[dict] = {}
+    ui: dict | None = {}
     model_config = ConfigDict(extra='allow')
     pass
 
@@ -84,29 +76,29 @@ class UserModel(BaseModel):
     id: str
 
     email: str
-    username: Optional[str] = None
+    username: str | None = None
     role: str = 'pending'
 
     name: str
 
-    profile_image_url: Optional[str] = None
-    profile_banner_image_url: Optional[str] = None
+    profile_image_url: str | None = None
+    profile_banner_image_url: str | None = None
 
-    bio: Optional[str] = None
-    gender: Optional[str] = None
-    date_of_birth: Optional[datetime.date] = None
-    timezone: Optional[str] = None
+    bio: str | None = None
+    gender: str | None = None
+    date_of_birth: dt.date | None = None
+    timezone: str | None = None
 
-    presence_state: Optional[str] = None
-    status_emoji: Optional[str] = None
-    status_message: Optional[str] = None
-    status_expires_at: Optional[int] = None
+    presence_state: str | None = None
+    status_emoji: str | None = None
+    status_message: str | None = None
+    status_expires_at: int | None = None
 
-    info: Optional[dict] = None
-    settings: Optional[UserSettings] = None
+    info: dict | None = None
+    settings: UserSettings | None = None
 
-    oauth: Optional[dict] = None
-    scim: Optional[dict] = None
+    oauth: dict | None = None
+    scim: dict | None = None
 
     last_active_at: int  # timestamp in epoch
     updated_at: int  # timestamp in epoch
@@ -144,9 +136,9 @@ class ApiKeyModel(BaseModel):
     id: str
     user_id: str
     key: str
-    data: Optional[dict] = None
-    expires_at: Optional[int] = None
-    last_used_at: Optional[int] = None
+    data: dict | None = None
+    expires_at: int | None = None
+    last_used_at: int | None = None
     created_at: int  # timestamp in epoch
     updated_at: int  # timestamp in epoch
 
@@ -161,9 +153,9 @@ class ApiKeyModel(BaseModel):
 class UpdateProfileForm(BaseModel):
     profile_image_url: str
     name: str
-    bio: Optional[str] = None
-    gender: Optional[str] = None
-    date_of_birth: Optional[datetime.date] = None
+    bio: str | None = None
+    gender: str | None = None
+    date_of_birth: dt.date | None = None
 
     @field_validator('profile_image_url')
     @classmethod
@@ -190,9 +182,9 @@ class UserGroupIdsListResponse(BaseModel):
 
 
 class UserStatus(BaseModel):
-    status_emoji: Optional[str] = None
-    status_message: Optional[str] = None
-    status_expires_at: Optional[int] = None
+    status_emoji: str | None = None
+    status_message: str | None = None
+    status_expires_at: int | None = None
 
 
 class UserInfoResponse(UserStatus):
@@ -200,8 +192,8 @@ class UserInfoResponse(UserStatus):
     name: str
     email: str
     role: str
-    bio: Optional[str] = None
-    groups: Optional[list] = []
+    bio: str | None = None
+    groups: list | None = []
     is_active: bool = False
 
 
@@ -213,7 +205,7 @@ class UserIdNameResponse(BaseModel):
 class UserIdNameStatusResponse(UserStatus):
     id: str
     name: str
-    is_active: Optional[bool] = None
+    is_active: bool | None = None
 
 
 class UserInfoListResponse(BaseModel):
@@ -251,7 +243,7 @@ class UserUpdateForm(BaseModel):
     name: str
     email: str
     profile_image_url: str
-    password: Optional[str] = None
+    password: str | None = None
 
     @field_validator('profile_image_url')
     @classmethod
@@ -267,10 +259,10 @@ class UsersTable:
         email: str,
         profile_image_url: str = '/user.png',
         role: str = 'pending',
-        username: Optional[str] = None,
-        oauth: Optional[dict] = None,
-        db: Optional[Session] = None,
-    ) -> Optional[UserModel]:
+        username: str | None = None,
+        oauth: dict | None = None,
+        db: Session | None = None,
+    ) -> UserModel | None:
         with get_db_context(db) as db:
             user = UserModel(
                 **{
@@ -295,7 +287,7 @@ class UsersTable:
             else:
                 return None
 
-    def get_user_by_id(self, id: str, db: Optional[Session] = None) -> Optional[UserModel]:
+    def get_user_by_id(self, id: str, db: Session | None = None) -> UserModel | None:
         try:
             with get_db_context(db) as db:
                 user = db.query(User).filter_by(id=id).first()
@@ -303,7 +295,7 @@ class UsersTable:
         except Exception:
             return None
 
-    def get_user_by_api_key(self, api_key: str, db: Optional[Session] = None) -> Optional[UserModel]:
+    def get_user_by_api_key(self, api_key: str, db: Session | None = None) -> UserModel | None:
         try:
             with get_db_context(db) as db:
                 user = db.query(User).join(ApiKey, User.id == ApiKey.user_id).filter(ApiKey.key == api_key).first()
@@ -311,7 +303,7 @@ class UsersTable:
         except Exception:
             return None
 
-    def get_user_by_email(self, email: str, db: Optional[Session] = None) -> Optional[UserModel]:
+    def get_user_by_email(self, email: str, db: Session | None = None) -> UserModel | None:
         try:
             with get_db_context(db) as db:
                 user = db.query(User).filter(func.lower(User.email) == email.lower()).first()
@@ -319,7 +311,7 @@ class UsersTable:
         except Exception:
             return None
 
-    def get_user_by_oauth_sub(self, provider: str, sub: str, db: Optional[Session] = None) -> Optional[UserModel]:
+    def get_user_by_oauth_sub(self, provider: str, sub: str, db: Session | None = None) -> UserModel | None:
         try:
             with get_db_context(db) as db:  # type: Session
                 dialect_name = db.bind.dialect.name
@@ -332,13 +324,13 @@ class UsersTable:
 
                 user = query.first()
                 return UserModel.model_validate(user) if user else None
-        except Exception as e:
+        except Exception:
             # You may want to log the exception here
             return None
 
     def get_user_by_scim_external_id(
-        self, provider: str, external_id: str, db: Optional[Session] = None
-    ) -> Optional[UserModel]:
+        self, provider: str, external_id: str, db: Session | None = None
+    ) -> UserModel | None:
         try:
             with get_db_context(db) as db:  # type: Session
                 dialect_name = db.bind.dialect.name
@@ -356,10 +348,10 @@ class UsersTable:
 
     def get_users(
         self,
-        filter: Optional[dict] = None,
-        skip: Optional[int] = None,
-        limit: Optional[int] = None,
-        db: Optional[Session] = None,
+        filter: dict | None = None,
+        skip: int | None = None,
+        limit: int | None = None,
+        db: Session | None = None,
     ) -> dict:
         with get_db_context(db) as db:
             # Join GroupMember so we can order by group_id when requested
@@ -492,7 +484,7 @@ class UsersTable:
                 'total': total,
             }
 
-    def get_users_by_group_id(self, group_id: str, db: Optional[Session] = None) -> list[UserModel]:
+    def get_users_by_group_id(self, group_id: str, db: Session | None = None) -> list[UserModel]:
         with get_db_context(db) as db:
             users = (
                 db.query(User)
@@ -503,20 +495,20 @@ class UsersTable:
             )
             return [UserModel.model_validate(user) for user in users]
 
-    def get_users_by_user_ids(self, user_ids: list[str], db: Optional[Session] = None) -> list[UserStatusModel]:
+    def get_users_by_user_ids(self, user_ids: list[str], db: Session | None = None) -> list[UserStatusModel]:
         with get_db_context(db) as db:
             users = db.query(User).options(defer(User.profile_image_url)).filter(User.id.in_(user_ids)).all()
             return [UserModel.model_validate(user) for user in users]
 
-    def get_num_users(self, db: Optional[Session] = None) -> Optional[int]:
+    def get_num_users(self, db: Session | None = None) -> int | None:
         with get_db_context(db) as db:
             return db.query(User).count()
 
-    def has_users(self, db: Optional[Session] = None) -> bool:
+    def has_users(self, db: Session | None = None) -> bool:
         with get_db_context(db) as db:
             return db.query(db.query(User).exists()).scalar()
 
-    def get_first_user(self, db: Optional[Session] = None) -> UserModel:
+    def get_first_user(self, db: Session | None = None) -> UserModel:
         try:
             with get_db_context(db) as db:
                 user = db.query(User).order_by(User.created_at).first()
@@ -524,7 +516,7 @@ class UsersTable:
         except Exception:
             return None
 
-    def get_user_webhook_url_by_id(self, id: str, db: Optional[Session] = None) -> Optional[str]:
+    def get_user_webhook_url_by_id(self, id: str, db: Session | None = None) -> str | None:
         try:
             with get_db_context(db) as db:
                 user = db.query(User).filter_by(id=id).first()
@@ -536,14 +528,14 @@ class UsersTable:
         except Exception:
             return None
 
-    def get_num_users_active_today(self, db: Optional[Session] = None) -> Optional[int]:
+    def get_num_users_active_today(self, db: Session | None = None) -> int | None:
         with get_db_context(db) as db:
-            current_timestamp = int(datetime.datetime.now().timestamp())
+            current_timestamp = int(dt.datetime.now().timestamp())
             today_midnight_timestamp = current_timestamp - (current_timestamp % 86400)
             query = db.query(User).filter(User.last_active_at > today_midnight_timestamp)
             return query.count()
 
-    def update_user_role_by_id(self, id: str, role: str, db: Optional[Session] = None) -> Optional[UserModel]:
+    def update_user_role_by_id(self, id: str, role: str, db: Session | None = None) -> UserModel | None:
         try:
             with get_db_context(db) as db:
                 user = db.query(User).filter_by(id=id).first()
@@ -556,9 +548,7 @@ class UsersTable:
         except Exception:
             return None
 
-    def update_user_status_by_id(
-        self, id: str, form_data: UserStatus, db: Optional[Session] = None
-    ) -> Optional[UserModel]:
+    def update_user_status_by_id(self, id: str, form_data: UserStatus, db: Session | None = None) -> UserModel | None:
         try:
             with get_db_context(db) as db:
                 user = db.query(User).filter_by(id=id).first()
@@ -573,8 +563,8 @@ class UsersTable:
             return None
 
     def update_user_profile_image_url_by_id(
-        self, id: str, profile_image_url: str, db: Optional[Session] = None
-    ) -> Optional[UserModel]:
+        self, id: str, profile_image_url: str, db: Session | None = None
+    ) -> UserModel | None:
         try:
             with get_db_context(db) as db:
                 user = db.query(User).filter_by(id=id).first()
@@ -588,7 +578,7 @@ class UsersTable:
             return None
 
     @throttle(DATABASE_USER_ACTIVE_STATUS_UPDATE_INTERVAL)
-    def update_last_active_by_id(self, id: str, db: Optional[Session] = None) -> Optional[UserModel]:
+    def update_last_active_by_id(self, id: str, db: Session | None = None) -> UserModel | None:
         try:
             with get_db_context(db) as db:
                 user = db.query(User).filter_by(id=id).first()
@@ -601,9 +591,7 @@ class UsersTable:
         except Exception:
             return None
 
-    def update_user_oauth_by_id(
-        self, id: str, provider: str, sub: str, db: Optional[Session] = None
-    ) -> Optional[UserModel]:
+    def update_user_oauth_by_id(self, id: str, provider: str, sub: str, db: Session | None = None) -> UserModel | None:
         """
         Update or insert an OAuth provider/sub pair into the user's oauth JSON field.
         Example resulting structure:
@@ -638,8 +626,8 @@ class UsersTable:
         id: str,
         provider: str,
         external_id: str,
-        db: Optional[Session] = None,
-    ) -> Optional[UserModel]:
+        db: Session | None = None,
+    ) -> UserModel | None:
         """
         Update or insert a SCIM provider/external_id pair into the user's scim JSON field.
         Example resulting structure:
@@ -665,7 +653,7 @@ class UsersTable:
         except Exception:
             return None
 
-    def update_user_by_id(self, id: str, updated: dict, db: Optional[Session] = None) -> Optional[UserModel]:
+    def update_user_by_id(self, id: str, updated: dict, db: Session | None = None) -> UserModel | None:
         try:
             with get_db_context(db) as db:
                 user = db.query(User).filter_by(id=id).first()
@@ -680,7 +668,7 @@ class UsersTable:
             print(e)
             return None
 
-    def update_user_settings_by_id(self, id: str, updated: dict, db: Optional[Session] = None) -> Optional[UserModel]:
+    def update_user_settings_by_id(self, id: str, updated: dict, db: Session | None = None) -> UserModel | None:
         try:
             with get_db_context(db) as db:
                 user = db.query(User).filter_by(id=id).first()
@@ -702,7 +690,7 @@ class UsersTable:
         except Exception:
             return None
 
-    def delete_user_by_id(self, id: str, db: Optional[Session] = None) -> bool:
+    def delete_user_by_id(self, id: str, db: Session | None = None) -> bool:
         try:
             # Remove User from Groups
             Groups.remove_user_from_all_groups(id)
@@ -721,7 +709,7 @@ class UsersTable:
         except Exception:
             return False
 
-    def get_user_api_key_by_id(self, id: str, db: Optional[Session] = None) -> Optional[str]:
+    def get_user_api_key_by_id(self, id: str, db: Session | None = None) -> str | None:
         try:
             with get_db_context(db) as db:
                 api_key = db.query(ApiKey).filter_by(user_id=id).first()
@@ -729,7 +717,7 @@ class UsersTable:
         except Exception:
             return None
 
-    def update_user_api_key_by_id(self, id: str, api_key: str, db: Optional[Session] = None) -> bool:
+    def update_user_api_key_by_id(self, id: str, api_key: str, db: Session | None = None) -> bool:
         try:
             with get_db_context(db) as db:
                 db.query(ApiKey).filter_by(user_id=id).delete()
@@ -751,7 +739,7 @@ class UsersTable:
         except Exception:
             return False
 
-    def delete_user_api_key_by_id(self, id: str, db: Optional[Session] = None) -> bool:
+    def delete_user_api_key_by_id(self, id: str, db: Session | None = None) -> bool:
         try:
             with get_db_context(db) as db:
                 db.query(ApiKey).filter_by(user_id=id).delete()
@@ -760,12 +748,12 @@ class UsersTable:
         except Exception:
             return False
 
-    def get_valid_user_ids(self, user_ids: list[str], db: Optional[Session] = None) -> list[str]:
+    def get_valid_user_ids(self, user_ids: list[str], db: Session | None = None) -> list[str]:
         with get_db_context(db) as db:
             users = db.query(User).filter(User.id.in_(user_ids)).all()
             return [user.id for user in users]
 
-    def get_super_admin_user(self, db: Optional[Session] = None) -> Optional[UserModel]:
+    def get_super_admin_user(self, db: Session | None = None) -> UserModel | None:
         with get_db_context(db) as db:
             user = db.query(User).filter_by(role='admin').first()
             if user:
@@ -773,7 +761,7 @@ class UsersTable:
             else:
                 return None
 
-    def get_active_user_count(self, db: Optional[Session] = None) -> int:
+    def get_active_user_count(self, db: Session | None = None) -> int:
         with get_db_context(db) as db:
             # Consider user active if last_active_at within the last 3 minutes
             three_minutes_ago = int(time.time()) - 180
@@ -788,7 +776,7 @@ class UsersTable:
             return user.last_active_at >= three_minutes_ago
         return False
 
-    def is_user_active(self, user_id: str, db: Optional[Session] = None) -> bool:
+    def is_user_active(self, user_id: str, db: Session | None = None) -> bool:
         with get_db_context(db) as db:
             user = db.query(User).filter_by(id=user_id).first()
             if user and user.last_active_at:

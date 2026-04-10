@@ -2,9 +2,9 @@ import logging
 from logging.config import fileConfig
 
 from alembic import context
+from open_webui.env import DATABASE_PASSWORD, DATABASE_URL, LOG_FORMAT
 from open_webui.models.auths import Auth
-from open_webui.env import DATABASE_URL, DATABASE_PASSWORD, LOG_FORMAT
-from sqlalchemy import engine_from_config, pool, create_engine
+from sqlalchemy import create_engine, engine_from_config, pool
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

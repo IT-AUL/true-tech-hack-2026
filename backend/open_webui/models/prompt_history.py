@@ -1,17 +1,14 @@
 """Prompt history model for version tracking."""
 
+import difflib
 import time
 import uuid
-from typing import Optional
-import json
-import difflib
 
-from sqlalchemy.orm import Session
 from open_webui.internal.db import Base, get_db_context
-from open_webui.models.users import Users, UserResponse
-
+from open_webui.models.users import UserResponse, Users
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import BigInteger, Column, Text, JSON, Index
+from sqlalchemy import JSON, BigInteger, Column, Text
+from sqlalchemy.orm import Session
 
 ####################
 # PromptHistory DB Schema
@@ -33,10 +30,10 @@ class PromptHistory(Base):
 class PromptHistoryModel(BaseModel):
     id: str
     prompt_id: str
-    parent_id: Optional[str] = None
+    parent_id: str | None = None
     snapshot: dict
     user_id: str
-    commit_message: Optional[str] = None
+    commit_message: str | None = None
     created_at: int
 
     model_config = ConfigDict(from_attributes=True)
@@ -45,7 +42,7 @@ class PromptHistoryModel(BaseModel):
 class PromptHistoryResponse(PromptHistoryModel):
     """Response model with user info."""
 
-    user: Optional[UserResponse] = None
+    user: UserResponse | None = None
 
 
 class PromptHistoryTable:
@@ -54,10 +51,10 @@ class PromptHistoryTable:
         prompt_id: str,
         snapshot: dict,
         user_id: str,
-        parent_id: Optional[str] = None,
-        commit_message: Optional[str] = None,
-        db: Optional[Session] = None,
-    ) -> Optional[PromptHistoryModel]:
+        parent_id: str | None = None,
+        commit_message: str | None = None,
+        db: Session | None = None,
+    ) -> PromptHistoryModel | None:
         """Create a new history entry (commit) for a prompt."""
         with get_db_context(db) as db:
             history = PromptHistory(
@@ -79,7 +76,7 @@ class PromptHistoryTable:
         prompt_id: str,
         limit: int = 50,
         offset: int = 0,
-        db: Optional[Session] = None,
+        db: Session | None = None,
     ) -> list[PromptHistoryResponse]:
         """Get all history entries for a prompt, ordered by created_at desc."""
         with get_db_context(db) as db:
@@ -108,8 +105,8 @@ class PromptHistoryTable:
     def get_history_entry_by_id(
         self,
         history_id: str,
-        db: Optional[Session] = None,
-    ) -> Optional[PromptHistoryModel]:
+        db: Session | None = None,
+    ) -> PromptHistoryModel | None:
         """Get a specific history entry by ID."""
         with get_db_context(db) as db:
             entry = db.query(PromptHistory).filter(PromptHistory.id == history_id).first()
@@ -120,8 +117,8 @@ class PromptHistoryTable:
     def get_latest_history_entry(
         self,
         prompt_id: str,
-        db: Optional[Session] = None,
-    ) -> Optional[PromptHistoryModel]:
+        db: Session | None = None,
+    ) -> PromptHistoryModel | None:
         """Get the most recent history entry for a prompt."""
         with get_db_context(db) as db:
             entry = (
@@ -137,7 +134,7 @@ class PromptHistoryTable:
     def get_history_count(
         self,
         prompt_id: str,
-        db: Optional[Session] = None,
+        db: Session | None = None,
     ) -> int:
         """Get the number of history entries for a prompt."""
         with get_db_context(db) as db:
@@ -147,8 +144,8 @@ class PromptHistoryTable:
         self,
         from_id: str,
         to_id: str,
-        db: Optional[Session] = None,
-    ) -> Optional[dict]:
+        db: Session | None = None,
+    ) -> dict | None:
         """Compute diff between two history entries."""
         with get_db_context(db) as db:
             from_entry = db.query(PromptHistory).filter(PromptHistory.id == from_id).first()
@@ -186,7 +183,7 @@ class PromptHistoryTable:
     def delete_history_by_prompt_id(
         self,
         prompt_id: str,
-        db: Optional[Session] = None,
+        db: Session | None = None,
     ) -> bool:
         """Delete all history entries for a prompt."""
         with get_db_context(db) as db:
@@ -197,7 +194,7 @@ class PromptHistoryTable:
     def delete_history_entry(
         self,
         history_id: str,
-        db: Optional[Session] = None,
+        db: Session | None = None,
     ) -> bool:
         """Delete a history entry and reparent its children to grandparent."""
         with get_db_context(db) as db:

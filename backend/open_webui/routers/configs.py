@@ -1,35 +1,27 @@
 import logging
-import copy
-from fastapi import APIRouter, Depends, Request, HTTPException
-from pydantic import BaseModel, ConfigDict
+
 import aiohttp
-
-from typing import Optional
-
+from fastapi import APIRouter, Depends, HTTPException, Request
+from mcp.shared.auth import OAuthMetadata
+from open_webui.config import BannerModel, get_config, save_config
 from open_webui.env import AIOHTTP_CLIENT_TIMEOUT
 from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.config import get_config, save_config
-from open_webui.config import BannerModel
-
-from open_webui.utils.tools import (
-    get_tool_server_data,
-    get_tool_server_url,
-    set_tool_servers,
-    set_terminal_servers,
-)
 from open_webui.utils.mcp.client import MCPClient
-from open_webui.models.oauth_sessions import OAuthSessions
-
-
 from open_webui.utils.oauth import (
+    OAuthClientInformationFull,
+    decrypt_data,
+    encrypt_data,
     get_discovery_urls,
     get_oauth_client_info_with_dynamic_client_registration,
     get_oauth_client_info_with_static_credentials,
-    encrypt_data,
-    decrypt_data,
-    OAuthClientInformationFull,
 )
-from mcp.shared.auth import OAuthMetadata
+from open_webui.utils.tools import (
+    get_tool_server_data,
+    get_tool_server_url,
+    set_terminal_servers,
+    set_tool_servers,
+)
+from pydantic import BaseModel, ConfigDict
 
 router = APIRouter()
 
@@ -99,15 +91,15 @@ async def set_connections_config(
 class OAuthClientRegistrationForm(BaseModel):
     url: str
     client_id: str
-    client_name: Optional[str] = None
-    client_secret: Optional[str] = None
+    client_name: str | None = None
+    client_secret: str | None = None
 
 
 @router.post('/oauth/clients/register')
 async def register_oauth_client(
     request: Request,
     form_data: OAuthClientRegistrationForm,
-    type: Optional[str] = None,
+    type: str | None = None,
     user=Depends(get_admin_user),
 ):
     try:
@@ -136,7 +128,7 @@ async def register_oauth_client(
         log.debug(f'Failed to register OAuth client: {e}')
         raise HTTPException(
             status_code=400,
-            detail=f'Failed to register OAuth client',
+            detail='Failed to register OAuth client',
         )
 
 
@@ -148,11 +140,11 @@ async def register_oauth_client(
 class ToolServerConnection(BaseModel):
     url: str
     path: str
-    type: Optional[str] = 'openapi'  # openapi, mcp
-    auth_type: Optional[str]
-    headers: Optional[dict | str] = None
-    key: Optional[str]
-    config: Optional[dict]
+    type: str | None = 'openapi'  # openapi, mcp
+    auth_type: str | None
+    headers: dict | str | None = None
+    key: str | None
+    config: dict | None
 
     model_config = ConfigDict(extra='allow')
 
@@ -220,23 +212,23 @@ async def set_tool_servers_config(
 
 
 class TerminalServerConnection(BaseModel):
-    id: Optional[str] = ''
-    name: Optional[str] = ''
+    id: str | None = ''
+    name: str | None = ''
 
-    enabled: Optional[bool] = True
+    enabled: bool | None = True
 
     url: str
-    path: Optional[str] = '/openapi.json'
+    path: str | None = '/openapi.json'
 
-    key: Optional[str] = ''
-    auth_type: Optional[str] = 'bearer'
+    key: str | None = ''
+    auth_type: str | None = 'bearer'
 
-    config: Optional[dict] = None
+    config: dict | None = None
 
     # Orchestrator policy fields
-    server_type: Optional[str] = None  # "orchestrator", "terminal"
-    policy_id: Optional[str] = None
-    policy: Optional[dict] = None  # cached policy data
+    server_type: str | None = None  # "orchestrator", "terminal"
+    policy_id: str | None = None
+    policy: dict | None = None  # cached policy data
 
     model_config = ConfigDict(extra='allow')
 
@@ -316,8 +308,8 @@ async def verify_terminal_server_connection(
 
 class TerminalServerPolicyForm(BaseModel):
     url: str
-    key: Optional[str] = ''
-    auth_type: Optional[str] = 'bearer'
+    key: str | None = ''
+    auth_type: str | None = 'bearer'
     policy_id: str
     policy_data: dict
 
@@ -412,7 +404,7 @@ async def verify_tool_servers_config(request: Request, form_data: ToolServerConn
 
                                 if oauth_token:
                                     token = oauth_token.get('access_token', '')
-                        except Exception as e:
+                        except Exception:
                             pass
                     if token:
                         headers = {'Authorization': f'Bearer {token}'}
@@ -432,7 +424,7 @@ async def verify_tool_servers_config(request: Request, form_data: ToolServerConn
                     log.debug(f'Failed to create MCP client: {e}')
                     raise HTTPException(
                         status_code=400,
-                        detail=f'Failed to create MCP client',
+                        detail='Failed to create MCP client',
                     )
                 finally:
                     if client:
@@ -455,7 +447,7 @@ async def verify_tool_servers_config(request: Request, form_data: ToolServerConn
                         if oauth_token:
                             token = oauth_token.get('access_token', '')
 
-                except Exception as e:
+                except Exception:
                     pass
 
             if token:
@@ -474,7 +466,7 @@ async def verify_tool_servers_config(request: Request, form_data: ToolServerConn
         log.debug(f'Failed to connect to the tool server: {e}')
         raise HTTPException(
             status_code=400,
-            detail=f'Failed to connect to the tool server',
+            detail='Failed to connect to the tool server',
         )
 
 
@@ -484,19 +476,19 @@ async def verify_tool_servers_config(request: Request, form_data: ToolServerConn
 class CodeInterpreterConfigForm(BaseModel):
     ENABLE_CODE_EXECUTION: bool
     CODE_EXECUTION_ENGINE: str
-    CODE_EXECUTION_JUPYTER_URL: Optional[str]
-    CODE_EXECUTION_JUPYTER_AUTH: Optional[str]
-    CODE_EXECUTION_JUPYTER_AUTH_TOKEN: Optional[str]
-    CODE_EXECUTION_JUPYTER_AUTH_PASSWORD: Optional[str]
-    CODE_EXECUTION_JUPYTER_TIMEOUT: Optional[int]
+    CODE_EXECUTION_JUPYTER_URL: str | None
+    CODE_EXECUTION_JUPYTER_AUTH: str | None
+    CODE_EXECUTION_JUPYTER_AUTH_TOKEN: str | None
+    CODE_EXECUTION_JUPYTER_AUTH_PASSWORD: str | None
+    CODE_EXECUTION_JUPYTER_TIMEOUT: int | None
     ENABLE_CODE_INTERPRETER: bool
     CODE_INTERPRETER_ENGINE: str
-    CODE_INTERPRETER_PROMPT_TEMPLATE: Optional[str]
-    CODE_INTERPRETER_JUPYTER_URL: Optional[str]
-    CODE_INTERPRETER_JUPYTER_AUTH: Optional[str]
-    CODE_INTERPRETER_JUPYTER_AUTH_TOKEN: Optional[str]
-    CODE_INTERPRETER_JUPYTER_AUTH_PASSWORD: Optional[str]
-    CODE_INTERPRETER_JUPYTER_TIMEOUT: Optional[int]
+    CODE_INTERPRETER_PROMPT_TEMPLATE: str | None
+    CODE_INTERPRETER_JUPYTER_URL: str | None
+    CODE_INTERPRETER_JUPYTER_AUTH: str | None
+    CODE_INTERPRETER_JUPYTER_AUTH_TOKEN: str | None
+    CODE_INTERPRETER_JUPYTER_AUTH_PASSWORD: str | None
+    CODE_INTERPRETER_JUPYTER_TIMEOUT: int | None
 
 
 @router.get('/code_execution', response_model=CodeInterpreterConfigForm)
@@ -568,11 +560,11 @@ async def set_code_execution_config(
 # SetDefaultModels
 ############################
 class ModelsConfigForm(BaseModel):
-    DEFAULT_MODELS: Optional[str]
-    DEFAULT_PINNED_MODELS: Optional[str]
-    MODEL_ORDER_LIST: Optional[list[str]]
-    DEFAULT_MODEL_METADATA: Optional[dict] = None
-    DEFAULT_MODEL_PARAMS: Optional[dict] = None
+    DEFAULT_MODELS: str | None
+    DEFAULT_PINNED_MODELS: str | None
+    MODEL_ORDER_LIST: list[str] | None
+    DEFAULT_MODEL_METADATA: dict | None = None
+    DEFAULT_MODEL_PARAMS: dict | None = None
 
 
 @router.get('/models/defaults')

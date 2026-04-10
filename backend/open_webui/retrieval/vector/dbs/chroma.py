@@ -1,29 +1,26 @@
-import chromadb
 import logging
+
+import chromadb
 from chromadb import Settings
 from chromadb.utils.batch_utils import create_batches
-
-from typing import Optional
-
-from open_webui.retrieval.vector.main import (
-    VectorDBBase,
-    VectorItem,
-    SearchResult,
-    GetResult,
-)
-from open_webui.retrieval.vector.utils import process_metadata
-
 from open_webui.config import (
+    CHROMA_CLIENT_AUTH_CREDENTIALS,
+    CHROMA_CLIENT_AUTH_PROVIDER,
     CHROMA_DATA_PATH,
+    CHROMA_DATABASE,
+    CHROMA_HTTP_HEADERS,
     CHROMA_HTTP_HOST,
     CHROMA_HTTP_PORT,
-    CHROMA_HTTP_HEADERS,
     CHROMA_HTTP_SSL,
     CHROMA_TENANT,
-    CHROMA_DATABASE,
-    CHROMA_CLIENT_AUTH_PROVIDER,
-    CHROMA_CLIENT_AUTH_CREDENTIALS,
 )
+from open_webui.retrieval.vector.main import (
+    GetResult,
+    SearchResult,
+    VectorDBBase,
+    VectorItem,
+)
+from open_webui.retrieval.vector.utils import process_metadata
 
 log = logging.getLogger(__name__)
 
@@ -70,9 +67,9 @@ class ChromaClient(VectorDBBase):
         self,
         collection_name: str,
         vectors: list[list[float | int]],
-        filter: Optional[dict] = None,
+        filter: dict | None = None,
         limit: int = 10,
-    ) -> Optional[SearchResult]:
+    ) -> SearchResult | None:
         # Search for the nearest neighbor items based on the vectors and return 'limit' number of results.
         try:
             collection = self.client.get_collection(name=collection_name)
@@ -98,10 +95,10 @@ class ChromaClient(VectorDBBase):
                     }
                 )
             return None
-        except Exception as e:
+        except Exception:
             return None
 
-    def query(self, collection_name: str, filter: dict, limit: Optional[int] = None) -> Optional[GetResult]:
+    def query(self, collection_name: str, filter: dict, limit: int | None = None) -> GetResult | None:
         # Query the items from the collection based on the filter.
         try:
             collection = self.client.get_collection(name=collection_name)
@@ -122,7 +119,7 @@ class ChromaClient(VectorDBBase):
         except Exception:
             return None
 
-    def get(self, collection_name: str) -> Optional[GetResult]:
+    def get(self, collection_name: str) -> GetResult | None:
         # Get all the items in the collection.
         collection = self.client.get_collection(name=collection_name)
         if collection:
@@ -168,8 +165,8 @@ class ChromaClient(VectorDBBase):
     def delete(
         self,
         collection_name: str,
-        ids: Optional[list[str]] = None,
-        filter: Optional[dict] = None,
+        ids: list[str] | None = None,
+        filter: dict | None = None,
     ):
         # Delete the items from the collection based on the ids.
         try:
@@ -179,7 +176,7 @@ class ChromaClient(VectorDBBase):
                     collection.delete(ids=ids)
                 elif filter:
                     collection.delete(where=filter)
-        except Exception as e:
+        except Exception:
             # If collection doesn't exist, that's fine - nothing to delete
             log.debug(f'Attempted to delete from non-existent collection {collection_name}. Ignoring.')
             pass

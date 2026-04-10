@@ -1,41 +1,37 @@
-from typing import List, Optional
-from pydantic import BaseModel
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
-from fastapi.responses import StreamingResponse
-from fastapi.concurrency import run_in_threadpool
-import logging
 import io
+import logging
 import zipfile
+from typing import Optional
 from urllib.parse import quote
 
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import StreamingResponse
+from open_webui.config import BYPASS_ADMIN_ACCESS_CONTROL
+from open_webui.constants import ERROR_MESSAGES
 from open_webui.internal.db import get_session
+from open_webui.models.access_grants import AccessGrants
+from open_webui.models.files import FileMetadataResponse, Files
 from open_webui.models.groups import Groups
 from open_webui.models.knowledge import (
     KnowledgeFileListResponse,
-    Knowledges,
     KnowledgeForm,
     KnowledgeResponse,
+    Knowledges,
     KnowledgeUserResponse,
 )
-from open_webui.models.files import Files, FileModel, FileMetadataResponse
+from open_webui.models.models import ModelForm, Models
 from open_webui.retrieval.vector.factory import VECTOR_DB_CLIENT
 from open_webui.routers.retrieval import (
-    process_file,
-    ProcessFileForm,
-    process_files_batch,
     BatchProcessFilesForm,
+    ProcessFileForm,
+    process_file,
+    process_files_batch,
 )
-from open_webui.storage.provider import Storage
-
-from open_webui.constants import ERROR_MESSAGES
-from open_webui.utils.auth import get_verified_user, get_admin_user
-from open_webui.utils.access_control import has_permission, filter_allowed_access_grants
-from open_webui.models.access_grants import AccessGrants
-
-
-from open_webui.config import BYPASS_ADMIN_ACCESS_CONTROL
-from open_webui.models.models import Models, ModelForm
+from open_webui.utils.access_control import filter_allowed_access_grants, has_permission
+from open_webui.utils.auth import get_admin_user, get_verified_user
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 log = logging.getLogger(__name__)
 
@@ -99,7 +95,7 @@ def remove_knowledge_base_metadata_embedding(knowledge_base_id: str) -> bool:
 
 
 class KnowledgeAccessResponse(KnowledgeUserResponse):
-    write_access: Optional[bool] = False
+    write_access: bool | None = False
 
 
 class KnowledgeAccessListResponse(BaseModel):
@@ -109,7 +105,7 @@ class KnowledgeAccessListResponse(BaseModel):
 
 @router.get('/', response_model=KnowledgeAccessListResponse)
 async def get_knowledge_bases(
-    page: Optional[int] = 1,
+    page: int | None = 1,
     user=Depends(get_verified_user),
     db: Session = Depends(get_session),
 ):
@@ -158,9 +154,9 @@ async def get_knowledge_bases(
 
 @router.get('/search', response_model=KnowledgeAccessListResponse)
 async def search_knowledge_bases(
-    query: Optional[str] = None,
-    view_option: Optional[str] = None,
-    page: Optional[int] = 1,
+    query: str | None = None,
+    view_option: str | None = None,
+    page: int | None = 1,
     user=Depends(get_verified_user),
     db: Session = Depends(get_session),
 ):
@@ -214,8 +210,8 @@ async def search_knowledge_bases(
 
 @router.get('/search/files', response_model=KnowledgeFileListResponse)
 async def search_knowledge_files(
-    query: Optional[str] = None,
-    page: Optional[int] = 1,
+    query: str | None = None,
+    page: int | None = 1,
     user=Depends(get_verified_user),
     db: Session = Depends(get_session),
 ):
@@ -341,7 +337,7 @@ async def reindex_knowledge_files(
             for failed in failed_files:
                 log.warning(f'File ID: {failed["file_id"]}, Error: {failed["error"]}')
 
-    log.info(f'Reindexing completed.')
+    log.info('Reindexing completed.')
     return True
 
 
@@ -380,8 +376,8 @@ async def reindex_knowledge_base_metadata_embeddings(
 
 
 class KnowledgeFilesResponse(KnowledgeResponse):
-    files: Optional[list[FileMetadataResponse]] = None
-    write_access: Optional[bool] = False
+    files: list[FileMetadataResponse] | None = None
+    write_access: bool | None = False
 
 
 @router.get('/{id}', response_model=Optional[KnowledgeFilesResponse])
@@ -556,11 +552,11 @@ async def update_knowledge_access_by_id(
 @router.get('/{id}/files', response_model=KnowledgeFileListResponse)
 async def get_knowledge_files_by_id(
     id: str,
-    query: Optional[str] = None,
-    view_option: Optional[str] = None,
-    order_by: Optional[str] = None,
-    direction: Optional[str] = None,
-    page: Optional[int] = 1,
+    query: str | None = None,
+    view_option: str | None = None,
+    order_by: str | None = None,
+    direction: str | None = None,
+    page: int | None = 1,
     user=Depends(get_verified_user),
     db: Session = Depends(get_session),
 ):
