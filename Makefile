@@ -1,3 +1,4 @@
+COMPOSE_FILE ?= docker-compose.dev.yml
 
 ifneq ($(shell which docker-compose 2>/dev/null),)
     DOCKER_COMPOSE := docker-compose
@@ -5,29 +6,32 @@ else
     DOCKER_COMPOSE := docker compose
 endif
 
-install:
-	$(DOCKER_COMPOSE) up -d
+.PHONY: up down build lint lint-frontend lint-backend check dev
 
-remove:
-	@chmod +x confirm_remove.sh
-	@./confirm_remove.sh
+up:
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) up -d
 
-start:
-	$(DOCKER_COMPOSE) start
-startAndBuild: 
-	$(DOCKER_COMPOSE) up -d --build
+build:
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) up -d --build
 
-stop:
-	$(DOCKER_COMPOSE) stop
+down:
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) down
 
-update:
-	# Calls the LLM update script
-	chmod +x update_ollama_models.sh
-	@./update_ollama_models.sh
-	@git pull
-	$(DOCKER_COMPOSE) down
-	# Make sure the ollama-webui container is stopped before rebuilding
-	@docker stop open-webui || true
-	$(DOCKER_COMPOSE) up --build -d
-	$(DOCKER_COMPOSE) start
+logs:
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) logs -f
 
+lint: lint-frontend lint-backend
+
+lint-frontend:
+	npx eslint . --max-warnings=0
+	npx prettier --check "src/**/*.{js,ts,svelte,css,json}"
+
+lint-backend:
+	ruff check backend/
+	ruff format --check backend/
+
+check:
+	npm run check
+
+dev:
+	npm run dev
