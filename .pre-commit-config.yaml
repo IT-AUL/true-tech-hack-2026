@@ -1,3 +1,8 @@
+# Avoid Homebrew Python 3.14 + macOS libexpat crashes in hook venvs.
+# Change to python3.11 if that is what you have (`which python3.11`).
+default_language_version:
+  python: python3.12
+
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.5
