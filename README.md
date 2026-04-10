@@ -79,12 +79,15 @@ npm run check
 
 Конфиг в `.pre-commit-config.yaml` **не подключается сам**: пока не выполнишь `pre-commit install`, при `git commit` ничего не запустится.
 
+Хуки работают через **shell и `npx`**, без отдельных Python-окружений для линтеров — **конкретная версия Python не нужна**. В PATH должен быть **`ruff`** (для backend): `pip install ruff` или `brew install ruff`.
+
 ```bash
 pip install pre-commit   # или: brew install pre-commit
+brew install ruff        # или: pip install ruff
 pre-commit install       # один раз в корне репозитория
 ```
 
-Проверить: `test -f .git/hooks/pre-commit && echo OK` — должен вывести `OK`.
+Проверить: `test -f .git/hooks/pre-commit && echo OK` — должен вывести `OK`. После обновления конфига: `pre-commit clean`.
 
 ## Деплой для компаний (self-hosted)
 

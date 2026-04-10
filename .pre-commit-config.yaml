@@ -1,59 +1,74 @@
-# Avoid Homebrew Python 3.14 + macOS libexpat crashes in hook venvs.
-# Change to python3.11 if that is what you have (`which python3.11`).
-default_language_version:
-  python: python3.12
+# Все хуки — language: script | system. Нет Python virtualenv → не нужен python3.11/3.12.
+# Нужно: pre-commit (brew/pipx), ruff в PATH, Node (npx) для eslint/prettier.
 
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.5
-    hooks:
-      - id: ruff
-        args: [--fix]
-        files: ^backend/
-      - id: ruff-format
-        files: ^backend/
-
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
-    hooks:
-      - id: trailing-whitespace
-        exclude: ^(.*\.md|.*\.lock|.*\.svg|src/lib/i18n/.*)$
-      - id: end-of-file-fixer
-        exclude: ^(.*\.lock|.*\.svg)$
-      - id: check-yaml
-        args: [--allow-multiple-documents]
-      - id: check-added-large-files
-        args: [--maxkb=500]
-        exclude: ^(.*\.lock|.*\.png)$
-      - id: check-merge-conflict
-      - id: no-commit-to-branch
-        args: [--branch, main]
-
   - repo: local
     hooks:
+      - id: no-commit-main
+        name: no commit to main
+        entry: scripts/hooks/check-no-commit-main.sh
+        language: script
+        always_run: true
+        pass_filenames: false
+
       - id: branch-name
         name: branch name convention
         entry: scripts/hooks/check-branch-name.sh
         language: script
         always_run: true
         pass_filenames: false
+
+      - id: trailing-whitespace
+        name: trailing whitespace (staged)
+        entry: scripts/hooks/check-staged-whitespace.sh
+        language: script
+        pass_filenames: false
+
+      - id: merge-conflict
+        name: merge conflict markers
+        entry: scripts/hooks/check-merge-conflict-staged.sh
+        language: script
+        pass_filenames: false
+
+      - id: large-files
+        name: large files (staged)
+        entry: scripts/hooks/check-large-staged.sh
+        language: script
+        pass_filenames: false
+
+      - id: yaml-syntax
+        name: yaml syntax (staged, if PyYAML installed)
+        entry: scripts/hooks/check-yaml-staged.sh
+        language: script
+        pass_filenames: false
+
+      - id: ruff
+        name: ruff (backend)
+        entry: scripts/hooks/run-ruff.sh
+        language: script
+        pass_filenames: false
+        files: ^backend/.*\.py$
+
       - id: eslint
         name: eslint (frontend)
         entry: npx eslint --max-warnings=0
         language: system
         files: ^src/.*\.(js|ts|svelte)$
+
       - id: prettier-check
         name: prettier (frontend)
         entry: npx prettier --check
         language: system
         files: \.(js|ts|svelte|css|json)$
         exclude: ^(node_modules|build|package-lock\.json|src/lib/i18n/)
+
       - id: no-debug
         name: no debug leftovers
         entry: scripts/hooks/check-no-debug.sh
         language: script
         always_run: true
         pass_filenames: false
+
       - id: no-secrets
         name: no secrets in code
         entry: scripts/hooks/check-no-secrets.sh

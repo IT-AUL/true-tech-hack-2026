@@ -49,12 +49,15 @@ cd /path/to/task-repo && pre-commit install
 
 Проверка: в `.git/hooks/` должен быть исполняемый файл `pre-commit` (не только `pre-commit.sample`).
 
-Если `pre-commit run` падает с ошибкой `pyexpat` / `_XML_SetAllocTrackerActivationThreshold` на macOS — **Homebrew Python 3.14** ломает `virtualenv` внутри pre-commit. В `.pre-commit-config.yaml` задано `default_language_version: python3.12` (можно поменять на `python3.11`, если так удобнее). Установи интерпретатор и сбрось кэш:
+Хуки **не создают Python virtualenv** — версия системного Python для них не важна. Нужны в PATH:
+
+- **`ruff`** — `pip install ruff` или `brew install ruff` (для бэкенд-хука)
+- **Node** — для `npx eslint` / `prettier`
+
+После смены конфига pre-commit один раз очисти старые venv:
 
 ```bash
-brew install python@3.12   # или: brew install python@3.11 и правка yaml на python3.11
 pre-commit clean
-pre-commit run --all-files
 ```
 
 Pre-commit хуки после `pre-commit install` запускаются на каждом `git commit`:
