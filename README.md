@@ -77,10 +77,14 @@ npm run check
 
 ### Pre-commit хуки
 
+Конфиг в `.pre-commit-config.yaml` **не подключается сам**: пока не выполнишь `pre-commit install`, при `git commit` ничего не запустится.
+
 ```bash
-pip install pre-commit
-pre-commit install
+pip install pre-commit   # или: brew install pre-commit
+pre-commit install       # один раз в корне репозитория
 ```
+
+Проверить: `test -f .git/hooks/pre-commit && echo OK` — должен вывести `OK`.
 
 ## Деплой для компаний (self-hosted)
 

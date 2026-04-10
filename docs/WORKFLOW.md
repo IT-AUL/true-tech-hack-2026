@@ -40,7 +40,16 @@ cd backend && bash start.sh  # backend на :8080
 
 ### 3. Коммит
 
-Pre-commit хуки запускаются автоматически:
+**Один раз после клона** установи хуки (без этого `git commit` их не вызывает):
+
+```bash
+pip install pre-commit   # или: brew install pre-commit
+cd /path/to/task-repo && pre-commit install
+```
+
+Проверка: в `.git/hooks/` должен быть исполняемый файл `pre-commit` (не только `pre-commit.sample`).
+
+Pre-commit хуки после `pre-commit install` запускаются на каждом `git commit`:
 - **ruff** — линт и форматирование Python
 - **eslint / prettier** — линт и форматирование фронтенда
 - **branch-name** — проверка имени ветки (`feat/`, `fix/`, `chore/`, и т.д.)
