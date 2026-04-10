@@ -25,6 +25,11 @@ module.exports = {
 			parser: 'svelte-eslint-parser',
 			parserOptions: {
 				parser: '@typescript-eslint/parser'
+			},
+			// @typescript-eslint/no-unused-vars crashes on some Svelte AST nodes (e.g. Svelte 5 / reactive)
+			rules: {
+				'@typescript-eslint/no-unused-vars': 'off',
+				'no-unused-vars': 'off'
 			}
 		}
 	]
