@@ -49,16 +49,25 @@ cd /path/to/task-repo && pre-commit install
 
 Проверка: в `.git/hooks/` должен быть исполняемый файл `pre-commit` (не только `pre-commit.sample`).
 
-Хуки **не создают Python virtualenv** — версия системного Python для них не важна. Нужны в PATH:
-
-- **`ruff`** — `pip install ruff` или `brew install ruff` (для бэкенд-хука)
-- **Node** — для `npx eslint` / `prettier`
-
-После смены конфига pre-commit один раз очисти старые venv:
+**Ruff в хуках:** вызывается как обычная команда `ruff` (`language: system`), без отдельного venv под Ruff. Нужен `ruff` в `PATH`:
 
 ```bash
-pre-commit clean
+brew install ruff          # или: pip install ruff / pipx install ruff
 ```
+
+Если падает установка окружения для **pre-commit-hooks** (trailing-whitespace, check-yaml, …) — это уже **другой** venv на Python. На macOS с **Homebrew `pre-commit` на Python 3.14** бывают ошибки `pyexpat` / `libexpat`. Нормальный обход:
+
+```bash
+brew install ruff pipx
+pipx install pre-commit --force
+# при необходимости привязать pipx к стабильному Python:
+# brew install python@3.12 && pipx install pre-commit --python /opt/homebrew/opt/python@3.12/bin/python3.12
+pre-commit clean
+cd /path/to/repo && pre-commit install
+pre-commit run --all-files
+```
+
+Так ты **ничего не выкидываешь**: тот же `.pre-commit-config.yaml`, те же хуки; меняется только способ установки CLI `pre-commit` и наличие `ruff` в PATH.
 
 Pre-commit хуки после `pre-commit install` запускаются на каждом `git commit`:
 - **ruff** — линт и форматирование Python
