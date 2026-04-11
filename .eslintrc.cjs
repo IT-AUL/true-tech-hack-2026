@@ -32,7 +32,15 @@ module.exports = {
 		'no-control-regex': 'off',
 		'getter-return': 'off',
 		'prefer-const': 'off',
-		'no-extra-boolean-cast': 'off'
+		'no-extra-boolean-cast': 'off',
+		'no-prototype-builtins': 'off',
+		'@typescript-eslint/no-empty-object-type': 'off',
+		'no-empty': 'off',
+		'no-ex-assign': 'off',
+		'no-unsafe-optional-chaining': 'off',
+		'@typescript-eslint/ban-ts-comment': 'off',
+		'@typescript-eslint/no-unsafe-function-type': 'off',
+		'no-async-promise-executor': 'off'
 	},
 	overrides: [
 		{
@@ -49,7 +57,9 @@ module.exports = {
 				'no-undef': 'off',
 				// Upstream uses {@html} and has noisy a11y/CSS compile warnings
 				'svelte/no-at-html-tags': 'off',
-				'svelte/valid-compile': 'off'
+				'svelte/valid-compile': 'off',
+				'svelte/no-unused-svelte-ignore': 'off',
+				'svelte/no-inner-declarations': 'off'
 			}
 		}
 	]
