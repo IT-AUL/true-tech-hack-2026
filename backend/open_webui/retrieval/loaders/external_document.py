@@ -1,8 +1,8 @@
-import requests
-import logging, os
-from typing import Iterator, List, Union
+import logging
+import os
 from urllib.parse import quote
 
+import requests
 from langchain_core.document_loaders import BaseLoader
 from langchain_core.documents import Document
 from open_webui.utils.headers import include_user_info_headers
@@ -28,7 +28,7 @@ class ExternalDocumentLoader(BaseLoader):
 
         self.user = user
 
-    def load(self) -> List[Document]:
+    def load(self) -> list[Document]:
         with open(self.file_path, 'rb') as f:
             data = f.read()
 

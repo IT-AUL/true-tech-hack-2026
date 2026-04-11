@@ -1,19 +1,12 @@
-import json
 import time
 import uuid
-from typing import Optional
 
-from sqlalchemy.orm import Session
-from open_webui.internal.db import Base, JSONField, get_db, get_db_context
-from open_webui.models.tags import TagModel, Tag, Tags
-from open_webui.models.users import Users, User, UserNameResponse
-from open_webui.models.channels import Channels, ChannelMember
-
-
+from open_webui.internal.db import Base, get_db_context
+from open_webui.models.channels import Channels
+from open_webui.models.users import User, UserNameResponse, Users
 from pydantic import BaseModel, ConfigDict, field_validator
-from sqlalchemy import BigInteger, Boolean, Column, String, Text, JSON
-from sqlalchemy import or_, func, select, and_, text
-from sqlalchemy.sql import exists
+from sqlalchemy import JSON, BigInteger, Boolean, Column, Text
+from sqlalchemy.orm import Session
 
 ####################
 # Message DB Schema
@@ -67,19 +60,19 @@ class MessageModel(BaseModel):
 
     id: str
     user_id: str
-    channel_id: Optional[str] = None
+    channel_id: str | None = None
 
-    reply_to_id: Optional[str] = None
-    parent_id: Optional[str] = None
+    reply_to_id: str | None = None
+    parent_id: str | None = None
 
     # Pins
     is_pinned: bool = False
-    pinned_by: Optional[str] = None
-    pinned_at: Optional[int] = None  # timestamp in epoch (time_ns)
+    pinned_by: str | None = None
+    pinned_at: int | None = None  # timestamp in epoch (time_ns)
 
     content: str
-    data: Optional[dict] = None
-    meta: Optional[dict] = None
+    data: dict | None = None
+    meta: dict | None = None
 
     created_at: int  # timestamp in epoch (time_ns)
     updated_at: int  # timestamp in epoch (time_ns)
@@ -91,12 +84,12 @@ class MessageModel(BaseModel):
 
 
 class MessageForm(BaseModel):
-    temp_id: Optional[str] = None
+    temp_id: str | None = None
     content: str
-    reply_to_id: Optional[str] = None
-    parent_id: Optional[str] = None
-    data: Optional[dict] = None
-    meta: Optional[dict] = None
+    reply_to_id: str | None = None
+    parent_id: str | None = None
+    data: dict | None = None
+    meta: dict | None = None
 
 
 class Reactions(BaseModel):
@@ -106,7 +99,7 @@ class Reactions(BaseModel):
 
 
 class MessageUserResponse(MessageModel):
-    user: Optional[UserNameResponse] = None
+    user: UserNameResponse | None = None
 
 
 class MessageUserSlimResponse(MessageUserResponse):
@@ -123,7 +116,7 @@ class MessageUserSlimResponse(MessageUserResponse):
 
 
 class MessageReplyToResponse(MessageUserResponse):
-    reply_to_message: Optional[MessageUserSlimResponse] = None
+    reply_to_message: MessageUserSlimResponse | None = None
 
 
 class MessageWithReactionsResponse(MessageUserSlimResponse):
@@ -131,7 +124,7 @@ class MessageWithReactionsResponse(MessageUserSlimResponse):
 
 
 class MessageResponse(MessageReplyToResponse):
-    latest_reply_at: Optional[int]
+    latest_reply_at: int | None
     reply_count: int
     reactions: list[Reactions]
 
@@ -142,10 +135,10 @@ class MessageTable:
         form_data: MessageForm,
         channel_id: str,
         user_id: str,
-        db: Optional[Session] = None,
-    ) -> Optional[MessageModel]:
+        db: Session | None = None,
+    ) -> MessageModel | None:
         with get_db_context(db) as db:
-            channel_member = Channels.join_channel(channel_id, user_id)
+            Channels.join_channel(channel_id, user_id)
 
             id = str(uuid.uuid4())
             ts = int(time.time_ns())
@@ -177,9 +170,9 @@ class MessageTable:
     def get_message_by_id(
         self,
         id: str,
-        include_thread_replies: Optional[bool] = True,
-        db: Optional[Session] = None,
-    ) -> Optional[MessageResponse]:
+        include_thread_replies: bool | None = True,
+        db: Session | None = None,
+    ) -> MessageResponse | None:
         with get_db_context(db) as db:
             message = db.get(Message, id)
             if not message:
@@ -230,7 +223,7 @@ class MessageTable:
                 }
             )
 
-    def get_thread_replies_by_message_id(self, id: str, db: Optional[Session] = None) -> list[MessageReplyToResponse]:
+    def get_thread_replies_by_message_id(self, id: str, db: Session | None = None) -> list[MessageReplyToResponse]:
         with get_db_context(db) as db:
             all_messages = db.query(Message).filter_by(parent_id=id).order_by(Message.created_at.desc()).all()
 
@@ -270,7 +263,7 @@ class MessageTable:
                 )
             return messages
 
-    def get_reply_user_ids_by_message_id(self, id: str, db: Optional[Session] = None) -> list[str]:
+    def get_reply_user_ids_by_message_id(self, id: str, db: Session | None = None) -> list[str]:
         with get_db_context(db) as db:
             return [message.user_id for message in db.query(Message).filter_by(parent_id=id).all()]
 
@@ -279,7 +272,7 @@ class MessageTable:
         channel_id: str,
         skip: int = 0,
         limit: int = 50,
-        db: Optional[Session] = None,
+        db: Session | None = None,
     ) -> list[MessageReplyToResponse]:
         with get_db_context(db) as db:
             all_messages = (
@@ -333,7 +326,7 @@ class MessageTable:
         parent_id: str,
         skip: int = 0,
         limit: int = 50,
-        db: Optional[Session] = None,
+        db: Session | None = None,
     ) -> list[MessageReplyToResponse]:
         with get_db_context(db) as db:
             message = db.get(Message, parent_id)
@@ -390,7 +383,7 @@ class MessageTable:
                 )
             return messages
 
-    def get_last_message_by_channel_id(self, channel_id: str, db: Optional[Session] = None) -> Optional[MessageModel]:
+    def get_last_message_by_channel_id(self, channel_id: str, db: Session | None = None) -> MessageModel | None:
         with get_db_context(db) as db:
             message = db.query(Message).filter_by(channel_id=channel_id).order_by(Message.created_at.desc()).first()
             return MessageModel.model_validate(message) if message else None
@@ -400,7 +393,7 @@ class MessageTable:
         channel_id: str,
         skip: int = 0,
         limit: int = 50,
-        db: Optional[Session] = None,
+        db: Session | None = None,
     ) -> list[MessageModel]:
         with get_db_context(db) as db:
             all_messages = (
@@ -413,9 +406,7 @@ class MessageTable:
             )
             return [MessageModel.model_validate(message) for message in all_messages]
 
-    def update_message_by_id(
-        self, id: str, form_data: MessageForm, db: Optional[Session] = None
-    ) -> Optional[MessageModel]:
+    def update_message_by_id(self, id: str, form_data: MessageForm, db: Session | None = None) -> MessageModel | None:
         with get_db_context(db) as db:
             message = db.get(Message, id)
             message.content = form_data.content
@@ -436,9 +427,9 @@ class MessageTable:
         self,
         id: str,
         is_pinned: bool,
-        pinned_by: Optional[str] = None,
-        db: Optional[Session] = None,
-    ) -> Optional[MessageModel]:
+        pinned_by: str | None = None,
+        db: Session | None = None,
+    ) -> MessageModel | None:
         with get_db_context(db) as db:
             message = db.get(Message, id)
             message.is_pinned = is_pinned
@@ -452,13 +443,13 @@ class MessageTable:
         self,
         channel_id: str,
         user_id: str,
-        last_read_at: Optional[int] = None,
-        db: Optional[Session] = None,
+        last_read_at: int | None = None,
+        db: Session | None = None,
     ) -> int:
         with get_db_context(db) as db:
             query = db.query(Message).filter(
                 Message.channel_id == channel_id,
-                Message.parent_id == None,  # only count top-level messages
+                Message.parent_id is None,  # only count top-level messages
                 Message.created_at > (last_read_at if last_read_at else 0),
             )
             if user_id:
@@ -466,8 +457,8 @@ class MessageTable:
             return query.count()
 
     def add_reaction_to_message(
-        self, id: str, user_id: str, name: str, db: Optional[Session] = None
-    ) -> Optional[MessageReactionModel]:
+        self, id: str, user_id: str, name: str, db: Session | None = None
+    ) -> MessageReactionModel | None:
         with get_db_context(db) as db:
             # check for existing reaction
             existing_reaction = db.query(MessageReaction).filter_by(message_id=id, user_id=user_id, name=name).first()
@@ -488,7 +479,7 @@ class MessageTable:
             db.refresh(result)
             return MessageReactionModel.model_validate(result) if result else None
 
-    def get_reactions_by_message_id(self, id: str, db: Optional[Session] = None) -> list[Reactions]:
+    def get_reactions_by_message_id(self, id: str, db: Session | None = None) -> list[Reactions]:
         with get_db_context(db) as db:
             # JOIN User so all user info is fetched in one query
             results = (
@@ -519,26 +510,26 @@ class MessageTable:
             return [Reactions(**reaction) for reaction in reactions.values()]
 
     def remove_reaction_by_id_and_user_id_and_name(
-        self, id: str, user_id: str, name: str, db: Optional[Session] = None
+        self, id: str, user_id: str, name: str, db: Session | None = None
     ) -> bool:
         with get_db_context(db) as db:
             db.query(MessageReaction).filter_by(message_id=id, user_id=user_id, name=name).delete()
             db.commit()
             return True
 
-    def delete_reactions_by_id(self, id: str, db: Optional[Session] = None) -> bool:
+    def delete_reactions_by_id(self, id: str, db: Session | None = None) -> bool:
         with get_db_context(db) as db:
             db.query(MessageReaction).filter_by(message_id=id).delete()
             db.commit()
             return True
 
-    def delete_replies_by_id(self, id: str, db: Optional[Session] = None) -> bool:
+    def delete_replies_by_id(self, id: str, db: Session | None = None) -> bool:
         with get_db_context(db) as db:
             db.query(Message).filter_by(parent_id=id).delete()
             db.commit()
             return True
 
-    def delete_message_by_id(self, id: str, db: Optional[Session] = None) -> bool:
+    def delete_message_by_id(self, id: str, db: Session | None = None) -> bool:
         with get_db_context(db) as db:
             db.query(Message).filter_by(id=id).delete()
 
@@ -552,10 +543,10 @@ class MessageTable:
         self,
         channel_ids: list[str],
         query: str,
-        start_timestamp: Optional[int] = None,
-        end_timestamp: Optional[int] = None,
+        start_timestamp: int | None = None,
+        end_timestamp: int | None = None,
         limit: int = 10,
-        db: Optional[Session] = None,
+        db: Session | None = None,
     ) -> list[MessageModel]:
         """Search messages in specified channels by content."""
         with get_db_context(db) as db:

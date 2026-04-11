@@ -1,26 +1,22 @@
-from typing import Optional
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status, Request
-from fastapi.concurrency import run_in_threadpool
-from pydantic import BaseModel
 
-from open_webui.models.users import Users, UserModel
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.concurrency import run_in_threadpool
+from open_webui.constants import ERROR_MESSAGES
+from open_webui.internal.db import get_session
 from open_webui.models.feedbacks import (
+    FeedbackForm,
     FeedbackIdResponse,
+    FeedbackListResponse,
     FeedbackModel,
     FeedbackResponse,
-    FeedbackForm,
-    FeedbackUserResponse,
-    FeedbackListResponse,
-    LeaderboardFeedbackData,
-    ModelHistoryEntry,
-    ModelHistoryResponse,
     Feedbacks,
+    FeedbackUserResponse,
+    LeaderboardFeedbackData,
+    ModelHistoryResponse,
 )
-
-from open_webui.constants import ERROR_MESSAGES
 from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.internal.db import get_session
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 log = logging.getLogger(__name__)
@@ -206,7 +202,7 @@ class LeaderboardResponse(BaseModel):
 
 @router.get('/leaderboard', response_model=LeaderboardResponse)
 async def get_leaderboard(
-    query: Optional[str] = None,
+    query: str | None = None,
     user=Depends(get_admin_user),
     db: Session = Depends(get_session),
 ):
@@ -270,8 +266,8 @@ async def get_config(request: Request, user=Depends(get_admin_user)):
 
 
 class UpdateConfigForm(BaseModel):
-    ENABLE_EVALUATION_ARENA_MODELS: Optional[bool] = None
-    EVALUATION_ARENA_MODELS: Optional[list[dict]] = None
+    ENABLE_EVALUATION_ARENA_MODELS: bool | None = None
+    EVALUATION_ARENA_MODELS: list[dict] | None = None
 
 
 @router.post('/config')
@@ -331,9 +327,9 @@ PAGE_ITEM_COUNT = 30
 
 @router.get('/feedbacks/list', response_model=FeedbackListResponse)
 async def get_feedbacks(
-    order_by: Optional[str] = None,
-    direction: Optional[str] = None,
-    page: Optional[int] = 1,
+    order_by: str | None = None,
+    direction: str | None = None,
+    page: int | None = 1,
     user=Depends(get_admin_user),
     db: Session = Depends(get_session),
 ):

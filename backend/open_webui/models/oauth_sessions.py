@@ -1,19 +1,16 @@
-import time
-import logging
-import uuid
-from typing import Optional, List
 import base64
 import hashlib
 import json
+import logging
+import time
+import uuid
 
 from cryptography.fernet import Fernet
-
-from sqlalchemy.orm import Session
-from open_webui.internal.db import Base, get_db, get_db_context
 from open_webui.env import OAUTH_SESSION_TOKEN_ENCRYPTION_KEY
-
+from open_webui.internal.db import Base, get_db_context
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import BigInteger, Column, String, Text, Index
+from sqlalchemy import BigInteger, Column, Index, Text
+from sqlalchemy.orm import Session
 
 log = logging.getLogger(__name__)
 
@@ -108,8 +105,8 @@ class OAuthSessionTable:
         user_id: str,
         provider: str,
         token: dict,
-        db: Optional[Session] = None,
-    ) -> Optional[OAuthSessionModel]:
+        db: Session | None = None,
+    ) -> OAuthSessionModel | None:
         """Create a new OAuth session"""
         try:
             with get_db_context(db) as db:
@@ -142,7 +139,7 @@ class OAuthSessionTable:
             log.error(f'Error creating OAuth session: {e}')
             return None
 
-    def get_session_by_id(self, session_id: str, db: Optional[Session] = None) -> Optional[OAuthSessionModel]:
+    def get_session_by_id(self, session_id: str, db: Session | None = None) -> OAuthSessionModel | None:
         """Get OAuth session by ID"""
         try:
             with get_db_context(db) as db:
@@ -158,8 +155,8 @@ class OAuthSessionTable:
             return None
 
     def get_session_by_id_and_user_id(
-        self, session_id: str, user_id: str, db: Optional[Session] = None
-    ) -> Optional[OAuthSessionModel]:
+        self, session_id: str, user_id: str, db: Session | None = None
+    ) -> OAuthSessionModel | None:
         """Get OAuth session by ID and user ID"""
         try:
             with get_db_context(db) as db:
@@ -175,8 +172,8 @@ class OAuthSessionTable:
             return None
 
     def get_session_by_provider_and_user_id(
-        self, provider: str, user_id: str, db: Optional[Session] = None
-    ) -> Optional[OAuthSessionModel]:
+        self, provider: str, user_id: str, db: Session | None = None
+    ) -> OAuthSessionModel | None:
         """Get OAuth session by provider and user ID"""
         try:
             with get_db_context(db) as db:
@@ -196,7 +193,7 @@ class OAuthSessionTable:
             log.error(f'Error getting OAuth session by provider and user ID: {e}')
             return None
 
-    def get_sessions_by_user_id(self, user_id: str, db: Optional[Session] = None) -> List[OAuthSessionModel]:
+    def get_sessions_by_user_id(self, user_id: str, db: Session | None = None) -> list[OAuthSessionModel]:
         """Get all OAuth sessions for a user"""
         try:
             with get_db_context(db) as db:
@@ -221,9 +218,7 @@ class OAuthSessionTable:
             log.error(f'Error getting OAuth sessions by user ID: {e}')
             return []
 
-    def update_session_by_id(
-        self, session_id: str, token: dict, db: Optional[Session] = None
-    ) -> Optional[OAuthSessionModel]:
+    def update_session_by_id(self, session_id: str, token: dict, db: Session | None = None) -> OAuthSessionModel | None:
         """Update OAuth session tokens"""
         try:
             with get_db_context(db) as db:
@@ -249,7 +244,7 @@ class OAuthSessionTable:
             log.error(f'Error updating OAuth session tokens: {e}')
             return None
 
-    def delete_session_by_id(self, session_id: str, db: Optional[Session] = None) -> bool:
+    def delete_session_by_id(self, session_id: str, db: Session | None = None) -> bool:
         """Delete an OAuth session"""
         try:
             with get_db_context(db) as db:
@@ -260,18 +255,18 @@ class OAuthSessionTable:
             log.error(f'Error deleting OAuth session: {e}')
             return False
 
-    def delete_sessions_by_user_id(self, user_id: str, db: Optional[Session] = None) -> bool:
+    def delete_sessions_by_user_id(self, user_id: str, db: Session | None = None) -> bool:
         """Delete all OAuth sessions for a user"""
         try:
             with get_db_context(db) as db:
-                result = db.query(OAuthSession).filter_by(user_id=user_id).delete()
+                db.query(OAuthSession).filter_by(user_id=user_id).delete()
                 db.commit()
                 return True
         except Exception as e:
             log.error(f'Error deleting OAuth sessions by user ID: {e}')
             return False
 
-    def delete_sessions_by_provider(self, provider: str, db: Optional[Session] = None) -> bool:
+    def delete_sessions_by_provider(self, provider: str, db: Session | None = None) -> bool:
         """Delete all OAuth sessions for a provider"""
         try:
             with get_db_context(db) as db:

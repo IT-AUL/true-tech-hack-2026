@@ -1,14 +1,16 @@
 import logging
 import traceback
-from typing import Collection, Union
+from collections.abc import Collection
 
 from aiohttp import (
-    TraceRequestStartParams,
     TraceRequestEndParams,
     TraceRequestExceptionParams,
+    TraceRequestStartParams,
 )
 from chromadb.telemetry.opentelemetry.fastapi import instrument_fastapi
-from fastapi import FastAPI
+from fastapi import FastAPI, status
+from open_webui.utils.telemetry.constants import SPAN_REDIS_TYPE, SpanAttributes
+from opentelemetry.instrumentation.aiohttp_client import AioHttpClientInstrumentor
 from opentelemetry.instrumentation.httpx import (
     HTTPXClientInstrumentor,
     RequestInfo,
@@ -19,16 +21,12 @@ from opentelemetry.instrumentation.logging import LoggingInstrumentor
 from opentelemetry.instrumentation.redis import RedisInstrumentor
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
-from opentelemetry.instrumentation.aiohttp_client import AioHttpClientInstrumentor
 from opentelemetry.instrumentation.system_metrics import SystemMetricsInstrumentor
 from opentelemetry.trace import Span, StatusCode
 from redis import Redis
 from redis.cluster import RedisCluster
 from requests import PreparedRequest, Response
 from sqlalchemy import Engine
-from fastapi import status
-
-from open_webui.utils.telemetry.constants import SPAN_REDIS_TYPE, SpanAttributes
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +58,7 @@ def response_hook(span: Span, request: PreparedRequest, response: Response):
     span.set_status(StatusCode.ERROR if response.status_code >= 400 else StatusCode.OK)
 
 
-def redis_request_hook(span: Span, instance: Union[Redis | RedisCluster], args, kwargs):
+def redis_request_hook(span: Span, instance: Redis | RedisCluster, args, kwargs):
     """
     Redis Request Hook
     """
@@ -150,7 +148,7 @@ def aiohttp_request_hook(span: Span, request: TraceRequestStartParams):
     )
 
 
-def aiohttp_response_hook(span: Span, response: Union[TraceRequestExceptionParams, TraceRequestEndParams]):
+def aiohttp_response_hook(span: Span, response: TraceRequestExceptionParams | TraceRequestEndParams):
     """
     Aiohttp Response Hook
     """

@@ -1,30 +1,23 @@
+import logging
+import os
+import shutil
+
+import aiohttp
 from fastapi import (
+    APIRouter,
     Depends,
-    FastAPI,
     File,
     Form,
     HTTPException,
     Request,
     UploadFile,
     status,
-    APIRouter,
 )
-import aiohttp
-import os
-import logging
-import shutil
-from pydantic import BaseModel
-from starlette.responses import FileResponse
-from typing import Optional
-
-from open_webui.env import AIOHTTP_CLIENT_SESSION_SSL
 from open_webui.config import CACHE_DIR
-from open_webui.constants import ERROR_MESSAGES
-
-
+from open_webui.env import AIOHTTP_CLIENT_SESSION_SSL
 from open_webui.routers.openai import get_all_models_responses
-
 from open_webui.utils.auth import get_admin_user
+from pydantic import BaseModel
 
 log = logging.getLogger(__name__)
 
@@ -93,7 +86,7 @@ async def process_pipeline_inlet_filter(request, payload, user, models):
                 ) as response:
                     response.raise_for_status()
                     payload = await response.json()
-            except aiohttp.ClientResponseError as e:
+            except aiohttp.ClientResponseError:
                 res = await response.json() if response.content_type == 'application/json' else {}
                 if 'detail' in res:
                     raise Exception(response.status, res['detail'])
@@ -142,7 +135,7 @@ async def process_pipeline_outlet_filter(request, payload, user, models):
                 ) as response:
                     response.raise_for_status()
                     payload = await response.json()
-            except aiohttp.ClientResponseError as e:
+            except aiohttp.ClientResponseError:
                 try:
                     res = await response.json() if 'application/json' in response.content_type else {}
                     if 'detail' in res:
@@ -348,7 +341,7 @@ async def delete_pipeline(request: Request, form_data: DeletePipelineForm, user=
 
 
 @router.get('/')
-async def get_pipelines(request: Request, urlIdx: Optional[int] = None, user=Depends(get_admin_user)):
+async def get_pipelines(request: Request, urlIdx: int | None = None, user=Depends(get_admin_user)):
     response = None
     try:
         url = request.app.state.config.OPENAI_API_BASE_URLS[urlIdx]
@@ -386,7 +379,7 @@ async def get_pipelines(request: Request, urlIdx: Optional[int] = None, user=Dep
 @router.get('/{pipeline_id}/valves')
 async def get_pipeline_valves(
     request: Request,
-    urlIdx: Optional[int],
+    urlIdx: int | None,
     pipeline_id: str,
     user=Depends(get_admin_user),
 ):
@@ -427,7 +420,7 @@ async def get_pipeline_valves(
 @router.get('/{pipeline_id}/valves/spec')
 async def get_pipeline_valves_spec(
     request: Request,
-    urlIdx: Optional[int],
+    urlIdx: int | None,
     pipeline_id: str,
     user=Depends(get_admin_user),
 ):
@@ -468,7 +461,7 @@ async def get_pipeline_valves_spec(
 @router.post('/{pipeline_id}/valves/update')
 async def update_pipeline_valves(
     request: Request,
-    urlIdx: Optional[int],
+    urlIdx: int | None,
     pipeline_id: str,
     form_data: dict,
     user=Depends(get_admin_user),

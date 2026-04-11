@@ -1,3 +1,4 @@
+// @ts-nocheck — upstream ProseMirror plugin; strict checkJs produces noise
 import { Plugin, PluginKey, NodeSelection } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { Fragment } from 'prosemirror-model';

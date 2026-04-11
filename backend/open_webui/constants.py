@@ -1,22 +1,32 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class MESSAGES(str, Enum):
-    DEFAULT = lambda msg='': f'{msg if msg else ""}'
-    MODEL_ADDED = lambda model='': f"The model '{model}' has been added successfully."
-    MODEL_DELETED = lambda model='': f"The model '{model}' has been deleted successfully."
+class MESSAGES(StrEnum):
+    def DEFAULT(msg=''):
+        return f'{msg if msg else ""}'
+
+    def MODEL_ADDED(model=''):
+        return f"The model '{model}' has been added successfully."
+
+    def MODEL_DELETED(model=''):
+        return f"The model '{model}' has been deleted successfully."
 
 
-class WEBHOOK_MESSAGES(str, Enum):
-    DEFAULT = lambda msg='': f'{msg if msg else ""}'
-    USER_SIGNUP = lambda username='': f'New user signed up: {username}' if username else 'New user signed up'
+class WEBHOOK_MESSAGES(StrEnum):
+    def DEFAULT(msg=''):
+        return f'{msg if msg else ""}'
+
+    def USER_SIGNUP(username=''):
+        return f'New user signed up: {username}' if username else 'New user signed up'
 
 
-class ERROR_MESSAGES(str, Enum):
+class ERROR_MESSAGES(StrEnum):
     def __str__(self) -> str:
         return super().__str__()
 
-    DEFAULT = lambda err='': f'{"Something went wrong :/" if err == "" else "[ERROR: " + str(err) + "]"}'
+    def DEFAULT(err=''):
+        return f'{"Something went wrong :/" if err == "" else "[ERROR: " + str(err) + "]"}'
+
     ENV_VAR_NOT_FOUND = 'Required environment variable not found. Terminating now.'
     CREATE_USER_ERROR = 'Oops! Something went wrong while creating your account. Please try again later. If the issue persists, contact support for assistance.'
     DELETE_USER_ERROR = 'Oops! Something went wrong. We encountered an issue while trying to delete the user. Please give it another shot.'
@@ -61,11 +71,18 @@ class ERROR_MESSAGES(str, Enum):
     MALICIOUS = 'Unusual activities detected, please try again in a few minutes.'
 
     PANDOC_NOT_INSTALLED = 'Pandoc is not installed on the server. Please contact your administrator for assistance.'
-    INCORRECT_FORMAT = lambda err='': f'Invalid format. Please use the correct format{err}'
+
+    def INCORRECT_FORMAT(err=''):
+        return f'Invalid format. Please use the correct format{err}'
+
     RATE_LIMIT_EXCEEDED = 'API rate limit exceeded'
 
-    MODEL_NOT_FOUND = lambda name='': f"Model '{name}' was not found"
-    OPENAI_NOT_FOUND = lambda name='': 'OpenAI API was not found'
+    def MODEL_NOT_FOUND(name=''):
+        return f"Model '{name}' was not found"
+
+    def OPENAI_NOT_FOUND(name=''):
+        return 'OpenAI API was not found'
+
     OLLAMA_NOT_FOUND = 'WebUI could not connect to Ollama'
     CREATE_API_KEY_ERROR = 'Oops! Something went wrong while creating your API key. Please try again later. If the issue persists, contact support for assistance.'
     API_KEY_CREATION_NOT_ALLOWED = 'API key creation is not allowed in the environment.'
@@ -76,27 +93,30 @@ class ERROR_MESSAGES(str, Enum):
 
     INVALID_URL = 'Oops! The URL you provided is invalid. Please double-check and try again.'
 
-    WEB_SEARCH_ERROR = lambda err='': f'{err if err else "Oops! Something went wrong while searching the web."}'
+    def WEB_SEARCH_ERROR(err=''):
+        return f'{err if err else "Oops! Something went wrong while searching the web."}'
 
     OLLAMA_API_DISABLED = 'The Ollama API is disabled. Please enable it to use this feature.'
 
-    FILE_TOO_LARGE = lambda size='': (
-        f"Oops! The file you're trying to upload is too large. Please upload a file that is less than {size}."
-    )
+    def FILE_TOO_LARGE(size=''):
+        return f"Oops! The file you're trying to upload is too large. Please upload a file that is less than {size}."
 
     DUPLICATE_CONTENT = 'Duplicate content detected. Please provide unique content to proceed.'
     FILE_NOT_PROCESSED = (
         'Extracted content is not available for this file. Please ensure that the file is processed before proceeding.'
     )
 
-    INVALID_PASSWORD = lambda err='': err if err else 'The password does not meet the required validation criteria.'
+    def INVALID_PASSWORD(err=''):
+        return err if err else 'The password does not meet the required validation criteria.'
 
 
-class TASKS(str, Enum):
+class TASKS(StrEnum):
     def __str__(self) -> str:
         return super().__str__()
 
-    DEFAULT = lambda task='': f'{task if task else "generation"}'
+    def DEFAULT(task=''):
+        return f'{task if task else "generation"}'
+
     TITLE_GENERATION = 'title_generation'
     FOLLOW_UP_GENERATION = 'follow_up_generation'
     TAGS_GENERATION = 'tags_generation'

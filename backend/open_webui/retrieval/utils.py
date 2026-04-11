@@ -1,16 +1,14 @@
-import logging
-import os
-from typing import Awaitable, Optional, Union
-
-import requests
-import aiohttp
 import asyncio
 import hashlib
-from concurrent.futures import ThreadPoolExecutor
-import time
+import logging
+import os
 import re
+import time
+from collections.abc import Awaitable
+from concurrent.futures import ThreadPoolExecutor
 
-from urllib.parse import quote
+import aiohttp
+import requests
 from huggingface_hub import snapshot_download
 from langchain_classic.retrievers import (
     ContextualCompressionRetriever,
@@ -18,39 +16,30 @@ from langchain_classic.retrievers import (
 )
 from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
-
-from open_webui.config import VECTOR_DB
-from open_webui.retrieval.vector.factory import VECTOR_DB_CLIENT
-
-
-from open_webui.models.users import UserModel
-from open_webui.models.files import Files
-from open_webui.models.knowledge import Knowledges
-
-from open_webui.models.chats import Chats
-from open_webui.models.notes import Notes
-from open_webui.models.access_grants import AccessGrants
-from open_webui.utils.access_control.files import has_access_to_file
-
-from open_webui.retrieval.vector.main import GetResult
-from open_webui.utils.headers import include_user_info_headers
-from open_webui.utils.misc import get_message_list
-
-from open_webui.retrieval.web.utils import get_web_loader
-from open_webui.retrieval.loaders.youtube import YoutubeLoader
-
-
-from open_webui.env import (
-    AIOHTTP_CLIENT_TIMEOUT,
-    OFFLINE_MODE,
-    ENABLE_FORWARD_USER_INFO_HEADERS,
-    AIOHTTP_CLIENT_SESSION_SSL,
-)
 from open_webui.config import (
-    RAG_EMBEDDING_QUERY_PREFIX,
     RAG_EMBEDDING_CONTENT_PREFIX,
     RAG_EMBEDDING_PREFIX_FIELD_NAME,
+    RAG_EMBEDDING_QUERY_PREFIX,
 )
+from open_webui.env import (
+    AIOHTTP_CLIENT_SESSION_SSL,
+    AIOHTTP_CLIENT_TIMEOUT,
+    ENABLE_FORWARD_USER_INFO_HEADERS,
+    OFFLINE_MODE,
+)
+from open_webui.models.access_grants import AccessGrants
+from open_webui.models.chats import Chats
+from open_webui.models.files import Files
+from open_webui.models.knowledge import Knowledges
+from open_webui.models.notes import Notes
+from open_webui.models.users import UserModel
+from open_webui.retrieval.loaders.youtube import YoutubeLoader
+from open_webui.retrieval.vector.factory import VECTOR_DB_CLIENT
+from open_webui.retrieval.vector.main import GetResult
+from open_webui.retrieval.web.utils import get_web_loader
+from open_webui.utils.access_control.files import has_access_to_file
+from open_webui.utils.headers import include_user_info_headers
+from open_webui.utils.misc import get_message_list
 
 log = logging.getLogger(__name__)
 
@@ -800,16 +789,18 @@ def get_embedding_function(
 
         return async_embedding_function
     elif embedding_engine in ['ollama', 'openai', 'azure_openai']:
-        embedding_function = lambda query, prefix=None, user=None: generate_embeddings(
-            engine=embedding_engine,
-            model=embedding_model,
-            text=query,
-            prefix=prefix,
-            url=url,
-            key=key,
-            user=user,
-            azure_api_version=azure_api_version,
-        )
+
+        def embedding_function(query, prefix=None, user=None):
+            return generate_embeddings(
+                engine=embedding_engine,
+                model=embedding_model,
+                text=query,
+                prefix=prefix,
+                url=url,
+                key=key,
+                user=user,
+                azure_api_version=azure_api_version,
+            )
 
         async def async_embedding_function(query, prefix=None, user=None):
             if isinstance(query, list):
@@ -859,8 +850,8 @@ def get_embedding_function(
 async def generate_embeddings(
     engine: str,
     model: str,
-    text: Union[str, list[str]],
-    prefix: Union[str, None] = None,
+    text: str | list[str],
+    prefix: str | None = None,
     **kwargs,
 ):
     url = kwargs.get('url', '')
@@ -935,7 +926,7 @@ async def get_sources_from_items(
     hybrid_bm25_weight,
     hybrid_search,
     full_context=False,
-    user: Optional[UserModel] = None,
+    user: UserModel | None = None,
 ):
     log.debug(f'items: {items} {queries} {embedding_function} {reranking_function} {full_context}')
 
@@ -1218,7 +1209,7 @@ def get_model_path(model: str, update_model: bool = False):
 
 
 import operator
-from typing import Optional, Sequence
+from collections.abc import Sequence
 
 from langchain_core.callbacks import Callbacks
 from langchain_core.documents import BaseDocumentCompressor, Document
@@ -1238,7 +1229,7 @@ class RerankCompressor(BaseDocumentCompressor):
         self,
         documents: Sequence[Document],
         query: str,
-        callbacks: Optional[Callbacks] = None,
+        callbacks: Callbacks | None = None,
     ) -> Sequence[Document]:
         """Compress retrieved documents given the query context.
 
@@ -1257,7 +1248,7 @@ class RerankCompressor(BaseDocumentCompressor):
         self,
         documents: Sequence[Document],
         query: str,
-        callbacks: Optional[Callbacks] = None,
+        callbacks: Callbacks | None = None,
     ) -> Sequence[Document]:
         reranking = self.reranking_function is not None
 

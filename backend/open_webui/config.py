@@ -3,30 +3,23 @@ import logging
 import os
 import shutil
 import socket
-import base64
 from concurrent.futures import ThreadPoolExecutor
-import redis
-
 from datetime import datetime
 from pathlib import Path
-from typing import Generic, Union, Optional, TypeVar
+from typing import Generic, TypeVar
 from urllib.parse import urlparse
 
+import redis
 import requests
+from authlib.integrations.starlette_client import OAuth
 from pydantic import BaseModel
 from sqlalchemy import JSON, Column, DateTime, Integer, func
-from authlib.integrations.starlette_client import OAuth
-
 
 from open_webui.env import (
     DATA_DIR,
     DATABASE_URL,
     ENABLE_DB_MIGRATIONS,
     ENV,
-    REDIS_URL,
-    REDIS_KEY_PREFIX,
-    REDIS_SENTINEL_HOSTS,
-    REDIS_SENTINEL_PORT,
     FRONTEND_BUILD_DIR,
     OFFLINE_MODE,
     OPEN_WEBUI_DIR,
@@ -85,7 +78,7 @@ class Config(Base):
 
 
 def load_json_config():
-    with open(f'{DATA_DIR}/config.json', 'r') as file:
+    with open(f'{DATA_DIR}/config.json') as file:
         return json.load(file)
 
 
@@ -215,16 +208,16 @@ class PersistentConfig(Generic[T]):
 
 
 class AppConfig:
-    _redis: Union[redis.Redis, redis.cluster.RedisCluster] = None
+    _redis: redis.Redis | redis.cluster.RedisCluster = None
     _redis_key_prefix: str
 
     _state: dict[str, PersistentConfig]
 
     def __init__(
         self,
-        redis_url: Optional[str] = None,
-        redis_sentinels: Optional[list] = [],
-        redis_cluster: Optional[bool] = False,
+        redis_url: str | None = None,
+        redis_sentinels: list | None = [],
+        redis_cluster: bool | None = False,
         redis_key_prefix: str = 'open-webui',
     ):
         if redis_url:
@@ -759,8 +752,9 @@ def load_oauth_providers():
                 client_kwargs['code_challenge_method'] = 'S256'
             elif OAUTH_CODE_CHALLENGE_METHOD.value:
                 raise Exception(
-                    'Code challenge methods other than "%s" not supported. Given: "%s"'
-                    % ('S256', OAUTH_CODE_CHALLENGE_METHOD.value)
+                    'Code challenge methods other than "{}" not supported. Given: "{}"'.format(
+                        'S256', OAUTH_CODE_CHALLENGE_METHOD.value
+                    )
                 )
 
             client = oauth.register(
@@ -819,8 +813,8 @@ def load_oauth_providers():
             f'⚠️  OAuth providers configured ({provider_list}) but OPENID_PROVIDER_URL not set - logout will not work!'
         )
         log.warning(
-            f"Set OPENID_PROVIDER_URL to your OAuth provider's OpenID Connect discovery endpoint,"
-            f' or set OPENID_END_SESSION_ENDPOINT to a custom logout URL to fix logout functionality.'
+            "Set OPENID_PROVIDER_URL to your OAuth provider's OpenID Connect discovery endpoint,"
+            ' or set OPENID_END_SESSION_ENDPOINT to a custom logout URL to fix logout functionality.'
         )
 
 
@@ -838,14 +832,14 @@ try:
             if item.is_file() or item.is_symlink():
                 try:
                     item.unlink()
-                except Exception as e:
+                except Exception:
                     pass
-except Exception as e:
+except Exception:
     pass
 
 for file_path in (FRONTEND_BUILD_DIR / 'static').glob('**/*'):
     if file_path.is_file():
-        target_path = STATIC_DIR / file_path.relative_to((FRONTEND_BUILD_DIR / 'static'))
+        target_path = STATIC_DIR / file_path.relative_to(FRONTEND_BUILD_DIR / 'static')
         target_path.parent.mkdir(parents=True, exist_ok=True)
         try:
             shutil.copyfile(file_path, target_path)
@@ -1655,7 +1649,7 @@ else:
 class BannerModel(BaseModel):
     id: str
     type: str
-    title: Optional[str] = None
+    title: str | None = None
     content: str
     dismissible: bool
     timestamp: int
@@ -1855,7 +1849,7 @@ Analyze the chat history to determine the necessity of generating search queries
 - Always prioritize providing actionable and broad queries that maximize informational coverage.
 
 ### Output:
-Strictly return in JSON format: 
+Strictly return in JSON format:
 {
   "queries": ["query1", "query2"]
 }
@@ -1886,44 +1880,44 @@ AUTOCOMPLETE_GENERATION_PROMPT_TEMPLATE = PersistentConfig(
 
 
 DEFAULT_AUTOCOMPLETE_GENERATION_PROMPT_TEMPLATE = """### Task:
-You are an autocompletion system. Continue the text in `<text>` based on the **completion type** in `<type>` and the given language.  
+You are an autocompletion system. Continue the text in `<text>` based on the **completion type** in `<type>` and the given language.
 
 ### **Instructions**:
-1. Analyze `<text>` for context and meaning.  
-2. Use `<type>` to guide your output:  
-   - **General**: Provide a natural, concise continuation.  
-   - **Search Query**: Complete as if generating a realistic search query.  
-3. Start as if you are directly continuing `<text>`. Do **not** repeat, paraphrase, or respond as a model. Simply complete the text.  
+1. Analyze `<text>` for context and meaning.
+2. Use `<type>` to guide your output:
+   - **General**: Provide a natural, concise continuation.
+   - **Search Query**: Complete as if generating a realistic search query.
+3. Start as if you are directly continuing `<text>`. Do **not** repeat, paraphrase, or respond as a model. Simply complete the text.
 4. Ensure the continuation:
-   - Flows naturally from `<text>`.  
-   - Avoids repetition, overexplaining, or unrelated ideas.  
-5. If unsure, return: `{ "text": "" }`.  
+   - Flows naturally from `<text>`.
+   - Avoids repetition, overexplaining, or unrelated ideas.
+5. If unsure, return: `{ "text": "" }`.
 
 ### **Output Rules**:
 - Respond only in JSON format: `{ "text": "<your_completion>" }`.
 
 ### **Examples**:
-#### Example 1:  
-Input:  
-<type>General</type>  
-<text>The sun was setting over the horizon, painting the sky</text>  
-Output:  
+#### Example 1:
+Input:
+<type>General</type>
+<text>The sun was setting over the horizon, painting the sky</text>
+Output:
 { "text": "with vibrant shades of orange and pink." }
 
-#### Example 2:  
-Input:  
-<type>Search Query</type>  
-<text>Top-rated restaurants in</text>  
-Output:  
-{ "text": "New York City for Italian cuisine." }  
+#### Example 2:
+Input:
+<type>Search Query</type>
+<text>Top-rated restaurants in</text>
+Output:
+{ "text": "New York City for Italian cuisine." }
 
 ---
 ### Context:
 <chat_history>
 {{MESSAGES:END:6}}
 </chat_history>
-<type>{{TYPE}}</type>  
-<text>{{PROMPT}}</text>  
+<type>{{TYPE}}</type>
+<text>{{PROMPT}}</text>
 #### Output:
 """
 
@@ -1972,7 +1966,7 @@ Your task is to choose and return the correct tool(s) from the list of available
 
 - Return only the JSON object, without any additional text or explanation.
 
-- If no tools match the query, return an empty array: 
+- If no tools match the query, return an empty array:
    {
      "tool_calls": []
    }
@@ -2200,7 +2194,7 @@ MARIADB_VECTOR_INDEX_M = int(os.environ.get('MARIADB_VECTOR_INDEX_M', '8').strip
 # Pooling (MariaDB-Vector)
 MARIADB_VECTOR_POOL_SIZE = os.environ.get('MARIADB_VECTOR_POOL_SIZE', None)
 
-if MARIADB_VECTOR_POOL_SIZE != None:
+if MARIADB_VECTOR_POOL_SIZE is not None:
     try:
         MARIADB_VECTOR_POOL_SIZE = int(MARIADB_VECTOR_POOL_SIZE)
     except Exception:
@@ -2329,7 +2323,7 @@ if PGVECTOR_PGCRYPTO and not PGVECTOR_PGCRYPTO_KEY:
 
 PGVECTOR_POOL_SIZE = os.environ.get('PGVECTOR_POOL_SIZE', None)
 
-if PGVECTOR_POOL_SIZE != None:
+if PGVECTOR_POOL_SIZE is not None:
     try:
         PGVECTOR_POOL_SIZE = int(PGVECTOR_POOL_SIZE)
     except Exception:
@@ -2406,7 +2400,7 @@ OPENGAUSS_INITIALIZE_MAX_VECTOR_LENGTH = int(os.environ.get('OPENGAUSS_INITIALIZ
 
 OPENGAUSS_POOL_SIZE = os.environ.get('OPENGAUSS_POOL_SIZE', None)
 
-if OPENGAUSS_POOL_SIZE != None:
+if OPENGAUSS_POOL_SIZE is not None:
     try:
         OPENGAUSS_POOL_SIZE = int(OPENGAUSS_POOL_SIZE)
     except Exception:
@@ -3060,7 +3054,7 @@ WEB_SEARCH_RESULT_COUNT = PersistentConfig(
 
 try:
     web_search_domain_filter_list = json.loads(os.getenv('WEB_SEARCH_DOMAIN_FILTER_LIST', '[]'))
-except Exception as e:
+except Exception:
     web_search_domain_filter_list = [
         # "wikipedia.com",
         # "wikimedia.org",

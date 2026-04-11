@@ -1,40 +1,33 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status, Request
-from fastapi.responses import JSONResponse, RedirectResponse
-
-from pydantic import BaseModel
-from typing import Optional
 import logging
-import re
 
-from open_webui.utils.chat import generate_chat_completion
-from open_webui.utils.task import (
-    title_generation_template,
-    follow_up_generation_template,
-    query_generation_template,
-    image_prompt_generation_template,
-    autocomplete_generation_template,
-    tags_generation_template,
-    emoji_generation_template,
-    moa_response_generation_template,
-)
-from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.constants import TASKS
-
-from open_webui.routers.pipelines import process_pipeline_inlet_filter
-
-from open_webui.utils.task import get_task_model_id
-
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from open_webui.config import (
-    DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE,
-    DEFAULT_FOLLOW_UP_GENERATION_PROMPT_TEMPLATE,
-    DEFAULT_TAGS_GENERATION_PROMPT_TEMPLATE,
-    DEFAULT_IMAGE_PROMPT_GENERATION_PROMPT_TEMPLATE,
-    DEFAULT_QUERY_GENERATION_PROMPT_TEMPLATE,
     DEFAULT_AUTOCOMPLETE_GENERATION_PROMPT_TEMPLATE,
     DEFAULT_EMOJI_GENERATION_PROMPT_TEMPLATE,
+    DEFAULT_FOLLOW_UP_GENERATION_PROMPT_TEMPLATE,
+    DEFAULT_IMAGE_PROMPT_GENERATION_PROMPT_TEMPLATE,
     DEFAULT_MOA_GENERATION_PROMPT_TEMPLATE,
-    DEFAULT_VOICE_MODE_PROMPT_TEMPLATE,
+    DEFAULT_QUERY_GENERATION_PROMPT_TEMPLATE,
+    DEFAULT_TAGS_GENERATION_PROMPT_TEMPLATE,
+    DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE,
 )
+from open_webui.constants import TASKS
+from open_webui.routers.pipelines import process_pipeline_inlet_filter
+from open_webui.utils.auth import get_admin_user, get_verified_user
+from open_webui.utils.chat import generate_chat_completion
+from open_webui.utils.task import (
+    autocomplete_generation_template,
+    emoji_generation_template,
+    follow_up_generation_template,
+    get_task_model_id,
+    image_prompt_generation_template,
+    moa_response_generation_template,
+    query_generation_template,
+    tags_generation_template,
+    title_generation_template,
+)
+from pydantic import BaseModel
 
 log = logging.getLogger(__name__)
 
@@ -84,8 +77,8 @@ async def get_task_config(request: Request, user=Depends(get_verified_user)):
 
 
 class TaskConfigForm(BaseModel):
-    TASK_MODEL: Optional[str]
-    TASK_MODEL_EXTERNAL: Optional[str]
+    TASK_MODEL: str | None
+    TASK_MODEL_EXTERNAL: str | None
     ENABLE_TITLE_GENERATION: bool
     TITLE_GENERATION_PROMPT_TEMPLATE: str
     IMAGE_PROMPT_GENERATION_PROMPT_TEMPLATE: str
@@ -99,7 +92,7 @@ class TaskConfigForm(BaseModel):
     ENABLE_RETRIEVAL_QUERY_GENERATION: bool
     QUERY_GENERATION_PROMPT_TEMPLATE: str
     TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE: str
-    VOICE_MODE_PROMPT_TEMPLATE: Optional[str]
+    VOICE_MODE_PROMPT_TEMPLATE: str | None
 
 
 @router.post('/config/update')
@@ -218,7 +211,7 @@ async def generate_title(request: Request, form_data: dict, user=Depends(get_ver
 
     try:
         return await generate_chat_completion(request, form_data=payload, user=user)
-    except Exception as e:
+    except Exception:
         log.error('Exception occurred', exc_info=True)
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -286,7 +279,7 @@ async def generate_follow_ups(request: Request, form_data: dict, user=Depends(ge
 
     try:
         return await generate_chat_completion(request, form_data=payload, user=user)
-    except Exception as e:
+    except Exception:
         log.error('Exception occurred', exc_info=True)
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -416,7 +409,7 @@ async def generate_image_prompt(request: Request, form_data: dict, user=Depends(
 
     try:
         return await generate_chat_completion(request, form_data=payload, user=user)
-    except Exception as e:
+    except Exception:
         log.error('Exception occurred', exc_info=True)
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -431,13 +424,13 @@ async def generate_queries(request: Request, form_data: dict, user=Depends(get_v
         if not request.app.state.config.ENABLE_SEARCH_QUERY_GENERATION:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f'Search query generation is disabled',
+                detail='Search query generation is disabled',
             )
     elif type == 'retrieval':
         if not request.app.state.config.ENABLE_RETRIEVAL_QUERY_GENERATION:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f'Query generation is disabled',
+                detail='Query generation is disabled',
             )
 
     if getattr(request.state, 'cached_queries', None):
@@ -508,7 +501,7 @@ async def generate_autocompletion(request: Request, form_data: dict, user=Depend
     if not request.app.state.config.ENABLE_AUTOCOMPLETE_GENERATION:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f'Autocompletion generation is disabled',
+            detail='Autocompletion generation is disabled',
         )
 
     type = form_data.get('type')

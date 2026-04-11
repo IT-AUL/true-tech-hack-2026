@@ -1,91 +1,79 @@
 import asyncio
-import re
-import uuid
-import time
-import datetime
+import datetime as dt
 import logging
-from aiohttp import ClientSession
+import re
+import time
 import urllib
+import uuid
+from ssl import CERT_NONE, CERT_REQUIRED, PROTOCOL_TLS
 
-
+from aiohttp import ClientSession
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse, Response
+from ldap3 import NONE, Connection, Server, Tls
+from ldap3.utils.conv import escape_filter_chars
+from open_webui.config import (
+    ENABLE_PASSWORD_AUTH,
+    OAUTH_MERGE_ACCOUNTS_BY_EMAIL,
+    OAUTH_PROVIDERS,
+    OPENID_END_SESSION_ENDPOINT,
+    OPENID_PROVIDER_URL,
+)
+from open_webui.constants import ERROR_MESSAGES, WEBHOOK_MESSAGES
+from open_webui.env import (
+    ENABLE_INITIAL_ADMIN_SIGNUP,
+    ENABLE_OAUTH_TOKEN_EXCHANGE,
+    WEBUI_AUTH,
+    WEBUI_AUTH_COOKIE_SAME_SITE,
+    WEBUI_AUTH_COOKIE_SECURE,
+    WEBUI_AUTH_SIGNOUT_REDIRECT_URL,
+    WEBUI_AUTH_TRUSTED_EMAIL_HEADER,
+    WEBUI_AUTH_TRUSTED_GROUPS_HEADER,
+    WEBUI_AUTH_TRUSTED_NAME_HEADER,
+    WEBUI_AUTH_TRUSTED_ROLE_HEADER,
+)
+from open_webui.internal.db import get_session
 from open_webui.models.auths import (
     AddUserForm,
     ApiKey,
     Auths,
-    Token,
     LdapForm,
     SigninForm,
     SigninResponse,
     SignupForm,
+    Token,
     UpdatePasswordForm,
-)
-from open_webui.models.users import (
-    UserModel,
-    UserProfileImageResponse,
-    Users,
-    UpdateProfileForm,
-    UserStatus,
 )
 from open_webui.models.groups import Groups
 from open_webui.models.oauth_sessions import OAuthSessions
-
-from open_webui.constants import ERROR_MESSAGES, WEBHOOK_MESSAGES
-from open_webui.env import (
-    WEBUI_AUTH,
-    WEBUI_AUTH_TRUSTED_EMAIL_HEADER,
-    WEBUI_AUTH_TRUSTED_NAME_HEADER,
-    WEBUI_AUTH_TRUSTED_GROUPS_HEADER,
-    WEBUI_AUTH_TRUSTED_ROLE_HEADER,
-    WEBUI_AUTH_COOKIE_SAME_SITE,
-    WEBUI_AUTH_COOKIE_SECURE,
-    WEBUI_AUTH_SIGNOUT_REDIRECT_URL,
-    ENABLE_INITIAL_ADMIN_SIGNUP,
-    ENABLE_OAUTH_TOKEN_EXCHANGE,
-    AIOHTTP_CLIENT_SESSION_SSL,
+from open_webui.models.users import (
+    UpdateProfileForm,
+    UserModel,
+    UserProfileImageResponse,
+    Users,
+    UserStatus,
 )
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import RedirectResponse, Response, JSONResponse
-from open_webui.config import (
-    OPENID_PROVIDER_URL,
-    OPENID_END_SESSION_ENDPOINT,
-    ENABLE_OAUTH_SIGNUP,
-    ENABLE_LDAP,
-    ENABLE_PASSWORD_AUTH,
-    OAUTH_PROVIDERS,
-    OAUTH_MERGE_ACCOUNTS_BY_EMAIL,
-)
-from pydantic import BaseModel
-
-from open_webui.utils.misc import parse_duration, validate_email_format
+from open_webui.utils.access_control import get_permissions, has_permission
 from open_webui.utils.auth import (
-    validate_password,
-    verify_password,
-    decode_token,
-    invalidate_token,
     create_api_key,
     create_token,
+    decode_token,
     get_admin_user,
-    get_verified_user,
     get_current_user,
-    get_password_hash,
     get_http_authorization_cred,
+    get_password_hash,
+    get_verified_user,
+    invalidate_token,
+    validate_password,
+    verify_password,
 )
-from open_webui.internal.db import get_session
-from sqlalchemy.orm import Session
-from open_webui.utils.webhook import post_webhook
-from open_webui.utils.access_control import get_permissions, has_permission
 from open_webui.utils.groups import apply_default_group_assignment
-
-from open_webui.utils.redis import get_redis_client
+from open_webui.utils.misc import parse_duration, validate_email_format
 from open_webui.utils.rate_limit import RateLimiter
-
-
-from typing import Optional, List
-
-from ssl import CERT_NONE, CERT_REQUIRED, PROTOCOL_TLS
-
-from ldap3 import Server, Connection, NONE, Tls
-from ldap3.utils.conv import escape_filter_chars
+from open_webui.utils.redis import get_redis_client
+from open_webui.utils.webhook import post_webhook
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 
@@ -119,7 +107,7 @@ def create_session_response(request: Request, user, db, response: Response = Non
     )
 
     if set_cookie and response:
-        datetime_expires_at = datetime.datetime.fromtimestamp(expires_at, datetime.timezone.utc) if expires_at else None
+        datetime_expires_at = dt.datetime.fromtimestamp(expires_at, dt.UTC) if expires_at else None
         max_age = int(expires_delta.total_seconds()) if expires_delta else None
         response.set_cookie(
             key='token',
@@ -152,14 +140,14 @@ def create_session_response(request: Request, user, db, response: Response = Non
 
 
 class SessionUserResponse(Token, UserProfileImageResponse):
-    expires_at: Optional[int] = None
-    permissions: Optional[dict] = None
+    expires_at: int | None = None
+    permissions: dict | None = None
 
 
 class SessionUserInfoResponse(SessionUserResponse, UserStatus):
-    bio: Optional[str] = None
-    gender: Optional[str] = None
-    date_of_birth: Optional[datetime.date] = None
+    bio: str | None = None
+    gender: str | None = None
+    date_of_birth: dt.date | None = None
 
 
 @router.get('/', response_model=SessionUserInfoResponse)
@@ -190,7 +178,7 @@ async def get_session_user(
         response.set_cookie(
             key='token',
             value=token,
-            expires=(datetime.datetime.fromtimestamp(expires_at, datetime.timezone.utc) if expires_at else None),
+            expires=(dt.datetime.fromtimestamp(expires_at, dt.UTC) if expires_at else None),
             httponly=True,  # Ensures the cookie is not accessible via JavaScript
             samesite=WEBUI_AUTH_COOKIE_SAME_SITE,
             secure=WEBUI_AUTH_COOKIE_SECURE,
@@ -323,7 +311,6 @@ async def ldap_auth(
         )
 
     # NOW load LDAP config variables
-    LDAP_SERVER_LABEL = request.app.state.config.LDAP_SERVER_LABEL
     LDAP_SERVER_HOST = request.app.state.config.LDAP_SERVER_HOST
     LDAP_SERVER_PORT = request.app.state.config.LDAP_SERVER_PORT
     LDAP_ATTRIBUTE_FOR_MAIL = request.app.state.config.LDAP_ATTRIBUTE_FOR_MAIL
@@ -555,7 +542,7 @@ async def signin(
             name = request.headers.get(WEBUI_AUTH_TRUSTED_NAME_HEADER, email)
             try:
                 name = urllib.parse.unquote(name, encoding='utf-8')
-            except Exception as e:
+            except Exception:
                 pass
 
         if not Users.get_user_by_email(email.lower(), db=db):
@@ -584,7 +571,7 @@ async def signin(
                 elif trusted_role:
                     log.warning(f'Ignoring invalid trusted role header value: {trusted_role}')
 
-    elif WEBUI_AUTH == False:
+    elif not WEBUI_AUTH:
         admin_email = 'admin@localhost'
         admin_password = 'admin'
 
@@ -962,7 +949,7 @@ async def get_admin_config(request: Request, user=Depends(get_admin_user)):
 
 class AdminConfig(BaseModel):
     SHOW_ADMIN_DETAILS: bool
-    ADMIN_EMAIL: Optional[str] = None
+    ADMIN_EMAIL: str | None = None
     WEBUI_URL: str
     ENABLE_SIGNUP: bool
     ENABLE_API_KEYS: bool
@@ -974,15 +961,15 @@ class AdminConfig(BaseModel):
     ENABLE_COMMUNITY_SHARING: bool
     ENABLE_MESSAGE_RATING: bool
     ENABLE_FOLDERS: bool
-    FOLDER_MAX_FILE_COUNT: Optional[int | str] = None
+    FOLDER_MAX_FILE_COUNT: int | str | None = None
     ENABLE_CHANNELS: bool
     ENABLE_MEMORIES: bool
     ENABLE_NOTES: bool
     ENABLE_USER_WEBHOOKS: bool
     ENABLE_USER_STATUS: bool
-    PENDING_USER_OVERLAY_TITLE: Optional[str] = None
-    PENDING_USER_OVERLAY_CONTENT: Optional[str] = None
-    RESPONSE_WATERMARK: Optional[str] = None
+    PENDING_USER_OVERLAY_TITLE: str | None = None
+    PENDING_USER_OVERLAY_CONTENT: str | None = None
+    RESPONSE_WATERMARK: str | None = None
 
 
 @router.post('/admin/config')
@@ -1055,7 +1042,7 @@ async def update_admin_config(request: Request, form_data: AdminConfig, user=Dep
 class LdapServerConfig(BaseModel):
     label: str
     host: str
-    port: Optional[int] = None
+    port: int | None = None
     attribute_for_mail: str = 'mail'
     attribute_for_username: str = 'uid'
     app_dn: str
@@ -1063,9 +1050,9 @@ class LdapServerConfig(BaseModel):
     search_base: str
     search_filters: str = ''
     use_tls: bool = True
-    certificate_path: Optional[str] = None
+    certificate_path: str | None = None
     validate_cert: bool = True
-    ciphers: Optional[str] = 'ALL'
+    ciphers: str | None = 'ALL'
 
 
 @router.get('/admin/config/ldap/server', response_model=LdapServerConfig)
@@ -1138,7 +1125,7 @@ async def get_ldap_config(request: Request, user=Depends(get_admin_user)):
 
 
 class LdapConfigForm(BaseModel):
-    enable_ldap: Optional[bool] = None
+    enable_ldap: bool | None = None
 
 
 @router.post('/admin/config/ldap')
@@ -1256,12 +1243,11 @@ async def token_exchange(
 
     # Extract user information from the token claims
     email_claim = request.app.state.config.OAUTH_EMAIL_CLAIM
-    username_claim = request.app.state.config.OAUTH_USERNAME_CLAIM
 
     # Get sub claim
     sub = user_data.get(request.app.state.config.OAUTH_SUB_CLAIM or OAUTH_PROVIDERS[provider].get('sub_claim', 'sub'))
     if not sub:
-        log.warning(f'Token exchange failed: sub claim missing from user data')
+        log.warning('Token exchange failed: sub claim missing from user data')
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Token missing required 'sub' claim",
@@ -1269,7 +1255,7 @@ async def token_exchange(
 
     email = user_data.get(email_claim, '')
     if not email:
-        log.warning(f'Token exchange failed: email claim missing from user data')
+        log.warning('Token exchange failed: email claim missing from user data')
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Token missing required email claim',

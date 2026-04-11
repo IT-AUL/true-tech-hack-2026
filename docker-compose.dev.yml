@@ -1,0 +1,32 @@
+services:
+  gpthub:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        USE_SLIM: "true"
+    container_name: gpthub
+    ports:
+      - "${PORT:-3000}:8080"
+    environment:
+      - OPENAI_API_BASE_URL=${OPENAI_API_BASE_URL:-https://api.gpt.mws.ru/v1}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-gpthub-dev-secret}
+      - ENABLE_SIGNUP=${ENABLE_SIGNUP:-true}
+      - DEFAULT_USER_ROLE=${DEFAULT_USER_ROLE:-user}
+      - ENABLE_COMMUNITY_SHARING=false
+      - SCARF_NO_ANALYTICS=true
+      - DO_NOT_TRACK=true
+      - ANONYMIZED_TELEMETRY=false
+    volumes:
+      - gpthub-data:/app/backend/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  gpthub-data:

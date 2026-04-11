@@ -1,19 +1,13 @@
-import json
 import time
 import uuid
-from typing import Optional
-from functools import lru_cache
 
-from sqlalchemy.orm import Session
-from open_webui.internal.db import Base, get_db, get_db_context
-from open_webui.models.groups import Groups
-from open_webui.models.users import User, UserModel, Users, UserResponse
+from open_webui.internal.db import Base, get_db_context
 from open_webui.models.access_grants import AccessGrantModel, AccessGrants
-
-
+from open_webui.models.groups import Groups
+from open_webui.models.users import User, UserModel, UserResponse
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import BigInteger, Column, Text, JSON
-from sqlalchemy import or_, func, cast
+from sqlalchemy import JSON, BigInteger, Column, Text, cast, func, or_
+from sqlalchemy.orm import Session
 
 ####################
 # Note DB Schema
@@ -41,8 +35,8 @@ class NoteModel(BaseModel):
     user_id: str
 
     title: str
-    data: Optional[dict] = None
-    meta: Optional[dict] = None
+    data: dict | None = None
+    meta: dict | None = None
 
     access_grants: list[AccessGrantModel] = Field(default_factory=list)
 
@@ -57,29 +51,29 @@ class NoteModel(BaseModel):
 
 class NoteForm(BaseModel):
     title: str
-    data: Optional[dict] = None
-    meta: Optional[dict] = None
-    access_grants: Optional[list[dict]] = None
+    data: dict | None = None
+    meta: dict | None = None
+    access_grants: list[dict] | None = None
 
 
 class NoteUpdateForm(BaseModel):
-    title: Optional[str] = None
-    data: Optional[dict] = None
-    meta: Optional[dict] = None
-    access_grants: Optional[list[dict]] = None
+    title: str | None = None
+    data: dict | None = None
+    meta: dict | None = None
+    access_grants: list[dict] | None = None
 
 
 class NoteUserResponse(NoteModel):
-    user: Optional[UserResponse] = None
+    user: UserResponse | None = None
 
 
 class NoteItemResponse(BaseModel):
     id: str
     title: str
-    data: Optional[dict]
+    data: dict | None
     updated_at: int
     created_at: int
-    user: Optional[UserResponse] = None
+    user: UserResponse | None = None
 
 
 class NoteListResponse(BaseModel):
@@ -88,14 +82,14 @@ class NoteListResponse(BaseModel):
 
 
 class NoteTable:
-    def _get_access_grants(self, note_id: str, db: Optional[Session] = None) -> list[AccessGrantModel]:
+    def _get_access_grants(self, note_id: str, db: Session | None = None) -> list[AccessGrantModel]:
         return AccessGrants.get_grants_by_resource('note', note_id, db=db)
 
     def _to_note_model(
         self,
         note: Note,
-        access_grants: Optional[list[AccessGrantModel]] = None,
-        db: Optional[Session] = None,
+        access_grants: list[AccessGrantModel] | None = None,
+        db: Session | None = None,
     ) -> NoteModel:
         note_data = NoteModel.model_validate(note).model_dump(exclude={'access_grants'})
         note_data['access_grants'] = (
@@ -113,7 +107,7 @@ class NoteTable:
             permission=permission,
         )
 
-    def insert_new_note(self, user_id: str, form_data: NoteForm, db: Optional[Session] = None) -> Optional[NoteModel]:
+    def insert_new_note(self, user_id: str, form_data: NoteForm, db: Session | None = None) -> NoteModel | None:
         with get_db_context(db) as db:
             note = NoteModel(
                 **{
@@ -133,7 +127,7 @@ class NoteTable:
             AccessGrants.set_access_grants('note', note.id, form_data.access_grants, db=db)
             return self._to_note_model(new_note, db=db)
 
-    def get_notes(self, skip: int = 0, limit: int = 50, db: Optional[Session] = None) -> list[NoteModel]:
+    def get_notes(self, skip: int = 0, limit: int = 50, db: Session | None = None) -> list[NoteModel]:
         with get_db_context(db) as db:
             query = db.query(Note).order_by(Note.updated_at.desc())
             if skip is not None:
@@ -151,7 +145,7 @@ class NoteTable:
         filter: dict = {},
         skip: int = 0,
         limit: int = 30,
-        db: Optional[Session] = None,
+        db: Session | None = None,
     ) -> NoteListResponse:
         with get_db_context(db) as db:
             query = db.query(Note, User).outerjoin(User, User.id == Note.user_id)
@@ -248,7 +242,7 @@ class NoteTable:
         permission: str = 'read',
         skip: int = 0,
         limit: int = 50,
-        db: Optional[Session] = None,
+        db: Session | None = None,
     ) -> list[NoteModel]:
         with get_db_context(db) as db:
             user_group_ids = [group.id for group in Groups.get_groups_by_member_id(user_id, db=db)]
@@ -266,14 +260,12 @@ class NoteTable:
             grants_map = AccessGrants.get_grants_by_resources('note', note_ids, db=db)
             return [self._to_note_model(note, access_grants=grants_map.get(note.id, []), db=db) for note in notes]
 
-    def get_note_by_id(self, id: str, db: Optional[Session] = None) -> Optional[NoteModel]:
+    def get_note_by_id(self, id: str, db: Session | None = None) -> NoteModel | None:
         with get_db_context(db) as db:
             note = db.query(Note).filter(Note.id == id).first()
             return self._to_note_model(note, db=db) if note else None
 
-    def update_note_by_id(
-        self, id: str, form_data: NoteUpdateForm, db: Optional[Session] = None
-    ) -> Optional[NoteModel]:
+    def update_note_by_id(self, id: str, form_data: NoteUpdateForm, db: Session | None = None) -> NoteModel | None:
         with get_db_context(db) as db:
             note = db.query(Note).filter(Note.id == id).first()
             if not note:
@@ -296,7 +288,7 @@ class NoteTable:
             db.commit()
             return self._to_note_model(note, db=db) if note else None
 
-    def delete_note_by_id(self, id: str, db: Optional[Session] = None) -> bool:
+    def delete_note_by_id(self, id: str, db: Session | None = None) -> bool:
         try:
             with get_db_context(db) as db:
                 AccessGrants.revoke_all_access('note', id, db=db)

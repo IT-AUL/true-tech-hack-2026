@@ -1,34 +1,29 @@
+import asyncio
+import json
 import logging
 import os
 import uuid
-import json
 from pathlib import Path
 from typing import Optional
 from urllib.parse import quote
-import asyncio
 
 from fastapi import (
-    BackgroundTasks,
     APIRouter,
+    BackgroundTasks,
     Depends,
     File,
     Form,
     HTTPException,
+    Query,
     Request,
     UploadFile,
     status,
-    Query,
 )
-
 from fastapi.responses import FileResponse, StreamingResponse
-from sqlalchemy.orm import Session
-from open_webui.internal.db import get_session, SessionLocal
-
+from open_webui.config import BYPASS_ADMIN_ACCESS_CONTROL
 from open_webui.constants import ERROR_MESSAGES
-from open_webui.retrieval.vector.factory import VECTOR_DB_CLIENT
-
+from open_webui.internal.db import SessionLocal, get_session
 from open_webui.models.channels import Channels
-from open_webui.models.users import Users
 from open_webui.models.files import (
     FileForm,
     FileListResponse,
@@ -36,22 +31,16 @@ from open_webui.models.files import (
     FileModelResponse,
     Files,
 )
-from open_webui.models.chats import Chats
 from open_webui.models.knowledge import Knowledges
-from open_webui.models.groups import Groups
-from open_webui.models.access_grants import AccessGrants
-
-
-from open_webui.routers.retrieval import ProcessFileForm, process_file
+from open_webui.models.users import Users
+from open_webui.retrieval.vector.factory import VECTOR_DB_CLIENT
 from open_webui.routers.audio import transcribe
-
+from open_webui.routers.retrieval import ProcessFileForm, process_file
 from open_webui.storage.provider import Storage
-
-
-from open_webui.config import BYPASS_ADMIN_ACCESS_CONTROL
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.misc import strict_match_mime_type
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 log = logging.getLogger(__name__)
 
@@ -95,7 +84,7 @@ def process_uploaded_file(
     file_item,
     file_metadata,
     user,
-    db: Optional[Session] = None,
+    db: Session | None = None,
 ):
     def _process_handler(db_session):
         try:
@@ -162,7 +151,7 @@ def upload_file(
     request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    metadata: Optional[dict | str] = Form(None),
+    metadata: dict | str | None = Form(None),
     process: bool = Query(True),
     process_in_background: bool = Query(True),
     user=Depends(get_verified_user),
@@ -183,12 +172,12 @@ def upload_file(
 def upload_file_handler(
     request: Request,
     file: UploadFile = File(...),
-    metadata: Optional[dict | str] = Form(None),
+    metadata: dict | str | None = Form(None),
     process: bool = Query(True),
     process_in_background: bool = Query(True),
     user=Depends(get_verified_user),
-    background_tasks: Optional[BackgroundTasks] = None,
-    db: Optional[Session] = None,
+    background_tasks: BackgroundTasks | None = None,
+    db: Session | None = None,
 ):
     log.info(f'file.content_type: {file.content_type} {process}')
 
@@ -725,7 +714,6 @@ async def get_file_content_by_id(id: str, user=Depends(get_verified_user), db: S
         else:
             # File path doesn’t exist, return the content as .txt if possible
             file_content = file.data.get('content', '')
-            file_name = file.filename
 
             # Create a generator that encodes the file content
             def generator():

@@ -1,8 +1,7 @@
 import logging
-from typing import Optional, Literal
-import requests
 
-from open_webui.retrieval.web.main import SearchResult, get_filtered_results
+import requests
+from open_webui.retrieval.web.main import SearchResult
 from open_webui.utils.headers import include_user_info_headers
 
 log = logging.getLogger(__name__)
@@ -12,7 +11,7 @@ def search_perplexity_search(
     api_key: str,
     query: str,
     count: int,
-    filter_list: Optional[list[str]] = None,
+    filter_list: list[str] | None = None,
     api_url: str = 'https://api.perplexity.ai/search',
     user=None,
 ) -> list[SearchResult]:

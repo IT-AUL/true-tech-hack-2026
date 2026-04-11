@@ -1,8 +1,9 @@
 import logging
+from collections.abc import Generator, Sequence
+from typing import Any
+from urllib.parse import parse_qs, urlparse
 from xml.etree.ElementTree import ParseError
 
-from typing import Any, Dict, Generator, List, Optional, Sequence, Union
-from urllib.parse import parse_qs, urlparse
 from langchain_core.documents import Document
 
 log = logging.getLogger(__name__)
@@ -18,7 +19,7 @@ ALLOWED_NETLOCS = {
 }
 
 
-def _parse_video_id(url: str) -> Optional[str]:
+def _parse_video_id(url: str) -> str | None:
     """Parse a YouTube URL and return the video ID if valid, otherwise None."""
     parsed_url = urlparse(url)
 
@@ -54,8 +55,8 @@ class YoutubeLoader:
     def __init__(
         self,
         video_id: str,
-        language: Union[str, Sequence[str]] = 'en',
-        proxy_url: Optional[str] = None,
+        language: str | Sequence[str] = 'en',
+        proxy_url: str | None = None,
     ):
         """Initialize with YouTube video ID."""
         _video_id = _parse_video_id(video_id)
@@ -73,12 +74,11 @@ class YoutubeLoader:
         if 'en' not in self.language:
             self.language.append('en')
 
-    def load(self) -> List[Document]:
+    def load(self) -> list[Document]:
         """Load YouTube transcripts into `Document` objects."""
         try:
             from youtube_transcript_api import (
                 NoTranscriptFound,
-                TranscriptsDisabled,
                 YouTubeTranscriptApi,
             )
             from youtube_transcript_api.proxies import GenericProxyConfig
@@ -97,7 +97,7 @@ class YoutubeLoader:
         transcript_api = YouTubeTranscriptApi(proxy_config=youtube_proxies)
         try:
             transcript_list = transcript_api.list(self.video_id)
-        except Exception as e:
+        except Exception:
             log.exception('Loading YouTube transcript failed')
             return []
 
@@ -116,7 +116,7 @@ class YoutubeLoader:
 
                 log.debug(f"Found transcript for language '{lang}'")
                 try:
-                    transcript_pieces: List[Dict[str, Any]] = transcript.fetch()
+                    transcript_pieces: list[dict[str, Any]] = transcript.fetch()
                 except ParseError:
                     log.debug(f"Empty or invalid transcript for language '{lang}'")
                     continue

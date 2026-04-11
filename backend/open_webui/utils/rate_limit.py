@@ -1,5 +1,5 @@
 import time
-from typing import Optional, Dict
+
 from open_webui.env import REDIS_KEY_PREFIX
 
 
@@ -10,7 +10,7 @@ class RateLimiter:
     """
 
     # In-memory fallback storage
-    _memory_store: Dict[str, Dict[int, int]] = {}
+    _memory_store: dict[str, dict[int, int]] = {}
 
     def __init__(
         self,

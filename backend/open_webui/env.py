@@ -3,19 +3,19 @@ import json
 import logging
 import os
 import pkgutil
-import sys
+import re
 import shutil
+import sys
 import traceback
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
-from pathlib import Path
-from cryptography.hazmat.primitives import serialization
-import re
-
 
 import markdown
 from bs4 import BeautifulSoup
+from cryptography.hazmat.primitives import serialization
+
 from open_webui.constants import ERROR_MESSAGES
 
 ####################################
@@ -86,7 +86,7 @@ class JSONFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         log_entry: dict[str, Any] = {
-            'ts': datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(timespec='milliseconds'),
+            'ts': datetime.fromtimestamp(record.created, tz=UTC).isoformat(timespec='milliseconds'),
             'level': _LEVEL_MAP.get(record.levelname, record.levelname.lower()),
             'msg': record.getMessage(),
             'caller': record.name,
@@ -179,7 +179,7 @@ def parse_section(section):
 
 try:
     changelog_path = BASE_DIR / 'CHANGELOG.md'
-    with open(str(changelog_path.absolute()), 'r', encoding='utf8') as file:
+    with open(str(changelog_path.absolute()), encoding='utf8') as file:
         changelog_content = file.read()
 
 except Exception:
@@ -338,7 +338,7 @@ DATABASE_SCHEMA = os.environ.get('DATABASE_SCHEMA', None)
 
 DATABASE_POOL_SIZE = os.environ.get('DATABASE_POOL_SIZE', None)
 
-if DATABASE_POOL_SIZE != None:
+if DATABASE_POOL_SIZE is not None:
     try:
         DATABASE_POOL_SIZE = int(DATABASE_POOL_SIZE)
     except Exception:
@@ -580,7 +580,7 @@ if LICENSE_PUBLIC_KEY:
 -----BEGIN PUBLIC KEY-----
 {LICENSE_PUBLIC_KEY}
 -----END PUBLIC KEY-----
-""".encode('utf-8')
+""".encode()
     )
 
 

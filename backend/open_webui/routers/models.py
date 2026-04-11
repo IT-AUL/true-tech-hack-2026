@@ -1,41 +1,35 @@
-from typing import Optional
-import io
 import base64
-import json
-import asyncio
+import io
 import logging
+from typing import Optional
 
-from open_webui.models.groups import Groups
-from open_webui.models.models import (
-    ModelForm,
-    ModelMeta,
-    ModelModel,
-    ModelParams,
-    ModelResponse,
-    ModelListResponse,
-    ModelAccessListResponse,
-    ModelAccessResponse,
-    Models,
-)
-from open_webui.models.access_grants import AccessGrants
-
-from pydantic import BaseModel
-from open_webui.constants import ERROR_MESSAGES
 from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
     Request,
-    status,
     Response,
+    status,
 )
 from fastapi.responses import FileResponse, StreamingResponse
-
-
-from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.utils.access_control import has_permission, filter_allowed_access_grants
 from open_webui.config import BYPASS_ADMIN_ACCESS_CONTROL, STATIC_DIR
+from open_webui.constants import ERROR_MESSAGES
 from open_webui.internal.db import get_session
+from open_webui.models.access_grants import AccessGrants
+from open_webui.models.groups import Groups
+from open_webui.models.models import (
+    ModelAccessListResponse,
+    ModelAccessResponse,
+    ModelForm,
+    ModelMeta,
+    ModelModel,
+    ModelParams,
+    ModelResponse,
+    Models,
+)
+from open_webui.utils.access_control import filter_allowed_access_grants, has_permission
+from open_webui.utils.auth import get_admin_user, get_verified_user
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 log = logging.getLogger(__name__)
@@ -59,12 +53,12 @@ PAGE_ITEM_COUNT = 30
 
 @router.get('/list', response_model=ModelAccessListResponse)  # do NOT use "/" as path, conflicts with main.py
 async def get_models(
-    query: Optional[str] = None,
-    view_option: Optional[str] = None,
-    tag: Optional[str] = None,
-    order_by: Optional[str] = None,
-    direction: Optional[str] = None,
-    page: Optional[int] = 1,
+    query: str | None = None,
+    view_option: str | None = None,
+    tag: str | None = None,
+    order_by: str | None = None,
+    direction: str | None = None,
+    page: int | None = 1,
     user=Depends(get_verified_user),
     db: Session = Depends(get_session),
 ):
@@ -404,7 +398,7 @@ def get_model_profile_image(id: str, user=Depends(get_verified_user)):
                         media_type=media_type,
                         headers=headers,
                     )
-                except Exception as e:
+                except Exception:
                     pass
 
         return FileResponse(f'{STATIC_DIR}/favicon.png')
@@ -498,7 +492,7 @@ async def update_model_by_id(
 
 class ModelAccessGrantsForm(BaseModel):
     id: str
-    name: Optional[str] = None
+    name: str | None = None
     access_grants: list[dict]
 
 

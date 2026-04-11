@@ -2,12 +2,10 @@ import asyncio
 import json
 import logging
 import random
-import requests
-import aiohttp
 import urllib.parse
 import urllib.request
-from typing import Optional
 
+import aiohttp
 import websocket  # NOTE: websocket-client (https://github.com/websocket-client/websocket-client)
 from pydantic import BaseModel
 
@@ -112,10 +110,10 @@ async def comfyui_upload_image(image_file_item, base_url, api_key):
 
 
 class ComfyUINodeInput(BaseModel):
-    type: Optional[str] = None
+    type: str | None = None
     node_ids: list[str] = []
-    key: Optional[str] = 'text'
-    value: Optional[str] = None
+    key: str | None = 'text'
+    value: str | None = None
 
 
 class ComfyUIWorkflow(BaseModel):
@@ -127,13 +125,13 @@ class ComfyUICreateImageForm(BaseModel):
     workflow: ComfyUIWorkflow
 
     prompt: str
-    negative_prompt: Optional[str] = None
+    negative_prompt: str | None = None
     width: int
     height: int
     n: int = 1
 
-    steps: Optional[int] = None
-    seed: Optional[int] = None
+    steps: int | None = None
+    seed: int | None = None
 
 
 async def comfyui_create_image(model: str, payload: ComfyUICreateImageForm, client_id, base_url, api_key):
@@ -198,12 +196,12 @@ class ComfyUIEditImageForm(BaseModel):
 
     image: str | list[str]
     prompt: str
-    width: Optional[int] = None
-    height: Optional[int] = None
-    n: Optional[int] = None
+    width: int | None = None
+    height: int | None = None
+    n: int | None = None
 
-    steps: Optional[int] = None
-    seed: Optional[int] = None
+    steps: int | None = None
+    seed: int | None = None
 
 
 async def comfyui_edit_image(model: str, payload: ComfyUIEditImageForm, client_id, base_url, api_key):

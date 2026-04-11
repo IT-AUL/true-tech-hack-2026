@@ -1,5 +1,4 @@
 import logging
-from typing import Optional, List
 
 from open_webui.retrieval.web.main import SearchResult, get_filtered_results
 
@@ -11,8 +10,8 @@ def search_firecrawl(
     firecrawl_api_key: str,
     query: str,
     count: int,
-    filter_list: Optional[List[str]] = None,
-) -> List[SearchResult]:
+    filter_list: list[str] | None = None,
+) -> list[SearchResult]:
     try:
         from firecrawl import FirecrawlApp
 

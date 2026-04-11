@@ -1,30 +1,22 @@
-import json
 import logging
 import time
-from typing import Optional
 import uuid
 
-from sqlalchemy.orm import Session
-from open_webui.internal.db import Base, JSONField, get_db, get_db_context
 from open_webui.env import DEFAULT_GROUP_SHARE_PERMISSION
-
-from open_webui.models.files import FileMetadataResponse
-
-
+from open_webui.internal.db import Base, get_db_context
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Column,
-    String,
+    ForeignKey,
     Text,
-    JSON,
     and_,
     func,
-    ForeignKey,
-    cast,
     or_,
     select,
 )
+from sqlalchemy.orm import Session
 
 log = logging.getLogger(__name__)
 
@@ -60,10 +52,10 @@ class GroupModel(BaseModel):
     name: str
     description: str
 
-    data: Optional[dict] = None
-    meta: Optional[dict] = None
+    data: dict | None = None
+    meta: dict | None = None
 
-    permissions: Optional[dict] = None
+    permissions: dict | None = None
 
     created_at: int  # timestamp in epoch
     updated_at: int  # timestamp in epoch
@@ -89,8 +81,8 @@ class GroupMemberModel(BaseModel):
     id: str
     group_id: str
     user_id: str
-    created_at: Optional[int] = None  # timestamp in epoch
-    updated_at: Optional[int] = None  # timestamp in epoch
+    created_at: int | None = None  # timestamp in epoch
+    updated_at: int | None = None  # timestamp in epoch
 
 
 ####################
@@ -99,7 +91,7 @@ class GroupMemberModel(BaseModel):
 
 
 class GroupResponse(GroupModel):
-    member_count: Optional[int] = None
+    member_count: int | None = None
 
 
 class GroupInfoResponse(BaseModel):
@@ -107,7 +99,7 @@ class GroupInfoResponse(BaseModel):
     user_id: str
     name: str
     description: str
-    member_count: Optional[int] = None
+    member_count: int | None = None
     created_at: int
     updated_at: int
 
@@ -115,12 +107,12 @@ class GroupInfoResponse(BaseModel):
 class GroupForm(BaseModel):
     name: str
     description: str
-    permissions: Optional[dict] = None
-    data: Optional[dict] = None
+    permissions: dict | None = None
+    data: dict | None = None
 
 
 class UserIdsForm(BaseModel):
-    user_ids: Optional[list[str]] = None
+    user_ids: list[str] | None = None
 
 
 class GroupUpdateForm(GroupForm):
@@ -143,9 +135,7 @@ class GroupTable:
             group_data['data']['config']['share'] = DEFAULT_GROUP_SHARE_PERMISSION
         return group_data
 
-    def insert_new_group(
-        self, user_id: str, form_data: GroupForm, db: Optional[Session] = None
-    ) -> Optional[GroupModel]:
+    def insert_new_group(self, user_id: str, form_data: GroupForm, db: Session | None = None) -> GroupModel | None:
         with get_db_context(db) as db:
             group_data = self._ensure_default_share_config(form_data.model_dump(exclude_none=True))
             group = GroupModel(
@@ -171,17 +161,17 @@ class GroupTable:
             except Exception:
                 return None
 
-    def get_all_groups(self, db: Optional[Session] = None) -> list[GroupModel]:
+    def get_all_groups(self, db: Session | None = None) -> list[GroupModel]:
         with get_db_context(db) as db:
             groups = db.query(Group).order_by(Group.updated_at.desc()).all()
             return [GroupModel.model_validate(group) for group in groups]
 
-    def get_group_by_name(self, name: str, db: Optional[Session] = None) -> Optional[GroupModel]:
+    def get_group_by_name(self, name: str, db: Session | None = None) -> GroupModel | None:
         with get_db_context(db) as db:
             group = db.query(Group).filter(Group.name == name).first()
             return GroupModel.model_validate(group) if group else None
 
-    def get_groups(self, filter, db: Optional[Session] = None) -> list[GroupResponse]:
+    def get_groups(self, filter, db: Session | None = None) -> list[GroupResponse]:
         with get_db_context(db) as db:
             member_count = (
                 select(func.count(GroupMember.user_id))
@@ -245,10 +235,10 @@ class GroupTable:
 
     def search_groups(
         self,
-        filter: Optional[dict] = None,
+        filter: dict | None = None,
         skip: int = 0,
         limit: int = 30,
-        db: Optional[Session] = None,
+        db: Session | None = None,
     ) -> GroupListResponse:
         with get_db_context(db) as db:
             query = db.query(Group)
@@ -289,7 +279,7 @@ class GroupTable:
                 'total': total,
             }
 
-    def get_groups_by_member_id(self, user_id: str, db: Optional[Session] = None) -> list[GroupModel]:
+    def get_groups_by_member_id(self, user_id: str, db: Session | None = None) -> list[GroupModel]:
         with get_db_context(db) as db:
             return [
                 GroupModel.model_validate(group)
@@ -300,9 +290,7 @@ class GroupTable:
                 .all()
             ]
 
-    def get_groups_by_member_ids(
-        self, user_ids: list[str], db: Optional[Session] = None
-    ) -> dict[str, list[GroupModel]]:
+    def get_groups_by_member_ids(self, user_ids: list[str], db: Session | None = None) -> dict[str, list[GroupModel]]:
         """Fetch groups for multiple users in a single query to avoid N+1."""
         with get_db_context(db) as db:
             # Query GroupMember joined with Group, filtering by user_ids
@@ -321,7 +309,7 @@ class GroupTable:
 
             return user_groups
 
-    def get_group_by_id(self, id: str, db: Optional[Session] = None) -> Optional[GroupModel]:
+    def get_group_by_id(self, id: str, db: Session | None = None) -> GroupModel | None:
         try:
             with get_db_context(db) as db:
                 group = db.query(Group).filter_by(id=id).first()
@@ -329,7 +317,7 @@ class GroupTable:
         except Exception:
             return None
 
-    def get_group_user_ids_by_id(self, id: str, db: Optional[Session] = None) -> list[str]:
+    def get_group_user_ids_by_id(self, id: str, db: Session | None = None) -> list[str]:
         with get_db_context(db) as db:
             members = db.query(GroupMember.user_id).filter(GroupMember.group_id == id).all()
 
@@ -338,7 +326,7 @@ class GroupTable:
 
             return [m[0] for m in members]
 
-    def get_group_user_ids_by_ids(self, group_ids: list[str], db: Optional[Session] = None) -> dict[str, list[str]]:
+    def get_group_user_ids_by_ids(self, group_ids: list[str], db: Session | None = None) -> dict[str, list[str]]:
         with get_db_context(db) as db:
             members = (
                 db.query(GroupMember.group_id, GroupMember.user_id).filter(GroupMember.group_id.in_(group_ids)).all()
@@ -351,7 +339,7 @@ class GroupTable:
 
             return group_user_ids
 
-    def set_group_user_ids_by_id(self, group_id: str, user_ids: list[str], db: Optional[Session] = None) -> None:
+    def set_group_user_ids_by_id(self, group_id: str, user_ids: list[str], db: Session | None = None) -> None:
         with get_db_context(db) as db:
             # Delete existing members
             db.query(GroupMember).filter(GroupMember.group_id == group_id).delete()
@@ -372,12 +360,12 @@ class GroupTable:
             db.add_all(new_members)
             db.commit()
 
-    def get_group_member_count_by_id(self, id: str, db: Optional[Session] = None) -> int:
+    def get_group_member_count_by_id(self, id: str, db: Session | None = None) -> int:
         with get_db_context(db) as db:
             count = db.query(func.count(GroupMember.user_id)).filter(GroupMember.group_id == id).scalar()
             return count if count else 0
 
-    def get_group_member_counts_by_ids(self, ids: list[str], db: Optional[Session] = None) -> dict[str, int]:
+    def get_group_member_counts_by_ids(self, ids: list[str], db: Session | None = None) -> dict[str, int]:
         if not ids:
             return {}
         with get_db_context(db) as db:
@@ -394,8 +382,8 @@ class GroupTable:
         id: str,
         form_data: GroupUpdateForm,
         overwrite: bool = False,
-        db: Optional[Session] = None,
-    ) -> Optional[GroupModel]:
+        db: Session | None = None,
+    ) -> GroupModel | None:
         try:
             with get_db_context(db) as db:
                 db.query(Group).filter_by(id=id).update(
@@ -410,7 +398,7 @@ class GroupTable:
             log.exception(e)
             return None
 
-    def delete_group_by_id(self, id: str, db: Optional[Session] = None) -> bool:
+    def delete_group_by_id(self, id: str, db: Session | None = None) -> bool:
         try:
             with get_db_context(db) as db:
                 db.query(Group).filter_by(id=id).delete()
@@ -419,7 +407,7 @@ class GroupTable:
         except Exception:
             return False
 
-    def delete_all_groups(self, db: Optional[Session] = None) -> bool:
+    def delete_all_groups(self, db: Session | None = None) -> bool:
         with get_db_context(db) as db:
             try:
                 db.query(Group).delete()
@@ -429,7 +417,7 @@ class GroupTable:
             except Exception:
                 return False
 
-    def remove_user_from_all_groups(self, user_id: str, db: Optional[Session] = None) -> bool:
+    def remove_user_from_all_groups(self, user_id: str, db: Session | None = None) -> bool:
         with get_db_context(db) as db:
             try:
                 # Find all groups the user belongs to
@@ -456,7 +444,7 @@ class GroupTable:
                 return False
 
     def create_groups_by_group_names(
-        self, user_id: str, group_names: list[str], db: Optional[Session] = None
+        self, user_id: str, group_names: list[str], db: Session | None = None
     ) -> list[GroupModel]:
         # check for existing groups
         existing_groups = self.get_all_groups(db=db)
@@ -491,7 +479,7 @@ class GroupTable:
                         continue
             return new_groups
 
-    def sync_groups_by_group_names(self, user_id: str, group_names: list[str], db: Optional[Session] = None) -> bool:
+    def sync_groups_by_group_names(self, user_id: str, group_names: list[str], db: Session | None = None) -> bool:
         with get_db_context(db) as db:
             try:
                 now = int(time.time())
@@ -552,9 +540,9 @@ class GroupTable:
     def add_users_to_group(
         self,
         id: str,
-        user_ids: Optional[list[str]] = None,
-        db: Optional[Session] = None,
-    ) -> Optional[GroupModel]:
+        user_ids: list[str] | None = None,
+        db: Session | None = None,
+    ) -> GroupModel | None:
         try:
             with get_db_context(db) as db:
                 group = db.query(Group).filter_by(id=id).first()
@@ -593,9 +581,9 @@ class GroupTable:
     def remove_users_from_group(
         self,
         id: str,
-        user_ids: Optional[list[str]] = None,
-        db: Optional[Session] = None,
-    ) -> Optional[GroupModel]:
+        user_ids: list[str] | None = None,
+        db: Session | None = None,
+    ) -> GroupModel | None:
         try:
             with get_db_context(db) as db:
                 group = db.query(Group).filter_by(id=id).first()

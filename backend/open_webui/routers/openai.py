@@ -3,62 +3,50 @@ import hashlib
 import json
 import logging
 import re
-from typing import Optional
 from urllib.parse import urlparse
 
 import aiohttp
-from aiocache import cached
 import requests
-
+from aiocache import cached
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
-
-from fastapi import Depends, HTTPException, Request, APIRouter
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import (
     FileResponse,
-    StreamingResponse,
     JSONResponse,
     PlainTextResponse,
+    StreamingResponse,
 )
-from pydantic import BaseModel, ConfigDict
-
-from sqlalchemy.orm import Session
-
-from open_webui.internal.db import get_session
-
-from open_webui.models.models import Models
-from open_webui.models.access_grants import AccessGrants
-from open_webui.models.groups import Groups
 from open_webui.config import (
     CACHE_DIR,
 )
+from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import (
-    MODELS_CACHE_TTL,
     AIOHTTP_CLIENT_SESSION_SSL,
     AIOHTTP_CLIENT_TIMEOUT,
     AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST,
+    BYPASS_MODEL_ACCESS_CONTROL,
     ENABLE_FORWARD_USER_INFO_HEADERS,
     FORWARD_SESSION_INFO_HEADER_CHAT_ID,
-    BYPASS_MODEL_ACCESS_CONTROL,
+    MODELS_CACHE_TTL,
 )
+from open_webui.models.access_grants import AccessGrants
+from open_webui.models.groups import Groups
+from open_webui.models.models import Models
 from open_webui.models.users import UserModel
-
-from open_webui.constants import ERROR_MESSAGES
-
-
-from open_webui.utils.payload import (
-    apply_model_params_to_body_openai,
-    apply_system_prompt_to_body,
-)
+from open_webui.utils.anthropic import get_anthropic_models, is_anthropic_url
+from open_webui.utils.auth import get_admin_user, get_verified_user
+from open_webui.utils.headers import include_user_info_headers
 from open_webui.utils.misc import (
     cleanup_response,
     convert_logit_bias_input_to_json,
     stream_chunks_handler,
     stream_wrapper,
 )
-
-from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.utils.headers import include_user_info_headers
-from open_webui.utils.anthropic import is_anthropic_url, get_anthropic_models
+from open_webui.utils.payload import (
+    apply_model_params_to_body_openai,
+    apply_system_prompt_to_body,
+)
+from pydantic import BaseModel, ConfigDict
 
 log = logging.getLogger(__name__)
 
@@ -144,7 +132,7 @@ async def get_headers_and_cookies(
     url,
     key=None,
     config=None,
-    metadata: Optional[dict] = None,
+    metadata: dict | None = None,
     user: UserModel = None,
 ):
     cookies = {}
@@ -239,7 +227,7 @@ async def get_config(request: Request, user=Depends(get_admin_user)):
 
 
 class OpenAIConfigForm(BaseModel):
-    ENABLE_OPENAI_API: Optional[bool] = None
+    ENABLE_OPENAI_API: bool | None = None
     OPENAI_API_BASE_URLS: list[str]
     OPENAI_API_KEYS: list[str]
     OPENAI_API_CONFIGS: dict
@@ -545,7 +533,7 @@ async def get_all_models(request: Request, user: UserModel) -> dict[str, list]:
 
 @router.get('/models')
 @router.get('/models/{url_idx}')
-async def get_models(request: Request, url_idx: Optional[int] = None, user=Depends(get_verified_user)):
+async def get_models(request: Request, url_idx: int | None = None, user=Depends(get_verified_user)):
     if not request.app.state.config.ENABLE_OPENAI_API:
         raise HTTPException(status_code=503, detail='OpenAI API is disabled')
 
@@ -637,7 +625,7 @@ class ConnectionVerificationForm(BaseModel):
     url: str
     key: str
 
-    config: Optional[dict] = None
+    config: dict | None = None
 
 
 @router.post('/verify')
@@ -1303,20 +1291,20 @@ class ResponsesForm(BaseModel):
     model_config = ConfigDict(extra='allow')
 
     model: str
-    input: Optional[list | str] = None
-    instructions: Optional[str] = None
-    stream: Optional[bool] = None
-    temperature: Optional[float] = None
-    max_output_tokens: Optional[int] = None
-    top_p: Optional[float] = None
-    tools: Optional[list] = None
-    tool_choice: Optional[str | dict] = None
-    text: Optional[dict] = None
-    truncation: Optional[str] = None
-    metadata: Optional[dict] = None
-    store: Optional[bool] = None
-    reasoning: Optional[dict] = None
-    previous_response_id: Optional[str] = None
+    input: list | str | None = None
+    instructions: str | None = None
+    stream: bool | None = None
+    temperature: float | None = None
+    max_output_tokens: int | None = None
+    top_p: float | None = None
+    tools: list | None = None
+    tool_choice: str | dict | None = None
+    text: dict | None = None
+    truncation: str | None = None
+    metadata: dict | None = None
+    store: bool | None = None
+    reasoning: dict | None = None
+    previous_response_id: str | None = None
 
 
 @router.post('/responses')

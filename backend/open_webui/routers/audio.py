@@ -1,62 +1,52 @@
+import base64
 import hashlib
+import html
 import json
 import logging
+import mimetypes
 import os
 import uuid
-import html
-import base64
-from functools import lru_cache
-from pydub import AudioSegment
-from pydub.silence import split_on_silence
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional
+from functools import lru_cache
 
-from fnmatch import fnmatch
-import aiohttp
 import aiofiles
+import aiohttp
 import requests
-import mimetypes
-
 from fastapi import (
+    APIRouter,
     Depends,
-    FastAPI,
     File,
     Form,
     HTTPException,
     Request,
     UploadFile,
     status,
-    APIRouter,
 )
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
-
-
-from open_webui.utils.misc import strict_match_mime_type
-from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.utils.access_control import has_permission
-from open_webui.utils.headers import include_user_info_headers
 from open_webui.config import (
-    WHISPER_MODEL_AUTO_UPDATE,
-    WHISPER_COMPUTE_TYPE,
-    WHISPER_MODEL_DIR,
-    WHISPER_VAD_FILTER,
     CACHE_DIR,
-    WHISPER_LANGUAGE,
-    WHISPER_MULTILINGUAL,
     ELEVENLABS_API_BASE_URL,
+    WHISPER_COMPUTE_TYPE,
+    WHISPER_LANGUAGE,
+    WHISPER_MODEL_AUTO_UPDATE,
+    WHISPER_MODEL_DIR,
+    WHISPER_MULTILINGUAL,
+    WHISPER_VAD_FILTER,
 )
-
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import (
-    ENV,
     AIOHTTP_CLIENT_SESSION_SSL,
     AIOHTTP_CLIENT_TIMEOUT,
     AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST,
     DEVICE_TYPE,
     ENABLE_FORWARD_USER_INFO_HEADERS,
 )
+from open_webui.utils.access_control import has_permission
+from open_webui.utils.auth import get_admin_user, get_verified_user
+from open_webui.utils.headers import include_user_info_headers
+from open_webui.utils.misc import strict_match_mime_type
+from pydantic import BaseModel
+from pydub import AudioSegment
 
 router = APIRouter()
 
@@ -80,7 +70,6 @@ SPEECH_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 #
 ##########################################
 
-from pydub import AudioSegment
 from pydub.utils import mediainfo
 
 
@@ -159,7 +148,7 @@ def set_faster_whisper_model(model: str, auto_update: bool = False):
 class TTSConfigForm(BaseModel):
     OPENAI_API_BASE_URL: str
     OPENAI_API_KEY: str
-    OPENAI_PARAMS: Optional[dict] = None
+    OPENAI_PARAMS: dict | None = None
     API_KEY: str
     ENGINE: str
     MODEL: str
@@ -302,8 +291,8 @@ async def update_audio_config(request: Request, form_data: AudioConfigUpdateForm
 
 
 def load_speech_pipeline(request):
-    from transformers import pipeline
     from datasets import load_dataset
+    from transformers import pipeline
 
     if request.app.state.speech_synthesiser is None:
         request.app.state.speech_synthesiser = pipeline('text-to-speech', 'microsoft/speecht5_tts')
@@ -390,7 +379,7 @@ async def speech(request: Request, user=Depends(get_verified_user)):
             detail = None
 
             status_code = 500
-            detail = f'Open WebUI: Server Connection Error'
+            detail = 'Open WebUI: Server Connection Error'
 
             if r is not None:
                 status_code = r.status
@@ -524,8 +513,8 @@ async def speech(request: Request, user=Depends(get_verified_user)):
             log.exception(e)
             raise HTTPException(status_code=400, detail='Invalid JSON payload')
 
-        import torch
         import soundfile as sf
+        import torch
 
         load_speech_pipeline(request)
 
@@ -576,7 +565,7 @@ def transcription_handler(request, file_path, metadata, user=None):
             language=languages[0],
             multilingual=WHISPER_MULTILINGUAL,
         )
-        log.info("Detected language '%s' with probability %f" % (info.language, info.language_probability))
+        log.info(f"Detected language '{info.language}' with probability {info.language_probability:f}")
 
         transcript = ''.join([segment.text for segment in list(segments)])
         data = {'text': transcript.strip()}
@@ -1014,7 +1003,7 @@ def transcription_handler(request, file_path, metadata, user=None):
             )
 
 
-def transcribe(request: Request, file_path: str, metadata: Optional[dict] = None, user=None):
+def transcribe(request: Request, file_path: str, metadata: dict | None = None, user=None):
     log.info(f'transcribe: {file_path} {metadata}')
 
     if is_audio_conversion_required(file_path):
@@ -1133,7 +1122,7 @@ def split_audio(file_path, max_bytes, format='mp3', bitrate='32k'):
 def transcription(
     request: Request,
     file: UploadFile = File(...),
-    language: Optional[str] = Form(None),
+    language: str | None = Form(None),
     user=Depends(get_verified_user),
 ):
     if user.role != 'admin' and not has_permission(user.id, 'chat.stt', request.app.state.config.USER_PERMISSIONS):
