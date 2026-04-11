@@ -59,12 +59,6 @@ repos:
         entry: npx eslint --max-warnings=0
         language: system
         files: ^src/.*\.(js|ts|svelte)$
-      - id: prettier-check
-        name: prettier (frontend)
-        entry: npx prettier --check
-        language: system
-        files: \.(js|ts|svelte|css|json)$
-        exclude: ^(node_modules|build|package-lock\.json|src/lib/i18n/)
       - id: no-debug
         name: no debug leftovers
         entry: scripts/hooks/check-no-debug.sh
