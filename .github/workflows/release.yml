@@ -25,28 +25,44 @@ jobs:
     needs: verify
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Extract version
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract version and image names
         id: version
         run: |
-          echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
-          echo "image=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
-      - name: Build and push
+          VERSION="${GITHUB_REF_NAME#v}"
+          GHCR_IMAGE="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          DH_IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/gpthub"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "ghcr_image=${GHCR_IMAGE}" >> $GITHUB_OUTPUT
+          echo "dh_image=${DH_IMAGE}" >> $GITHUB_OUTPUT
+
+      - name: Build and push to GHCR + Docker Hub
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           build-args: BUILD_HASH=${{ github.ref_name }}
           tags: |
-            ${{ steps.version.outputs.image }}:${{ steps.version.outputs.version }}
-            ${{ steps.version.outputs.image }}:latest
+            ${{ steps.version.outputs.ghcr_image }}:${{ steps.version.outputs.version }}
+            ${{ steps.version.outputs.ghcr_image }}:latest
+            ${{ steps.version.outputs.dh_image }}:${{ steps.version.outputs.version }}
+            ${{ steps.version.outputs.dh_image }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -61,8 +77,12 @@ jobs:
       - name: Extract version
         id: version
         run: |
-          echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
-          echo "image=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+          VERSION="${GITHUB_REF_NAME#v}"
+          GHCR_IMAGE="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          DH_IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/gpthub"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "ghcr_image=${GHCR_IMAGE}" >> $GITHUB_OUTPUT
+          echo "dh_image=${DH_IMAGE}" >> $GITHUB_OUTPUT
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -71,12 +91,19 @@ jobs:
           body: |
             ## GPTHub ${{ steps.version.outputs.version }}
 
-            | Артефакт | Как получить |
-            |----------|--------------|
-            | **Docker** | `${{ steps.version.outputs.image }}:${{ steps.version.outputs.version }}` |
-            | **Исходники** | [Тег ${{ github.ref_name }}](${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}) |
+            | Реестр | Команда |
+            |--------|---------|
+            | **Docker Hub** | `docker pull ${{ steps.version.outputs.dh_image }}:${{ steps.version.outputs.version }}` |
+            | **GHCR** | `docker pull ${{ steps.version.outputs.ghcr_image }}:${{ steps.version.outputs.version }}` |
+
+            ### Быстрый запуск
 
             ```bash
-            docker pull ${{ steps.version.outputs.image }}:${{ steps.version.outputs.version }}
+            docker run -d -p 3000:8080 \
+              -e OPENAI_API_KEY=your-key \
+              -v gpthub_data:/app/backend/data \
+              ${{ steps.version.outputs.dh_image }}:${{ steps.version.outputs.version }}
             ```
+
+            Затем открой http://localhost:3000
           generate_release_notes: true
