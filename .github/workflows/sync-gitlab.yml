@@ -1,4 +1,4 @@
-name: Sync main → GitLab
+name: Sync main → GitLab MR
 
 on:
   push:
@@ -6,16 +6,40 @@ on:
 
 jobs:
   sync:
-    name: Mirror main to GitLab
+    name: Mirror main → GitLab MR
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Push to GitLab
+      - name: Push sync branch to GitLab
         run: |
+          SYNC_BRANCH="sync/github-main-$(date +%Y%m%d-%H%M%S)"
+          echo "SYNC_BRANCH=$SYNC_BRANCH" >> $GITHUB_ENV
+
           git remote add gitlab "https://oauth2:${GITLAB_TOKEN}@git.truetecharena.ru/tta/true-tech-hack-in2026-gpthub-git/it-aul-misisxcuxkfu/task-repo.git"
-          git push gitlab main --force
+          git push gitlab "HEAD:refs/heads/${SYNC_BRANCH}"
+        env:
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+
+      - name: Create Merge Request on GitLab
+        run: |
+          SHORT_SHA="${{ github.sha }}"
+          SHORT_SHA="${SHORT_SHA:0:7}"
+
+          curl --fail-with-body \
+            --request POST \
+            --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data "{
+              \"source_branch\": \"${SYNC_BRANCH}\",
+              \"target_branch\": \"main\",
+              \"title\": \"chore: sync from GitHub main (${SHORT_SHA})\",
+              \"description\": \"Automated sync from GitHub commit [\`${SHORT_SHA}\`](https://github.com/${{ github.repository }}/commit/${{ github.sha }}).\",
+              \"remove_source_branch\": true,
+              \"squash\": false
+            }" \
+            "https://git.truetecharena.ru/api/v4/projects/$(python3 -c \"import urllib.parse; print(urllib.parse.quote('tta/true-tech-hack-in2026-gpthub-git/it-aul-misisxcuxkfu/task-repo', safe=''))\")/merge_requests"
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
