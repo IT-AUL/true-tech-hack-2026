@@ -3,18 +3,14 @@ import io
 import json
 import logging
 import os
-from typing import Optional, List
-
-import requests
-
-from fastapi import Request
-
-from open_webui.retrieval.web.main import SearchResult, get_filtered_results
-from open_webui.utils.headers import include_user_info_headers
-from open_webui.env import FORWARD_SESSION_INFO_HEADER_CHAT_ID
-
 from xml.etree import ElementTree as ET
 from xml.etree.ElementTree import Element
+
+import requests
+from fastapi import Request
+from open_webui.env import FORWARD_SESSION_INFO_HEADER_CHAT_ID
+from open_webui.retrieval.web.main import SearchResult, get_filtered_results
+from open_webui.utils.headers import include_user_info_headers
 
 log = logging.getLogger(__name__)
 
@@ -37,9 +33,9 @@ def search_yandex(
     yandex_search_config: str,
     query: str,
     count: int,
-    filter_list: Optional[List[str]] = None,
+    filter_list: list[str] | None = None,
     user=None,
-) -> List[SearchResult]:
+) -> list[SearchResult]:
     try:
         headers = {
             'User-Agent': 'Open WebUI (https://github.com/open-webui/open-webui) RAG Bot',
@@ -120,8 +116,8 @@ def search_yandex(
 
 
 if __name__ == '__main__':
-    from starlette.datastructures import Headers
     from fastapi import FastAPI
+    from starlette.datastructures import Headers
 
     result = search_yandex(
         Request(

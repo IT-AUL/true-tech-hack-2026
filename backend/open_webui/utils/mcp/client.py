@@ -1,14 +1,10 @@
 import asyncio
-from typing import Optional
 from contextlib import AsyncExitStack
 
 import anyio
-
-from mcp import ClientSession
-from mcp.client.auth import OAuthClientProvider, TokenStorage
-from mcp.client.streamable_http import streamablehttp_client
-from mcp.shared.auth import OAuthClientInformationFull, OAuthClientMetadata, OAuthToken
 import httpx
+from mcp import ClientSession
+from mcp.client.streamable_http import streamablehttp_client
 from open_webui.env import AIOHTTP_CLIENT_SESSION_TOOL_SERVER_SSL
 
 
@@ -34,10 +30,10 @@ def create_insecure_httpx_client(headers=None, timeout=None, auth=None):
 
 class MCPClient:
     def __init__(self):
-        self.session: Optional[ClientSession] = None
+        self.session: ClientSession | None = None
         self.exit_stack = None
 
-    async def connect(self, url: str, headers: Optional[dict] = None):
+    async def connect(self, url: str, headers: dict | None = None):
         async with AsyncExitStack() as exit_stack:
             try:
                 if AIOHTTP_CLIENT_SESSION_TOOL_SERVER_SSL:
@@ -62,7 +58,7 @@ class MCPClient:
                 await asyncio.shield(self.disconnect())
                 raise e
 
-    async def list_tool_specs(self) -> Optional[dict]:
+    async def list_tool_specs(self) -> dict | None:
         if not self.session:
             raise RuntimeError('MCP client is not connected.')
 
@@ -77,13 +73,13 @@ class MCPClient:
             inputSchema = tool.inputSchema
 
             # TODO: handle outputSchema if needed
-            outputSchema = getattr(tool, 'outputSchema', None)
+            getattr(tool, 'outputSchema', None)
 
             tool_specs.append({'name': name, 'description': description, 'parameters': inputSchema})
 
         return tool_specs
 
-    async def call_tool(self, function_name: str, function_args: dict) -> Optional[dict]:
+    async def call_tool(self, function_name: str, function_args: dict) -> dict | None:
         if not self.session:
             raise RuntimeError('MCP client is not connected.')
 
@@ -99,7 +95,7 @@ class MCPClient:
         else:
             return result_content
 
-    async def list_resources(self, cursor: Optional[str] = None) -> Optional[dict]:
+    async def list_resources(self, cursor: str | None = None) -> dict | None:
         if not self.session:
             raise RuntimeError('MCP client is not connected.')
 
@@ -112,7 +108,7 @@ class MCPClient:
 
         return resources
 
-    async def read_resource(self, uri: str) -> Optional[dict]:
+    async def read_resource(self, uri: str) -> dict | None:
         if not self.session:
             raise RuntimeError('MCP client is not connected.')
 

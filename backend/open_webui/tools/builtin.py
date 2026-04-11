@@ -6,38 +6,39 @@ These tools are automatically available when native function calling is enabled.
 IMPORTANT: DO NOT IMPORT THIS MODULE DIRECTLY IN OTHER PARTS OF THE CODEBASE.
 """
 
+import asyncio
 import json
 import logging
 import time
-import asyncio
-from typing import Optional
 
 from fastapi import Request
 
-from open_webui.models.users import UserModel
-from open_webui.routers.retrieval import search_web as _search_web
-from open_webui.retrieval.utils import get_content_from_url
-from open_webui.routers.images import (
-    image_generations,
-    image_edits,
-    CreateImageForm,
-    EditImageForm,
-)
-from open_webui.routers.memories import (
-    query_memory,
-    add_memory as _add_memory,
-    update_memory_by_id,
-    QueryMemoryForm,
-    AddMemoryForm,
-    MemoryUpdateModel,
-)
-from open_webui.models.notes import Notes
+from open_webui.models.channels import Channels
 from open_webui.models.chats import Chats
-from open_webui.models.channels import Channels, ChannelMember, Channel
-from open_webui.models.messages import Messages, Message
 from open_webui.models.groups import Groups
 from open_webui.models.memories import Memories
+from open_webui.models.messages import Messages
+from open_webui.models.notes import Notes
+from open_webui.models.users import UserModel
+from open_webui.retrieval.utils import get_content_from_url
 from open_webui.retrieval.vector.factory import VECTOR_DB_CLIENT
+from open_webui.routers.images import (
+    CreateImageForm,
+    EditImageForm,
+    image_edits,
+    image_generations,
+)
+from open_webui.routers.memories import (
+    AddMemoryForm,
+    MemoryUpdateModel,
+    QueryMemoryForm,
+    query_memory,
+    update_memory_by_id,
+)
+from open_webui.routers.memories import (
+    add_memory as _add_memory,
+)
+from open_webui.routers.retrieval import search_web as _search_web
 from open_webui.utils.sanitize import sanitize_code
 
 log = logging.getLogger(__name__)
@@ -59,9 +60,9 @@ async def get_current_timestamp(
     :return: JSON with current_timestamp (seconds) and current_iso (ISO format)
     """
     try:
-        import datetime
+        import datetime as dt
 
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = dt.datetime.now(dt.UTC)
         return json.dumps(
             {
                 'current_timestamp': int(now.timestamp()),
@@ -94,15 +95,16 @@ async def calculate_timestamp(
     :return: JSON with current_timestamp and calculated_timestamp (both in seconds)
     """
     try:
-        import datetime
+        import datetime as dt
+
         from dateutil.relativedelta import relativedelta
 
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = dt.datetime.now(dt.UTC)
         current_ts = int(now.timestamp())
 
         # Calculate the adjusted time
         total_days = days_ago + (weeks_ago * 7)
-        adjusted = now - datetime.timedelta(days=total_days)
+        adjusted = now - dt.timedelta(days=total_days)
 
         # Handle months and years separately (variable length)
         if months_ago > 0 or years_ago > 0:
@@ -121,12 +123,12 @@ async def calculate_timestamp(
         )
     except ImportError:
         # Fallback without dateutil
-        import datetime
+        import datetime as dt
 
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = dt.datetime.now(dt.UTC)
         current_ts = int(now.timestamp())
         total_days = days_ago + (weeks_ago * 7) + (months_ago * 30) + (years_ago * 365)
-        adjusted = now - datetime.timedelta(days=total_days)
+        adjusted = now - dt.timedelta(days=total_days)
         adjusted_ts = int(adjusted.timestamp())
         return json.dumps(
             {
@@ -709,8 +711,8 @@ async def list_memories(
 async def search_notes(
     query: str,
     count: int = 5,
-    start_timestamp: Optional[int] = None,
-    end_timestamp: Optional[int] = None,
+    start_timestamp: int | None = None,
+    end_timestamp: int | None = None,
     __request__: Request = None,
     __user__: dict = None,
 ) -> str:
@@ -901,7 +903,7 @@ async def write_note(
 async def replace_note_content(
     note_id: str,
     content: str,
-    title: Optional[str] = None,
+    title: str | None = None,
     __request__: Request = None,
     __user__: dict = None,
 ) -> str:
@@ -975,8 +977,8 @@ async def replace_note_content(
 async def search_chats(
     query: str,
     count: int = 5,
-    start_timestamp: Optional[int] = None,
-    end_timestamp: Optional[int] = None,
+    start_timestamp: int | None = None,
+    end_timestamp: int | None = None,
     __request__: Request = None,
     __user__: dict = None,
     __chat_id__: str = None,
@@ -1178,8 +1180,8 @@ async def search_channels(
 async def search_channel_messages(
     query: str,
     count: int = 10,
-    start_timestamp: Optional[int] = None,
-    end_timestamp: Optional[int] = None,
+    start_timestamp: int | None = None,
+    end_timestamp: int | None = None,
     __request__: Request = None,
     __user__: dict = None,
 ) -> str:
@@ -1523,12 +1525,12 @@ async def search_knowledge_bases(
 
 async def search_knowledge_files(
     query: str,
-    knowledge_id: Optional[str] = None,
+    knowledge_id: str | None = None,
     count: int = 5,
     skip: int = 0,
     __request__: Request = None,
     __user__: dict = None,
-    __model_knowledge__: Optional[list[dict]] = None,
+    __model_knowledge__: list[dict] | None = None,
 ) -> str:
     """
     Search files by filename across knowledge bases the user has access to.
@@ -1547,9 +1549,9 @@ async def search_knowledge_files(
         return json.dumps({'error': 'User context not available'})
 
     try:
-        from open_webui.models.knowledge import Knowledges
-        from open_webui.models.files import Files
         from open_webui.models.access_grants import AccessGrants
+        from open_webui.models.files import Files
+        from open_webui.models.knowledge import Knowledges
 
         user_id = __user__.get('id')
         user_role = __user__.get('role', 'user')
@@ -1681,7 +1683,7 @@ async def view_file(
     max_chars: int = DEFAULT_VIEW_FILE_MAX_CHARS,
     __request__: Request = None,
     __user__: dict = None,
-    __model_knowledge__: Optional[list[dict]] = None,
+    __model_knowledge__: list[dict] | None = None,
 ) -> str:
     """
     Get the content of a file by its ID. Supports pagination for large files.
@@ -1806,9 +1808,9 @@ async def view_knowledge_file(
     offset = max(offset, 0)
 
     try:
+        from open_webui.models.access_grants import AccessGrants
         from open_webui.models.files import Files
         from open_webui.models.knowledge import Knowledges
-        from open_webui.models.access_grants import AccessGrants
 
         user_id = __user__.get('id')
         user_role = __user__.get('role', 'user')
@@ -1879,7 +1881,7 @@ async def view_knowledge_file(
 async def list_knowledge(
     __request__: Request = None,
     __user__: dict = None,
-    __model_knowledge__: Optional[list[dict]] = None,
+    __model_knowledge__: list[dict] | None = None,
 ) -> str:
     """
     List all knowledge bases, files, and notes attached to the current model.
@@ -1897,10 +1899,10 @@ async def list_knowledge(
         return json.dumps({'knowledge_bases': [], 'files': [], 'notes': []})
 
     try:
-        from open_webui.models.knowledge import Knowledges
-        from open_webui.models.files import Files
-        from open_webui.models.notes import Notes
         from open_webui.models.access_grants import AccessGrants
+        from open_webui.models.files import Files
+        from open_webui.models.knowledge import Knowledges
+        from open_webui.models.notes import Notes
 
         user_id = __user__.get('id')
         user_role = __user__.get('role', 'user')
@@ -1988,7 +1990,7 @@ async def list_knowledge(
 
 async def query_knowledge_files(
     query: str,
-    knowledge_ids: Optional[list[str]] = None,
+    knowledge_ids: list[str] | None = None,
     count: int = 5,
     __request__: Request = None,
     __user__: dict = None,
@@ -2029,11 +2031,11 @@ async def query_knowledge_files(
                 knowledge_ids = [knowledge_ids]
 
     try:
-        from open_webui.models.knowledge import Knowledges
+        from open_webui.models.access_grants import AccessGrants
         from open_webui.models.files import Files
+        from open_webui.models.knowledge import Knowledges
         from open_webui.models.notes import Notes
         from open_webui.retrieval.utils import query_collection
-        from open_webui.models.access_grants import AccessGrants
 
         user_id = __user__.get('id')
         user_role = __user__.get('role', 'user')
@@ -2189,9 +2191,10 @@ async def query_knowledge_bases(
 
     try:
         import heapq
+
         from open_webui.models.knowledge import Knowledges
-        from open_webui.routers.knowledge import KNOWLEDGE_BASES_COLLECTION
         from open_webui.retrieval.vector.factory import VECTOR_DB_CLIENT
+        from open_webui.routers.knowledge import KNOWLEDGE_BASES_COLLECTION
 
         user_id = __user__.get('id')
         user_group_ids = [group.id for group in Groups.get_groups_by_member_id(user_id)]
@@ -2290,8 +2293,8 @@ async def view_skill(
         return json.dumps({'error': 'User context not available'})
 
     try:
-        from open_webui.models.skills import Skills
         from open_webui.models.access_grants import AccessGrants
+        from open_webui.models.skills import Skills
 
         user_id = __user__.get('id')
 

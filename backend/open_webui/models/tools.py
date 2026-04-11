@@ -1,15 +1,13 @@
 import logging
 import time
-from typing import Optional
 
-from sqlalchemy.orm import Session, defer
-from open_webui.internal.db import Base, JSONField, get_db, get_db_context
-from open_webui.models.users import Users, UserResponse
-from open_webui.models.groups import Groups
+from open_webui.internal.db import Base, JSONField, get_db_context
 from open_webui.models.access_grants import AccessGrantModel, AccessGrants
-
+from open_webui.models.groups import Groups
+from open_webui.models.users import UserResponse, Users
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import BigInteger, Column, String, Text
+from sqlalchemy.orm import Session, defer
 
 log = logging.getLogger(__name__)
 
@@ -36,8 +34,8 @@ class Tool(Base):
 
 
 class ToolMeta(BaseModel):
-    description: Optional[str] = None
-    manifest: Optional[dict] = {}
+    description: str | None = None
+    manifest: dict | None = {}
 
 
 class ToolModel(BaseModel):
@@ -61,7 +59,7 @@ class ToolModel(BaseModel):
 
 
 class ToolUserModel(ToolModel):
-    user: Optional[UserResponse] = None
+    user: UserResponse | None = None
 
 
 class ToolResponse(BaseModel):
@@ -75,13 +73,13 @@ class ToolResponse(BaseModel):
 
 
 class ToolUserResponse(ToolResponse):
-    user: Optional[UserResponse] = None
+    user: UserResponse | None = None
 
     model_config = ConfigDict(extra='allow')
 
 
 class ToolAccessResponse(ToolUserResponse):
-    write_access: Optional[bool] = False
+    write_access: bool | None = False
 
 
 class ToolForm(BaseModel):
@@ -89,22 +87,22 @@ class ToolForm(BaseModel):
     name: str
     content: str
     meta: ToolMeta
-    access_grants: Optional[list[dict]] = None
+    access_grants: list[dict] | None = None
 
 
 class ToolValves(BaseModel):
-    valves: Optional[dict] = None
+    valves: dict | None = None
 
 
 class ToolsTable:
-    def _get_access_grants(self, tool_id: str, db: Optional[Session] = None) -> list[AccessGrantModel]:
+    def _get_access_grants(self, tool_id: str, db: Session | None = None) -> list[AccessGrantModel]:
         return AccessGrants.get_grants_by_resource('tool', tool_id, db=db)
 
     def _to_tool_model(
         self,
         tool: Tool,
-        access_grants: Optional[list[AccessGrantModel]] = None,
-        db: Optional[Session] = None,
+        access_grants: list[AccessGrantModel] | None = None,
+        db: Session | None = None,
     ) -> ToolModel:
         tool_data = ToolModel.model_validate(tool).model_dump(exclude={'access_grants'})
         tool_data['access_grants'] = (
@@ -117,8 +115,8 @@ class ToolsTable:
         user_id: str,
         form_data: ToolForm,
         specs: list[dict],
-        db: Optional[Session] = None,
-    ) -> Optional[ToolModel]:
+        db: Session | None = None,
+    ) -> ToolModel | None:
         with get_db_context(db) as db:
             try:
                 result = Tool(
@@ -142,7 +140,7 @@ class ToolsTable:
                 log.exception(f'Error creating a new tool: {e}')
                 return None
 
-    def get_tool_by_id(self, id: str, db: Optional[Session] = None) -> Optional[ToolModel]:
+    def get_tool_by_id(self, id: str, db: Session | None = None) -> ToolModel | None:
         try:
             with get_db_context(db) as db:
                 tool = db.get(Tool, id)
@@ -150,7 +148,7 @@ class ToolsTable:
         except Exception:
             return None
 
-    def get_tools(self, defer_content: bool = False, db: Optional[Session] = None) -> list[ToolUserModel]:
+    def get_tools(self, defer_content: bool = False, db: Session | None = None) -> list[ToolUserModel]:
         with get_db_context(db) as db:
             query = db.query(Tool).order_by(Tool.updated_at.desc())
             if defer_content:
@@ -186,7 +184,7 @@ class ToolsTable:
         user_id: str,
         permission: str = 'write',
         defer_content: bool = False,
-        db: Optional[Session] = None,
+        db: Session | None = None,
     ) -> list[ToolUserModel]:
         tools = self.get_tools(defer_content=defer_content, db=db)
         user_group_ids = {group.id for group in Groups.get_groups_by_member_id(user_id, db=db)}
@@ -205,16 +203,16 @@ class ToolsTable:
             )
         ]
 
-    def get_tool_valves_by_id(self, id: str, db: Optional[Session] = None) -> Optional[dict]:
+    def get_tool_valves_by_id(self, id: str, db: Session | None = None) -> dict | None:
         try:
             with get_db_context(db) as db:
                 tool = db.get(Tool, id)
                 return tool.valves if tool.valves else {}
-        except Exception as e:
+        except Exception:
             log.exception(f'Error getting tool valves by id {id}')
             return None
 
-    def update_tool_valves_by_id(self, id: str, valves: dict, db: Optional[Session] = None) -> Optional[ToolValves]:
+    def update_tool_valves_by_id(self, id: str, valves: dict, db: Session | None = None) -> ToolValves | None:
         try:
             with get_db_context(db) as db:
                 db.query(Tool).filter_by(id=id).update({'valves': valves, 'updated_at': int(time.time())})
@@ -223,7 +221,7 @@ class ToolsTable:
         except Exception:
             return None
 
-    def get_user_valves_by_id_and_user_id(self, id: str, user_id: str, db: Optional[Session] = None) -> Optional[dict]:
+    def get_user_valves_by_id_and_user_id(self, id: str, user_id: str, db: Session | None = None) -> dict | None:
         try:
             user = Users.get_user_by_id(user_id, db=db)
             user_settings = user.settings.model_dump() if user.settings else {}
@@ -240,8 +238,8 @@ class ToolsTable:
             return None
 
     def update_user_valves_by_id_and_user_id(
-        self, id: str, user_id: str, valves: dict, db: Optional[Session] = None
-    ) -> Optional[dict]:
+        self, id: str, user_id: str, valves: dict, db: Session | None = None
+    ) -> dict | None:
         try:
             user = Users.get_user_by_id(user_id, db=db)
             user_settings = user.settings.model_dump() if user.settings else {}
@@ -262,7 +260,7 @@ class ToolsTable:
             log.exception(f'Error updating user valves by id {id} and user_id {user_id}: {e}')
             return None
 
-    def update_tool_by_id(self, id: str, updated: dict, db: Optional[Session] = None) -> Optional[ToolModel]:
+    def update_tool_by_id(self, id: str, updated: dict, db: Session | None = None) -> ToolModel | None:
         try:
             with get_db_context(db) as db:
                 access_grants = updated.pop('access_grants', None)
@@ -277,7 +275,7 @@ class ToolsTable:
         except Exception:
             return None
 
-    def delete_tool_by_id(self, id: str, db: Optional[Session] = None) -> bool:
+    def delete_tool_by_id(self, id: str, db: Session | None = None) -> bool:
         try:
             with get_db_context(db) as db:
                 AccessGrants.revoke_all_access('tool', id, db=db)

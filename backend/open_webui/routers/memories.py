@@ -1,17 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel
-import logging
 import asyncio
+import logging
 from typing import Optional
 
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from open_webui.constants import ERROR_MESSAGES
+from open_webui.internal.db import get_session
 from open_webui.models.memories import Memories, MemoryModel
 from open_webui.retrieval.vector.factory import VECTOR_DB_CLIENT
-from open_webui.utils.auth import get_verified_user
-from open_webui.internal.db import get_session
-from sqlalchemy.orm import Session
-
 from open_webui.utils.access_control import has_permission
-from open_webui.constants import ERROR_MESSAGES
+from open_webui.utils.auth import get_verified_user
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 log = logging.getLogger(__name__)
 
@@ -56,7 +55,7 @@ class AddMemoryForm(BaseModel):
 
 
 class MemoryUpdateModel(BaseModel):
-    content: Optional[str] = None
+    content: str | None = None
 
 
 @router.post('/add', response_model=Optional[MemoryModel])
@@ -107,7 +106,7 @@ async def add_memory(
 
 class QueryMemoryForm(BaseModel):
     content: str
-    k: Optional[int] = 1
+    k: int | None = 1
 
 
 @router.post('/query')

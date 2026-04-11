@@ -1,14 +1,14 @@
 import io
 import os
+from unittest.mock import MagicMock
+
 import boto3
 import pytest
 from botocore.exceptions import ClientError
-from moto import mock_aws
-from open_webui.storage import provider
 from gcp_storage_emulator.server import create_server
 from google.cloud import storage
-from azure.storage.blob import BlobServiceClient, ContainerClient, BlobClient
-from unittest.mock import MagicMock
+from moto import mock_aws
+from open_webui.storage import provider
 
 
 def mock_upload_dir(monkeypatch, tmp_path):
@@ -250,7 +250,7 @@ class TestGCSStorageProvider:
         self.Storage.delete_file(gcs_file_path)
         # check that deleting file from gcs will delete the local file as well
         assert not (upload_dir / self.filename).exists()
-        assert self.Storage.bucket.get_blob(self.filename) == None
+        assert self.Storage.bucket.get_blob(self.filename) is None
 
     def test_delete_all_files(self, monkeypatch, tmp_path, setup):
         upload_dir = mock_upload_dir(monkeypatch, tmp_path)
@@ -271,8 +271,8 @@ class TestGCSStorageProvider:
         self.Storage.delete_all_files()
         assert not (upload_dir / self.filename).exists()
         assert not (upload_dir / self.filename_extra).exists()
-        assert self.Storage.bucket.get_blob(self.filename) == None
-        assert self.Storage.bucket.get_blob(self.filename_extra) == None
+        assert self.Storage.bucket.get_blob(self.filename) is None
+        assert self.Storage.bucket.get_blob(self.filename_extra) is None
 
 
 class TestAzureStorageProvider:

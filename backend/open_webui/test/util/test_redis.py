@@ -1,14 +1,15 @@
+import inspect
+from unittest.mock import AsyncMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, AsyncMock
 import redis
 from open_webui.utils.redis import (
+    MAX_RETRY_COUNT,
     SentinelRedisProxy,
-    parse_redis_service_url,
     get_redis_connection,
     get_sentinels_from_env,
-    MAX_RETRY_COUNT,
+    parse_redis_service_url,
 )
-import inspect
 
 
 class TestSentinelRedisProxy:

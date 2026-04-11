@@ -1,0 +1,274 @@
+stages:
+  - validate
+  - lint
+  - check
+  - build
+  - release
+
+variables:
+  NODE_IMAGE: node:22-alpine
+  PYTHON_IMAGE: python:3.11-slim
+
+# ──────────────────────────────────────────────
+# VALIDATE (MR quality gates)
+# ──────────────────────────────────────────────
+
+validate:branch-name:
+  stage: validate
+  image: alpine:latest
+  script:
+    - |
+      BRANCH="$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME"
+      echo "Branch: $BRANCH"
+      echo "$BRANCH" | grep -qE "^(feat|fix|chore|refactor|docs|test)/" || {
+        echo ""
+        echo "ERROR: Branch '$BRANCH' does not follow naming convention."
+        echo ""
+        echo "  Allowed prefixes: feat/, fix/, chore/, refactor/, docs/, test/"
+        echo "  Example: feat/backend/auto-routing, fix/frontend/overflow"
+        echo ""
+        exit 1
+      }
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+validate:mr-title:
+  stage: validate
+  image: alpine:latest
+  script:
+    - |
+      TITLE="$CI_MERGE_REQUEST_TITLE"
+      echo "MR title: $TITLE"
+
+      echo "$TITLE" | grep -qi "^wip:" && {
+        echo "ERROR: WIP merge requests cannot be merged. Remove 'WIP:' prefix."
+        exit 1
+      }
+
+      echo "$TITLE" | grep -qE "^(feat|fix|chore|refactor|docs|test|ci|perf|style|build|revert)(\(.+\))?: .+" || {
+        echo ""
+        echo "ERROR: MR title does not follow Conventional Commits format."
+        echo ""
+        echo "  Format: <type>(<scope>): <description>"
+        echo ""
+        echo "  Types: feat, fix, chore, refactor, docs, test, ci, perf, style, build, revert"
+        echo "  Examples:"
+        echo "    feat(backend): add auto-routing endpoint"
+        echo "    fix(frontend): model selector overflow"
+        echo "    chore: update dependencies"
+        echo ""
+        exit 1
+      }
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+validate:no-version-drift:
+  stage: validate
+  image: $NODE_IMAGE
+  script:
+    - |
+      PKG_VERSION=$(node -e "console.log(require('./package.json').version)")
+      LOCK_VERSION=$(node -e "console.log(require('./package-lock.json').version)")
+      echo "package.json:      $PKG_VERSION"
+      echo "package-lock.json: $LOCK_VERSION"
+      if [ "$PKG_VERSION" != "$LOCK_VERSION" ]; then
+        echo ""
+        echo "ERROR: version mismatch between package.json and package-lock.json"
+        echo "Run: npm install --package-lock-only"
+        exit 1
+      fi
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - "package.json"
+        - "package-lock.json"
+    - if: $CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "main"
+
+validate:api-docs:
+  stage: validate
+  image: alpine:latest
+  script:
+    - |
+      if git diff --name-only $CI_MERGE_REQUEST_DIFF_BASE_SHA...$CI_COMMIT_SHA | grep -q "^backend/open_webui/routers/"; then
+        if ! git diff --name-only $CI_MERGE_REQUEST_DIFF_BASE_SHA...$CI_COMMIT_SHA | grep -q "docs/API_CHANGES.md"; then
+          echo ""
+          echo "WARNING: You modified backend routers but did not update docs/API_CHANGES.md"
+          echo "If you added/changed API endpoints, please document them."
+          echo ""
+        fi
+      fi
+  allow_failure: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - "backend/open_webui/routers/**/*"
+
+# ──────────────────────────────────────────────
+# LINT
+# ──────────────────────────────────────────────
+
+lint:frontend:
+  stage: lint
+  image: $NODE_IMAGE
+  cache:
+    key: npm-$CI_COMMIT_REF_SLUG
+    paths:
+      - node_modules/
+  script:
+    - npm ci --prefer-offline
+    - npx eslint . --max-warnings=0
+    - npx prettier --check "src/**/*.{js,ts,svelte,css,json}"
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - "src/**/*"
+        - "package.json"
+        - ".eslintrc.cjs"
+        - ".prettierrc"
+    - if: $CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "main"
+      changes:
+        - "src/**/*"
+
+lint:backend:
+  stage: lint
+  image: $PYTHON_IMAGE
+  cache:
+    key: pip-ruff
+    paths:
+      - .ruff_cache/
+  before_script:
+    - pip install --quiet ruff
+  script:
+    - ruff check backend/
+    - ruff format --check backend/
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - "backend/**/*"
+        - "pyproject.toml"
+    - if: $CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "main"
+      changes:
+        - "backend/**/*"
+
+# ──────────────────────────────────────────────
+# CHECK (type checking)
+# ──────────────────────────────────────────────
+
+check:svelte:
+  stage: check
+  image: $NODE_IMAGE
+  cache:
+    key: npm-$CI_COMMIT_REF_SLUG
+    paths:
+      - node_modules/
+  script:
+    - npm ci --prefer-offline
+    - npm run check
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - "src/**/*"
+        - "package.json"
+        - "tsconfig.json"
+    - if: $CI_COMMIT_BRANCH == "develop" || $CI_COMMIT_BRANCH == "main"
+      changes:
+        - "src/**/*"
+
+# ──────────────────────────────────────────────
+# BUILD
+# ──────────────────────────────────────────────
+
+build:docker:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+    IMAGE_NAME: $CI_REGISTRY_IMAGE
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - docker build
+        --build-arg BUILD_HASH=$CI_COMMIT_SHORT_SHA
+        --build-arg USE_SLIM=true
+        -t $IMAGE_NAME:$CI_COMMIT_SHORT_SHA .
+    - docker push $IMAGE_NAME:$CI_COMMIT_SHORT_SHA
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_COMMIT_BRANCH == "develop"
+    - if: $CI_COMMIT_BRANCH == "main"
+
+# ──────────────────────────────────────────────
+# RELEASE (теги vX.Y.Z или vX.Y.Z-gpthub.N — см. docs/VERSIONING.md)
+# ──────────────────────────────────────────────
+
+.release_tag_rules: &release_tag_rules
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$/
+
+release:verify:
+  stage: release
+  image: $NODE_IMAGE
+  script:
+    - node scripts/check-version-tag.mjs
+  <<: *release_tag_rules
+
+release:docker:
+  stage: release
+  image: docker:latest
+  services:
+    - docker:dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+    IMAGE_NAME: $CI_REGISTRY_IMAGE
+  needs:
+    - release:verify
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - export VERSION=${CI_COMMIT_TAG#v}
+    - docker build
+        --build-arg BUILD_HASH=$CI_COMMIT_TAG
+        --build-arg USE_SLIM=true
+        -t $IMAGE_NAME:$VERSION
+        -t $IMAGE_NAME:latest .
+    - docker push $IMAGE_NAME:$VERSION
+    - docker push $IMAGE_NAME:latest
+  <<: *release_tag_rules
+
+release:publish:
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  needs:
+    - release:docker
+  script:
+    - export VERSION=${CI_COMMIT_TAG#v}
+    - |
+      cat > release-notes.md << EOF
+      ## GPTHub ${VERSION}
+
+      | Артефакт | Как получить |
+      |----------|----------------|
+      | **Docker** | \`${CI_REGISTRY_IMAGE}:${VERSION}\` (и тег \`latest\`) |
+      | **Исходники** | [Тег ${CI_COMMIT_TAG}](${CI_PROJECT_URL}/-/tags/${CI_COMMIT_TAG}) — полный снимок репозитория |
+
+      База: **Open WebUI** — номер upstream в \`package.json\` → \`gpthub.upstreamVersion\`.
+
+      \`\`\`bash
+      docker pull ${CI_REGISTRY_IMAGE}:${VERSION}
+      \`\`\`
+      EOF
+  release:
+    tag_name: $CI_COMMIT_TAG
+    description: release-notes.md
+  <<: *release_tag_rules

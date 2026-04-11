@@ -1,70 +1,55 @@
-import json
-import logging
 import base64
 import io
+import logging
 from typing import Optional
 
-
-from fastapi import APIRouter, Depends, HTTPException, Request, status, BackgroundTasks
-from fastapi.responses import Response, StreamingResponse, FileResponse
-from pydantic import BaseModel
-from pydantic import field_validator
-
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi.responses import FileResponse, Response, StreamingResponse
+from open_webui.constants import ERROR_MESSAGES
+from open_webui.env import STATIC_DIR
+from open_webui.internal.db import get_session
+from open_webui.models.access_grants import AccessGrants, has_public_read_access_grant, has_public_write_access_grant
+from open_webui.models.channels import (
+    ChannelForm,
+    ChannelModel,
+    ChannelResponse,
+    Channels,
+    ChannelWebhookForm,
+    ChannelWebhookModel,
+    CreateChannelForm,
+)
+from open_webui.models.messages import (
+    MessageForm,
+    MessageModel,
+    MessageResponse,
+    Messages,
+    MessageWithReactionsResponse,
+)
+from open_webui.models.users import (
+    UserIdNameStatusResponse,
+    UserListResponse,
+    UserModel,
+    UserModelResponse,
+    UserNameResponse,
+    Users,
+)
 from open_webui.socket.main import (
     emit_to_users,
     enter_room_for_users,
-    sio,
     get_user_ids_from_room,
+    sio,
 )
-from open_webui.models.users import (
-    UserIdNameResponse,
-    UserIdNameStatusResponse,
-    UserListResponse,
-    UserModelResponse,
-    Users,
-    UserModel,
-    UserNameResponse,
-)
-
-from open_webui.models.groups import Groups
-from open_webui.models.channels import (
-    Channels,
-    ChannelModel,
-    ChannelForm,
-    ChannelResponse,
-    CreateChannelForm,
-    ChannelWebhookModel,
-    ChannelWebhookForm,
-)
-from open_webui.models.access_grants import AccessGrants, has_public_read_access_grant, has_public_write_access_grant
-from open_webui.models.messages import (
-    Messages,
-    MessageModel,
-    MessageResponse,
-    MessageWithReactionsResponse,
-    MessageForm,
-)
-
-
+from open_webui.utils.access_control import has_permission
+from open_webui.utils.auth import get_verified_user
+from open_webui.utils.channels import extract_mentions, replace_mentions
+from open_webui.utils.chat import generate_chat_completion
 from open_webui.utils.files import get_image_base64_from_file_id
-
-from open_webui.config import ENABLE_ADMIN_CHAT_ACCESS, ENABLE_ADMIN_EXPORT
-from open_webui.constants import ERROR_MESSAGES
-from open_webui.env import STATIC_DIR
-
-
 from open_webui.utils.models import (
     get_all_models,
     get_filtered_models,
 )
-from open_webui.utils.chat import generate_chat_completion
-
-
-from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.utils.access_control import has_permission
 from open_webui.utils.webhook import post_webhook
-from open_webui.utils.channels import extract_mentions, replace_mentions
-from open_webui.internal.db import get_session
+from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 log = logging.getLogger(__name__)
@@ -77,7 +62,7 @@ def channel_has_access(
     channel: ChannelModel,
     permission: str = 'read',
     strict: bool = True,
-    db: Optional[Session] = None,
+    db: Session | None = None,
 ) -> bool:
     if AccessGrants.has_access(
         user_id=user_id,
@@ -94,7 +79,7 @@ def channel_has_access(
     return False
 
 
-def get_channel_users_with_access(channel: ChannelModel, permission: str = 'read', db: Optional[Session] = None):
+def get_channel_users_with_access(channel: ChannelModel, permission: str = 'read', db: Session | None = None):
     return AccessGrants.get_users_with_access(
         resource_type='channel',
         resource_id=channel.id,
@@ -105,7 +90,7 @@ def get_channel_users_with_access(channel: ChannelModel, permission: str = 'read
 
 def get_channel_permitted_group_and_user_ids(
     channel: ChannelModel, permission: str = 'read'
-) -> Optional[dict[str, list[str]]]:
+) -> dict[str, list[str]] | None:
     if permission == 'read' and has_public_read_access_grant(channel.access_grants):
         return None
 
@@ -133,7 +118,7 @@ def get_channel_permitted_group_and_user_ids(
 ############################
 
 
-def check_channels_access(request: Request, user: Optional[UserModel] = None):
+def check_channels_access(request: Request, user: UserModel | None = None):
     """Dependency to ensure channels are globally enabled."""
     if not request.app.state.config.ENABLE_CHANNELS:
         raise HTTPException(
@@ -157,10 +142,10 @@ def check_channels_access(request: Request, user: Optional[UserModel] = None):
 
 
 class ChannelListItemResponse(ChannelModel):
-    user_ids: Optional[list[str]] = None  # 'dm' channels only
-    users: Optional[list[UserIdNameStatusResponse]] = None  # 'dm' channels only
+    user_ids: list[str] | None = None  # 'dm' channels only
+    users: list[UserIdNameStatusResponse] | None = None  # 'dm' channels only
 
-    last_message_at: Optional[int] = None  # timestamp in epoch (time_ns)
+    last_message_at: int | None = None  # timestamp in epoch (time_ns)
     unread_count: int = 0
 
 
@@ -346,10 +331,10 @@ async def create_new_channel(
 
 
 class ChannelFullResponse(ChannelResponse):
-    user_ids: Optional[list[str]] = None  # 'group'/'dm' channels only
-    users: Optional[list[UserIdNameStatusResponse]] = None  # 'group'/'dm' channels only
+    user_ids: list[str] | None = None  # 'group'/'dm' channels only
+    users: list[UserIdNameStatusResponse] | None = None  # 'group'/'dm' channels only
 
-    last_read_at: Optional[int] = None  # timestamp in epoch (time_ns)
+    last_read_at: int | None = None  # timestamp in epoch (time_ns)
     unread_count: int = 0
 
 
@@ -446,10 +431,10 @@ PAGE_ITEM_COUNT = 30
 async def get_channel_members_by_id(
     request: Request,
     id: str,
-    query: Optional[str] = None,
-    order_by: Optional[str] = None,
-    direction: Optional[str] = None,
-    page: Optional[int] = 1,
+    query: str | None = None,
+    order_by: str | None = None,
+    direction: str | None = None,
+    page: int | None = 1,
     user=Depends(get_verified_user),
     db: Session = Depends(get_session),
 ):
@@ -706,7 +691,7 @@ async def get_channel_messages(
         if user.role != 'admin' and not channel_has_access(user.id, channel, permission='read', db=db):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.DEFAULT())
 
-        channel_member = Channels.join_channel(id, user.id, db=db)  # Ensure user is a member of the channel
+        Channels.join_channel(id, user.id, db=db)  # Ensure user is a member of the channel
 
     message_list = Messages.get_messages_by_channel_id(id, skip, limit, db=db)
 
@@ -886,7 +871,7 @@ async def model_response_handler(request, channel, message, user, db=None):
                     MessageForm(
                         **{
                             'parent_id': (message.parent_id if message.parent_id else message.id),
-                            'content': f'',
+                            'content': '',
                             'data': {},
                             'meta': {
                                 'model_id': model_id,
@@ -1636,7 +1621,7 @@ def get_webhook_profile_image(webhook_id: str, user=Depends(get_verified_user)):
                     media_type=media_type,
                     headers={'Content-Disposition': 'inline'},
                 )
-            except Exception as e:
+            except Exception:
                 pass
 
     # Return default favicon if no profile image

@@ -14,7 +14,7 @@ db_state_default = {'closed': None, 'conn': None, 'ctx': None, 'transactions': N
 db_state = ContextVar('db_state', default=db_state_default.copy())
 
 
-class PeeweeConnectionState(object):
+class PeeweeConnectionState:
     def __init__(self, **kwargs):
         super().__setattr__('_state', db_state)
         super().__init__(**kwargs)

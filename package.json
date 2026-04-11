@@ -1,8 +1,15 @@
 {
 	"name": "open-webui",
-	"version": "0.8.12",
+	"version": "0.8.12-gpthub.0",
 	"private": true,
+	"gpthub": {
+		"forkName": "GPTHub",
+		"upstreamName": "Open WebUI",
+		"upstreamVersion": "0.8.12",
+		"upstreamUrl": "https://github.com/open-webui/open-webui"
+	},
 	"scripts": {
+		"prepare": "pre-commit install || echo '⚠️ pre-commit is not installed locally. Please install it (e.g. brew install pre-commit) to enable git hooks.'",
 		"dev": "npm run pyodide:fetch && vite dev --host",
 		"dev:5050": "npm run pyodide:fetch && vite dev --port 5050",
 		"build": "npm run pyodide:fetch && vite build",
@@ -19,7 +26,10 @@
 		"i18n:parse": "i18next --config i18next-parser.config.ts && prettier --write \"src/lib/i18n/**/*.{js,json}\"",
 		"cy:open": "cypress open",
 		"test:frontend": "vitest --passWithNoTests",
-		"pyodide:fetch": "node scripts/prepare-pyodide.js"
+		"pyodide:fetch": "node scripts/prepare-pyodide.js",
+		"release": "node scripts/release.mjs",
+		"version:bump": "node scripts/bump-version.mjs",
+		"version:check-tag": "node scripts/check-version-tag.mjs"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-auto": "3.2.2",

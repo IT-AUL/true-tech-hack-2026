@@ -12,12 +12,11 @@ from urllib.parse import unquote
 import aiohttp
 from fastapi import APIRouter, Depends, Request, Response, WebSocket
 from fastapi.responses import JSONResponse, StreamingResponse
-from starlette.background import BackgroundTask
-
-from open_webui.utils.auth import get_verified_user
-from open_webui.utils.access_control import has_connection_access
 from open_webui.models.groups import Groups
 from open_webui.models.users import Users
+from open_webui.utils.access_control import has_connection_access
+from open_webui.utils.auth import get_verified_user
+from starlette.background import BackgroundTask
 
 log = logging.getLogger(__name__)
 
@@ -190,6 +189,7 @@ async def _resolve_authenticated_connection(ws: WebSocket, server_id: str):
     """
     import asyncio
     import json
+
     from open_webui.utils.auth import decode_token
 
     # First-message authentication
@@ -208,7 +208,7 @@ async def _resolve_authenticated_connection(ws: WebSocket, server_id: str):
         if user is None:
             await ws.close(code=4001, reason='User not found')
             return None
-    except (asyncio.TimeoutError, json.JSONDecodeError):
+    except (TimeoutError, json.JSONDecodeError):
         await ws.close(code=4001, reason='Auth timeout or invalid payload')
         return None
     except Exception:

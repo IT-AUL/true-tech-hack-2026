@@ -1,15 +1,11 @@
-from datetime import datetime
-from io import BytesIO
-from pathlib import Path
-from typing import Dict, Any, List
-from html import escape
-
-from markdown import markdown
-
 import site
-from fpdf import FPDF
+from datetime import datetime
+from html import escape
+from pathlib import Path
+from typing import Any
 
-from open_webui.env import STATIC_DIR, FONTS_DIR
+from fpdf import FPDF
+from open_webui.env import FONTS_DIR, STATIC_DIR
 from open_webui.models.chats import ChatTitleMessagesForm
 
 
@@ -36,11 +32,11 @@ class PDFGenerator:
         try:
             date_time = datetime.fromtimestamp(timestamp)
             return date_time.strftime('%Y-%m-%d, %H:%M:%S')
-        except (ValueError, TypeError) as e:
+        except (ValueError, TypeError):
             # Log the error if necessary
             return ''
 
-    def _build_html_message(self, message: Dict[str, Any]) -> str:
+    def _build_html_message(self, message: dict[str, Any]) -> str:
         """Build HTML for a single message."""
         role = escape(message.get('role', 'user'))
         content = escape(message.get('content', ''))
@@ -126,7 +122,7 @@ class PDFGenerator:
             pdf.set_auto_page_break(auto=True, margin=15)
 
             # Build HTML messages
-            messages_html_list: List[str] = [self._build_html_message(msg) for msg in self.form_data.messages]
+            messages_html_list: list[str] = [self._build_html_message(msg) for msg in self.form_data.messages]
             self.messages_html = '<div>' + ''.join(messages_html_list) + '</div>'
 
             # Generate full HTML body

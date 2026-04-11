@@ -177,7 +177,7 @@ class TestAuths(AbstractPostgresTest):
         with mock_webui_user(id=user.id):
             response = self.fast_api_client.delete(self.create_url('/api_key'))
         assert response.status_code == 200
-        assert response.json() == True
+        assert response.json()
         db_user = self.users.get_user_by_id(user.id)
         assert db_user.api_key is None
 

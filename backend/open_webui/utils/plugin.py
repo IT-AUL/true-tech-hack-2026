@@ -1,18 +1,17 @@
+import logging
 import os
 import re
 import subprocess
 import sys
-from importlib import util
-import types
 import tempfile
-import logging
+import types
 from typing import Any
 
 from open_webui.env import (
+    ENABLE_PIP_INSTALL_FRONTMATTER_REQUIREMENTS,
+    OFFLINE_MODE,
     PIP_OPTIONS,
     PIP_PACKAGE_INDEX_OPTIONS,
-    OFFLINE_MODE,
-    ENABLE_PIP_INSTALL_FRONTMATTER_REQUIREMENTS,
 )
 from open_webui.models.functions import Functions
 from open_webui.models.tools import Tools

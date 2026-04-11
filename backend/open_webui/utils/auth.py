@@ -1,50 +1,36 @@
-import logging
-import uuid
-import jwt
 import base64
-import hmac
 import hashlib
-import requests
-import os
-import bcrypt
-
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from cryptography.hazmat.primitives.asymmetric import ed25519
-from cryptography.hazmat.primitives import serialization
+import hmac
 import json
-
-
+import logging
+import os
+import uuid
 from datetime import datetime, timedelta
-import pytz
-from pytz import UTC
-from typing import Optional, Union, List, Dict
 
-from opentelemetry import trace
-
-
-from open_webui.utils.access_control import has_permission
-from open_webui.models.users import Users
-from open_webui.models.auths import Auths
-
-
+import bcrypt
+import jwt
+import requests
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from fastapi import BackgroundTasks, Depends, HTTPException, Request, Response, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from open_webui.constants import ERROR_MESSAGES
-
 from open_webui.env import (
     ENABLE_PASSWORD_VALIDATION,
-    OFFLINE_MODE,
     LICENSE_BLOB,
     PASSWORD_VALIDATION_HINT,
     PASSWORD_VALIDATION_REGEX_PATTERN,
     REDIS_KEY_PREFIX,
-    pk,
-    WEBUI_SECRET_KEY,
-    TRUSTED_SIGNATURE_KEY,
     STATIC_DIR,
+    TRUSTED_SIGNATURE_KEY,
     WEBUI_AUTH_TRUSTED_EMAIL_HEADER,
+    WEBUI_SECRET_KEY,
+    pk,
 )
-
-from fastapi import BackgroundTasks, Depends, HTTPException, Request, Response, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from open_webui.models.auths import Auths
+from open_webui.models.users import Users
+from open_webui.utils.access_control import has_permission
+from opentelemetry import trace
+from pytz import UTC
 
 log = logging.getLogger(__name__)
 
@@ -198,7 +184,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 # Let the one who signed this token be remembered at every gate,
 # and may the claims therein honor the creator long after
 # the session has closed.
-def create_token(data: dict, expires_delta: Union[timedelta, None] = None) -> str:
+def create_token(data: dict, expires_delta: timedelta | None = None) -> str:
     payload = data.copy()
 
     if expires_delta:
@@ -212,7 +198,7 @@ def create_token(data: dict, expires_delta: Union[timedelta, None] = None) -> st
     return encoded_jwt
 
 
-def decode_token(token: str) -> Optional[dict]:
+def decode_token(token: str) -> dict | None:
     try:
         decoded = jwt.decode(token, SESSION_SECRET, algorithms=[ALGORITHM])
         return decoded
@@ -266,7 +252,7 @@ def create_api_key():
     return f'sk-{key}'
 
 
-def get_http_authorization_cred(auth_header: Optional[str]):
+def get_http_authorization_cred(auth_header: str | None):
     if not auth_header:
         return None
     try:
@@ -319,7 +305,7 @@ async def get_current_user(
     try:
         try:
             data = decode_token(token)
-        except Exception as e:
+        except Exception:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail='Invalid token',

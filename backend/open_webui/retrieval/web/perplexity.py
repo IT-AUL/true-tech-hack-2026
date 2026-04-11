@@ -1,7 +1,7 @@
 import logging
-from typing import Optional, Literal
-import requests
+from typing import Literal
 
+import requests
 from open_webui.retrieval.web.main import SearchResult, get_filtered_results
 
 MODELS = Literal[
@@ -21,7 +21,7 @@ def search_perplexity(
     api_key: str,
     query: str,
     count: int,
-    filter_list: Optional[list[str]] = None,
+    filter_list: list[str] | None = None,
     model: MODELS = 'sonar',
     search_context_usage: SEARCH_CONTEXT_USAGE_LEVELS = 'medium',
 ) -> list[SearchResult]:

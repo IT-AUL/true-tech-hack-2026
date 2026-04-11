@@ -1,45 +1,37 @@
-import logging
-from typing import Optional
-from sqlalchemy.orm import Session
 import base64
 import io
-
+import logging
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import Response, StreamingResponse, FileResponse
-from pydantic import BaseModel, ConfigDict
-
-
-from open_webui.models.auths import Auths
-from open_webui.models.oauth_sessions import OAuthSessions
-
-from open_webui.models.groups import Groups
-from open_webui.models.chats import Chats
-from open_webui.models.users import (
-    UserModel,
-    UserGroupIdsModel,
-    UserGroupIdsListResponse,
-    UserInfoResponse,
-    UserInfoListResponse,
-    UserRoleUpdateForm,
-    UserStatus,
-    Users,
-    UserSettings,
-    UserUpdateForm,
-)
-
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import STATIC_DIR
 from open_webui.internal.db import get_session
-
-
+from open_webui.models.auths import Auths
+from open_webui.models.chats import Chats
+from open_webui.models.groups import Groups
+from open_webui.models.oauth_sessions import OAuthSessions
+from open_webui.models.users import (
+    UserGroupIdsListResponse,
+    UserGroupIdsModel,
+    UserInfoListResponse,
+    UserInfoResponse,
+    UserModel,
+    Users,
+    UserSettings,
+    UserStatus,
+    UserUpdateForm,
+)
+from open_webui.utils.access_control import get_permissions, has_permission
 from open_webui.utils.auth import (
     get_admin_user,
     get_password_hash,
     get_verified_user,
     validate_password,
 )
-from open_webui.utils.access_control import get_permissions, has_permission
+from pydantic import BaseModel, ConfigDict
+from sqlalchemy.orm import Session
 
 log = logging.getLogger(__name__)
 
@@ -58,10 +50,10 @@ PAGE_ITEM_COUNT = 30
 
 @router.get('/', response_model=UserGroupIdsListResponse)
 async def get_users(
-    query: Optional[str] = None,
-    order_by: Optional[str] = None,
-    direction: Optional[str] = None,
-    page: Optional[int] = 1,
+    query: str | None = None,
+    order_by: str | None = None,
+    direction: str | None = None,
+    page: int | None = 1,
     user=Depends(get_admin_user),
     db: Session = Depends(get_session),
 ):
@@ -113,10 +105,10 @@ async def get_all_users(
 
 @router.get('/search', response_model=UserInfoListResponse)
 async def search_users(
-    query: Optional[str] = None,
-    order_by: Optional[str] = None,
-    direction: Optional[str] = None,
-    page: Optional[int] = 1,
+    query: str | None = None,
+    order_by: str | None = None,
+    direction: str | None = None,
+    page: int | None = 1,
     user=Depends(get_verified_user),
     db: Session = Depends(get_session),
 ):
@@ -426,8 +418,8 @@ async def update_user_info_by_session_user(
 
 class UserActiveResponse(UserStatus):
     name: str
-    profile_image_url: Optional[str] = None
-    groups: Optional[list] = []
+    profile_image_url: str | None = None
+    groups: list | None = []
 
     is_active: bool
     model_config = ConfigDict(extra='allow')
@@ -524,7 +516,7 @@ def get_user_profile_image_by_id(user_id: str, user=Depends(get_verified_user)):
                         media_type=media_type,
                         headers={'Content-Disposition': 'inline'},
                     )
-                except Exception as e:
+                except Exception:
                     pass
         return FileResponse(f'{STATIC_DIR}/user.png')
     else:

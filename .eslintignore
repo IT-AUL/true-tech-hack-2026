@@ -11,3 +11,6 @@ node_modules
 pnpm-lock.yaml
 package-lock.json
 yarn.lock
+
+# Upstream Open WebUI JS files without types (not our code)
+src/lib/components/common/RichTextInput/

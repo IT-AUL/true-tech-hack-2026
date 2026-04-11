@@ -1,17 +1,14 @@
 import time
 import uuid
-from typing import Optional
 
-from sqlalchemy.orm import Session
-from open_webui.internal.db import Base, JSONField, get_db, get_db_context
-from open_webui.models.groups import Groups
-from open_webui.models.users import Users, UserResponse
-from open_webui.models.prompt_history import PromptHistories
+from open_webui.internal.db import Base, get_db_context
 from open_webui.models.access_grants import AccessGrantModel, AccessGrants
-
-
+from open_webui.models.groups import Groups
+from open_webui.models.prompt_history import PromptHistories
+from open_webui.models.users import UserResponse, Users
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import BigInteger, Boolean, Column, String, Text, JSON, or_, func, cast
+from sqlalchemy import JSON, BigInteger, Boolean, Column, String, Text, cast, func, or_
+from sqlalchemy.orm import Session
 
 ####################
 # Prompts DB Schema
@@ -38,18 +35,18 @@ class Prompt(Base):
 
 
 class PromptModel(BaseModel):
-    id: Optional[str] = None
+    id: str | None = None
     command: str
     user_id: str
     name: str
     content: str
-    data: Optional[dict] = None
-    meta: Optional[dict] = None
-    tags: Optional[list[str]] = None
-    is_active: Optional[bool] = True
-    version_id: Optional[str] = None
-    created_at: Optional[int] = None
-    updated_at: Optional[int] = None
+    data: dict | None = None
+    meta: dict | None = None
+    tags: list[str] | None = None
+    is_active: bool | None = True
+    version_id: str | None = None
+    created_at: int | None = None
+    updated_at: int | None = None
     access_grants: list[AccessGrantModel] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
@@ -61,11 +58,11 @@ class PromptModel(BaseModel):
 
 
 class PromptUserResponse(PromptModel):
-    user: Optional[UserResponse] = None
+    user: UserResponse | None = None
 
 
 class PromptAccessResponse(PromptUserResponse):
-    write_access: Optional[bool] = False
+    write_access: bool | None = False
 
 
 class PromptListResponse(BaseModel):
@@ -82,24 +79,24 @@ class PromptForm(BaseModel):
     command: str
     name: str  # Changed from title
     content: str
-    data: Optional[dict] = None
-    meta: Optional[dict] = None
-    tags: Optional[list[str]] = None
-    access_grants: Optional[list[dict]] = None
-    version_id: Optional[str] = None  # Active version
-    commit_message: Optional[str] = None  # For history tracking
-    is_production: Optional[bool] = True  # Whether to set new version as production
+    data: dict | None = None
+    meta: dict | None = None
+    tags: list[str] | None = None
+    access_grants: list[dict] | None = None
+    version_id: str | None = None  # Active version
+    commit_message: str | None = None  # For history tracking
+    is_production: bool | None = True  # Whether to set new version as production
 
 
 class PromptsTable:
-    def _get_access_grants(self, prompt_id: str, db: Optional[Session] = None) -> list[AccessGrantModel]:
+    def _get_access_grants(self, prompt_id: str, db: Session | None = None) -> list[AccessGrantModel]:
         return AccessGrants.get_grants_by_resource('prompt', prompt_id, db=db)
 
     def _to_prompt_model(
         self,
         prompt: Prompt,
-        access_grants: Optional[list[AccessGrantModel]] = None,
-        db: Optional[Session] = None,
+        access_grants: list[AccessGrantModel] | None = None,
+        db: Session | None = None,
     ) -> PromptModel:
         prompt_data = PromptModel.model_validate(prompt).model_dump(exclude={'access_grants'})
         prompt_data['access_grants'] = (
@@ -107,9 +104,7 @@ class PromptsTable:
         )
         return PromptModel.model_validate(prompt_data)
 
-    def insert_new_prompt(
-        self, user_id: str, form_data: PromptForm, db: Optional[Session] = None
-    ) -> Optional[PromptModel]:
+    def insert_new_prompt(self, user_id: str, form_data: PromptForm, db: Session | None = None) -> PromptModel | None:
         now = int(time.time())
         prompt_id = str(uuid.uuid4())
 
@@ -169,7 +164,7 @@ class PromptsTable:
         except Exception:
             return None
 
-    def get_prompt_by_id(self, prompt_id: str, db: Optional[Session] = None) -> Optional[PromptModel]:
+    def get_prompt_by_id(self, prompt_id: str, db: Session | None = None) -> PromptModel | None:
         """Get prompt by UUID."""
         try:
             with get_db_context(db) as db:
@@ -180,7 +175,7 @@ class PromptsTable:
         except Exception:
             return None
 
-    def get_prompt_by_command(self, command: str, db: Optional[Session] = None) -> Optional[PromptModel]:
+    def get_prompt_by_command(self, command: str, db: Session | None = None) -> PromptModel | None:
         try:
             with get_db_context(db) as db:
                 prompt = db.query(Prompt).filter_by(command=command).first()
@@ -190,9 +185,9 @@ class PromptsTable:
         except Exception:
             return None
 
-    def get_prompts(self, db: Optional[Session] = None) -> list[PromptUserResponse]:
+    def get_prompts(self, db: Session | None = None) -> list[PromptUserResponse]:
         with get_db_context(db) as db:
-            all_prompts = db.query(Prompt).filter(Prompt.is_active == True).order_by(Prompt.updated_at.desc()).all()
+            all_prompts = db.query(Prompt).filter(Prompt.is_active).order_by(Prompt.updated_at.desc()).all()
 
             user_ids = list(set(prompt.user_id for prompt in all_prompts))
             prompt_ids = [prompt.id for prompt in all_prompts]
@@ -220,7 +215,7 @@ class PromptsTable:
             return prompts
 
     def get_prompts_by_user_id(
-        self, user_id: str, permission: str = 'write', db: Optional[Session] = None
+        self, user_id: str, permission: str = 'write', db: Session | None = None
     ) -> list[PromptUserResponse]:
         prompts = self.get_prompts(db=db)
         user_group_ids = {group.id for group in Groups.get_groups_by_member_id(user_id, db=db)}
@@ -245,7 +240,7 @@ class PromptsTable:
         filter: dict = {},
         skip: int = 0,
         limit: int = 30,
-        db: Optional[Session] = None,
+        db: Session | None = None,
     ) -> PromptListResponse:
         with get_db_context(db) as db:
             from open_webui.models.users import User, UserModel
@@ -345,8 +340,8 @@ class PromptsTable:
         command: str,
         form_data: PromptForm,
         user_id: str,
-        db: Optional[Session] = None,
-    ) -> Optional[PromptModel]:
+        db: Session | None = None,
+    ) -> PromptModel | None:
         try:
             with get_db_context(db) as db:
                 prompt = db.query(Prompt).filter_by(command=command).first()
@@ -410,8 +405,8 @@ class PromptsTable:
         prompt_id: str,
         form_data: PromptForm,
         user_id: str,
-        db: Optional[Session] = None,
-    ) -> Optional[PromptModel]:
+        db: Session | None = None,
+    ) -> PromptModel | None:
         try:
             with get_db_context(db) as db:
                 prompt = db.query(Prompt).filter_by(id=prompt_id).first()
@@ -484,9 +479,9 @@ class PromptsTable:
         prompt_id: str,
         name: str,
         command: str,
-        tags: Optional[list[str]] = None,
-        db: Optional[Session] = None,
-    ) -> Optional[PromptModel]:
+        tags: list[str] | None = None,
+        db: Session | None = None,
+    ) -> PromptModel | None:
         """Update only name, command, and tags (no history created)."""
         try:
             with get_db_context(db) as db:
@@ -511,8 +506,8 @@ class PromptsTable:
         self,
         prompt_id: str,
         version_id: str,
-        db: Optional[Session] = None,
-    ) -> Optional[PromptModel]:
+        db: Session | None = None,
+    ) -> PromptModel | None:
         """Set the active version of a prompt and restore content from that version's snapshot."""
         try:
             with get_db_context(db) as db:
@@ -543,7 +538,7 @@ class PromptsTable:
         except Exception:
             return None
 
-    def toggle_prompt_active(self, prompt_id: str, db: Optional[Session] = None) -> Optional[PromptModel]:
+    def toggle_prompt_active(self, prompt_id: str, db: Session | None = None) -> PromptModel | None:
         """Toggle the is_active flag on a prompt."""
         try:
             with get_db_context(db) as db:
@@ -558,7 +553,7 @@ class PromptsTable:
         except Exception:
             return None
 
-    def delete_prompt_by_command(self, command: str, db: Optional[Session] = None) -> bool:
+    def delete_prompt_by_command(self, command: str, db: Session | None = None) -> bool:
         """Permanently delete a prompt and its history."""
         try:
             with get_db_context(db) as db:
@@ -574,7 +569,7 @@ class PromptsTable:
         except Exception:
             return False
 
-    def delete_prompt_by_id(self, prompt_id: str, db: Optional[Session] = None) -> bool:
+    def delete_prompt_by_id(self, prompt_id: str, db: Session | None = None) -> bool:
         """Permanently delete a prompt and its history."""
         try:
             with get_db_context(db) as db:
@@ -590,7 +585,7 @@ class PromptsTable:
         except Exception:
             return False
 
-    def get_tags(self, db: Optional[Session] = None) -> list[str]:
+    def get_tags(self, db: Session | None = None) -> list[str]:
         try:
             with get_db_context(db) as db:
                 prompts = db.query(Prompt).filter_by(is_active=True).all()

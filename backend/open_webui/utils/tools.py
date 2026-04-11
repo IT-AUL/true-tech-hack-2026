@@ -1,93 +1,74 @@
+import asyncio
 import base64
+import copy
 import inspect
+import json
 import logging
 import re
-import inspect
-import aiohttp
-import asyncio
-import yaml
-import json
-
-from pydantic import BaseModel
-from pydantic.fields import FieldInfo
+from collections.abc import Awaitable, Callable
+from functools import partial, update_wrapper
 from typing import (
     Any,
-    Awaitable,
-    Callable,
     get_type_hints,
-    get_args,
-    get_origin,
-    Dict,
-    List,
-    Tuple,
-    Union,
-    Optional,
-    Type,
 )
-from functools import update_wrapper, partial
 
-
+import aiohttp
+import yaml
 from fastapi import Request
-from pydantic import BaseModel, Field, create_model
-
 from langchain_core.utils.function_calling import (
     convert_to_openai_function as convert_pydantic_model_to_openai_function_spec,
 )
-
-
-from open_webui.utils.misc import is_string_allowed
-from open_webui.models.tools import Tools
-from open_webui.models.users import UserModel
-from open_webui.models.groups import Groups
-from open_webui.models.access_grants import AccessGrants
-from open_webui.utils.plugin import load_tool_module_by_id
-from open_webui.utils.access_control import has_access, has_connection_access
 from open_webui.config import BYPASS_ADMIN_ACCESS_CONTROL
 from open_webui.env import (
-    AIOHTTP_CLIENT_TIMEOUT,
+    AIOHTTP_CLIENT_SESSION_TOOL_SERVER_SSL,
     AIOHTTP_CLIENT_TIMEOUT_TOOL_SERVER,
     AIOHTTP_CLIENT_TIMEOUT_TOOL_SERVER_DATA,
-    AIOHTTP_CLIENT_SESSION_TOOL_SERVER_SSL,
     ENABLE_FORWARD_USER_INFO_HEADERS,
     FORWARD_SESSION_INFO_HEADER_CHAT_ID,
     FORWARD_SESSION_INFO_HEADER_MESSAGE_ID,
 )
-from open_webui.utils.headers import include_user_info_headers
+from open_webui.models.access_grants import AccessGrants
+from open_webui.models.groups import Groups
+from open_webui.models.tools import Tools
+from open_webui.models.users import UserModel
 from open_webui.tools.builtin import (
-    search_web,
-    fetch_url,
-    generate_image,
+    add_memory,
+    calculate_timestamp,
+    delete_memory,
     edit_image,
     execute_code,
-    search_memories,
-    add_memory,
-    replace_memory_content,
-    delete_memory,
-    list_memories,
+    fetch_url,
+    generate_image,
     get_current_timestamp,
-    calculate_timestamp,
-    search_notes,
-    search_chats,
-    search_channels,
+    list_knowledge,
+    list_knowledge_bases,
+    list_memories,
+    query_knowledge_bases,
+    query_knowledge_files,
+    replace_memory_content,
+    replace_note_content,
     search_channel_messages,
-    view_note,
-    view_chat,
+    search_channels,
+    search_chats,
+    search_knowledge_bases,
+    search_knowledge_files,
+    search_memories,
+    search_notes,
+    search_web,
     view_channel_message,
     view_channel_thread,
-    replace_note_content,
-    write_note,
-    list_knowledge_bases,
-    search_knowledge_bases,
-    query_knowledge_bases,
-    search_knowledge_files,
-    query_knowledge_files,
-    list_knowledge,
+    view_chat,
     view_file,
     view_knowledge_file,
+    view_note,
     view_skill,
+    write_note,
 )
-
-import copy
+from open_webui.utils.access_control import has_connection_access
+from open_webui.utils.headers import include_user_info_headers
+from open_webui.utils.misc import is_string_allowed
+from open_webui.utils.plugin import load_tool_module_by_id
+from pydantic import BaseModel, Field, create_model
 
 log = logging.getLogger(__name__)
 
@@ -254,7 +235,7 @@ async def get_tools(request: Request, tool_ids: list[str], user: UserModel, extr
                 server_id_splits = server_id.split('|')
                 if len(server_id_splits) == 2:
                     server_id = server_id_splits[0]
-                    function_names = server_id_splits[1].split(',')
+                    server_id_splits[1].split(',')
 
                 if type == 'openapi':
                     tool_server_data = None
@@ -818,8 +799,8 @@ async def get_tool_servers(request: Request):
 async def get_terminal_cwd(
     base_url: str,
     headers: dict,
-    cookies: Optional[dict] = None,
-) -> Optional[str]:
+    cookies: dict | None = None,
+) -> str | None:
     """Fetch the current working directory from a terminal server."""
     try:
         cwd_url = f'{base_url.rstrip("/")}/files/cwd'
@@ -839,8 +820,8 @@ async def get_terminal_cwd(
 async def get_terminal_system_prompt(
     base_url: str,
     headers: dict,
-    cookies: Optional[dict] = None,
-) -> Optional[str]:
+    cookies: dict | None = None,
+) -> str | None:
     """Fetch the system prompt from a terminal server.
 
     Checks ``/api/config`` for the ``system`` feature flag first;
@@ -956,7 +937,7 @@ async def get_terminal_tools(
     terminal_id: str,
     user: UserModel,
     extra_params: dict,
-) -> dict[str, dict] | tuple[dict[str, dict], Optional[str]]:
+) -> dict[str, dict] | tuple[dict[str, dict], str | None]:
     """Resolve tools for a terminal server identified by terminal_id.
 
     - Finds the connection in TERMINAL_SERVER_CONNECTIONS
@@ -1042,7 +1023,7 @@ async def get_terminal_tools(
     return tools_dict, system_prompt
 
 
-async def get_tool_server_data(url: str, headers: Optional[dict]) -> Dict[str, Any]:
+async def get_tool_server_data(url: str, headers: dict | None) -> dict[str, Any]:
     _headers = {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
@@ -1089,7 +1070,7 @@ async def get_tool_server_data(url: str, headers: Optional[dict]) -> Dict[str, A
     return res
 
 
-async def get_tool_servers_data(servers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+async def get_tool_servers_data(servers: list[dict[str, Any]]) -> list[dict[str, Any]]:
     # Prepare list of enabled servers along with their original index
 
     tasks = []
@@ -1190,12 +1171,12 @@ async def get_tool_servers_data(servers: List[Dict[str, Any]]) -> List[Dict[str,
 
 async def execute_tool_server(
     url: str,
-    headers: Dict[str, str],
-    cookies: Dict[str, str],
+    headers: dict[str, str],
+    cookies: dict[str, str],
     name: str,
-    params: Dict[str, Any],
-    server_data: Dict[str, Any],
-) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]]]:
+    params: dict[str, Any],
+    server_data: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
     error = None
     try:
         openapi = server_data.get('openapi', {})
@@ -1321,7 +1302,7 @@ async def execute_tool_server(
         return ({'error': error}, None)
 
 
-def get_tool_server_url(url: Optional[str], path: str) -> str:
+def get_tool_server_url(url: str | None, path: str) -> str:
     """
     Build the full URL for a tool server, given a base url and a path.
     """

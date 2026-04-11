@@ -1,22 +1,22 @@
-from open_webui.utils.task import prompt_template, prompt_variables_template
-from open_webui.utils.misc import (
-    deep_update,
-    add_or_update_system_message,
-    replace_system_message_content,
-)
-
-from typing import Callable, Optional
 import copy
 import json
+from collections.abc import Callable
+
+from open_webui.utils.misc import (
+    add_or_update_system_message,
+    deep_update,
+    replace_system_message_content,
+)
+from open_webui.utils.task import prompt_template, prompt_variables_template
 
 
 # What goes out cannot be taken back. Let it be shaped
 # well before it leaves this place.
 # inplace function: form_data is modified
 def apply_system_prompt_to_body(
-    system: Optional[str],
+    system: str | None,
     form_data: dict,
-    metadata: Optional[dict] = None,
+    metadata: dict | None = None,
     user=None,
     replace: bool = False,
 ) -> dict:
@@ -177,7 +177,7 @@ def apply_model_params_to_body_ollama(params: dict, form_data: dict) -> dict:
         """
         try:
             return json.loads(value)
-        except Exception as e:
+        except Exception:
             return value
 
     ollama_root_params = {
@@ -308,7 +308,7 @@ def convert_payload_openai_to_ollama(openai_payload: dict) -> dict:
             """
             try:
                 return json.loads(value)
-            except Exception as e:
+            except Exception:
                 return value
 
         ollama_root_params = {

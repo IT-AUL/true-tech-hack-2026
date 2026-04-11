@@ -1,16 +1,15 @@
 import json
 from typing import Any
 
-from open_webui.models.users import UserModel
-from open_webui.models.groups import Groups
+from open_webui.config import DEFAULT_USER_PERMISSIONS
 from open_webui.models.access_grants import (
     has_public_read_access_grant,
     has_public_write_access_grant,
     has_user_access_grant,
     strip_user_access_grants,
 )
-from open_webui.config import DEFAULT_USER_PERMISSIONS
-
+from open_webui.models.groups import Groups
+from open_webui.models.users import UserModel
 from sqlalchemy.orm import Session
 
 
