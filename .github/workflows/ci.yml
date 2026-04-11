@@ -78,7 +78,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # Scope to app sources (Open WebUI root configs/scripts are not eslint-clean under strict rules)
       - run: npx eslint src --max-warnings=0
       - run: npx prettier --check "src/**/*.{js,ts,svelte,css,json}"
 
