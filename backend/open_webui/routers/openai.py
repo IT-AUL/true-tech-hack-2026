@@ -1010,8 +1010,17 @@ async def generate_chat_completion(
 
     payload = {**form_data}
     metadata = payload.pop('metadata', None)
+    auto_route = payload.pop('auto_route', False)
 
     model_id = form_data.get('model')
+
+    if model_id == 'auto' or auto_route:
+        from open_webui.utils.auto_routing import get_auto_routed_model
+
+        model_id = await get_auto_routed_model(payload)
+        payload['model'] = model_id
+        form_data['model'] = model_id
+
     model_info = Models.get_model_by_id(model_id)
 
     # Check model info and override the payload
@@ -1171,10 +1180,12 @@ async def generate_chat_completion(
         # Check if response is SSE
         if 'text/event-stream' in r.headers.get('Content-Type', ''):
             streaming = True
+            res_headers = dict(r.headers)
+            res_headers['x-selected-model'] = model_id
             return StreamingResponse(
                 stream_wrapper(r, session, stream_chunks_handler),
                 status_code=r.status,
-                headers=dict(r.headers),
+                headers=res_headers,
             )
         else:
             try:
@@ -1193,7 +1204,7 @@ async def generate_chat_completion(
             if is_responses and isinstance(response, dict):
                 response = convert_responses_result(response)
 
-            return response
+            return JSONResponse(status_code=r.status, content=response, headers={'x-selected-model': model_id})
     except Exception as e:
         log.exception(e)
 
