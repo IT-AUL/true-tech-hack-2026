@@ -13,21 +13,23 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Push sync branch to GitLab
-        run: |
-          SYNC_BRANCH="sync/github-main-$(date +%Y%m%d-%H%M%S)"
-          echo "SYNC_BRANCH=$SYNC_BRANCH" >> $GITHUB_ENV
-
-          git remote add gitlab "https://oauth2:${GITLAB_TOKEN}@git.truetecharena.ru/tta/true-tech-hack-in2026-gpthub-git/it-aul-misisxcuxkfu/task-repo.git"
-          git push gitlab "HEAD:refs/heads/${SYNC_BRANCH}"
+      - name: Push sync branch to GitLab and create MR
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
-
-      - name: Create Merge Request on GitLab
+          COMMIT_SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
         run: |
-          SHORT_SHA="${{ github.sha }}"
-          SHORT_SHA="${SHORT_SHA:0:7}"
+          SYNC_BRANCH="sync/github-main-$(date +%Y%m%d-%H%M%S)"
+          SHORT_SHA="${COMMIT_SHA:0:7}"
 
+          # Push to GitLab sync branch
+          git remote add gitlab "https://oauth2:${GITLAB_TOKEN}@git.truetecharena.ru/tta/true-tech-hack-in2026-gpthub-git/it-aul-misisxcuxkfu/task-repo.git"
+          git push gitlab "HEAD:refs/heads/${SYNC_BRANCH}"
+
+          # Project path URL-encoded (/ → %2F)
+          PROJECT_ID="tta%2Ftrue-tech-hack-in2026-gpthub-git%2Fit-aul-misisxcuxkfu%2Ftask-repo"
+
+          # Create Merge Request via GitLab API
           curl --fail-with-body \
             --request POST \
             --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
@@ -36,10 +38,8 @@ jobs:
               \"source_branch\": \"${SYNC_BRANCH}\",
               \"target_branch\": \"main\",
               \"title\": \"chore: sync from GitHub main (${SHORT_SHA})\",
-              \"description\": \"Automated sync from GitHub commit [\`${SHORT_SHA}\`](https://github.com/${{ github.repository }}/commit/${{ github.sha }}).\",
+              \"description\": \"Automated sync from GitHub commit [${SHORT_SHA}](https://github.com/${REPO}/commit/${COMMIT_SHA}).\",
               \"remove_source_branch\": true,
               \"squash\": false
             }" \
-            "https://git.truetecharena.ru/api/v4/projects/$(python3 -c \"import urllib.parse; print(urllib.parse.quote('tta/true-tech-hack-in2026-gpthub-git/it-aul-misisxcuxkfu/task-repo', safe=''))\")/merge_requests"
-        env:
-          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+            "https://git.truetecharena.ru/api/v4/projects/${PROJECT_ID}/merge_requests"
