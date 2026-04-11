@@ -1,8 +1,8 @@
 # GPTHub — Единое ИИ-пространство
 
 [![pipeline](https://git.truetecharena.ru/tta/true-tech-hack-in2026-gpthub-git/it-aul-misisxcuxkfu/task-repo/badges/develop/pipeline.svg)](https://git.truetecharena.ru/tta/true-tech-hack-in2026-gpthub-git/it-aul-misisxcuxkfu/task-repo/-/pipelines)
-[![release](https://img.shields.io/static/v1?label=release&message=0.8.12-gpthub.1&color=blue)](https://git.truetecharena.ru/tta/true-tech-hack-in2026-gpthub-git/it-aul-misisxcuxkfu/task-repo/-/tags)
-[![upstream](https://img.shields.io/static/v1?label=upstream&message=Open%20WebUI%200.8.12&color=8A2BE2&logo=github)](https://github.com/open-webui/open-webui)
+[![release](https://img.shields.io/static/v1?label=release&message=0.9.0-gpthub.0&color=blue)](https://git.truetecharena.ru/tta/true-tech-hack-in2026-gpthub-git/it-aul-misisxcuxkfu/task-repo/-/tags)
+[![upstream](https://img.shields.io/static/v1?label=upstream&message=Open%20WebUI%200.9.0&color=8A2BE2&logo=github)](https://github.com/open-webui/open-webui)
 [![license](https://img.shields.io/badge/license-BSD--3--Clause-green.svg)](LICENSE)
 [![docker](https://img.shields.io/badge/docker-ready-2496ED.svg?logo=docker&logoColor=white)](#быстрый-старт)
 [![self-hosted](https://img.shields.io/badge/self--hosted-supported-success.svg)](#деплой-для-компаний-self-hosted)
