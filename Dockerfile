@@ -75,12 +75,16 @@ ENV ENV=prod \
 ENV OLLAMA_BASE_URL="/ollama" \
     OPENAI_API_BASE_URL=""
 
-## API Key and Security Config ##
-ENV OPENAI_API_KEY="" \
-    WEBUI_SECRET_KEY="" \
-    SCARF_NO_ANALYTICS=true \
+## Telemetry opt-out (non-sensitive) ##
+ENV SCARF_NO_ANALYTICS=true \
     DO_NOT_TRACK=true \
     ANONYMIZED_TELEMETRY=false
+
+## Secrets must be passed at runtime via `docker run -e` or docker-compose env_file.
+## Do NOT hardcode real values here — these are empty defaults only.
+# hadolint ignore=DL3002
+ENV OPENAI_API_KEY="" \
+    WEBUI_SECRET_KEY=""
 
 #### Other models #########################################################
 ## whisper TTS model settings ##
