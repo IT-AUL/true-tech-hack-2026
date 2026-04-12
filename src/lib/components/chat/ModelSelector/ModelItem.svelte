@@ -106,7 +106,6 @@
 			{/if}
 
 			<div class=" shrink-0 flex items-center gap-2">
-
 				<!-- {JSON.stringify(item.info)} -->
 
 				{#if (item?.model?.tags ?? []).length > 0}

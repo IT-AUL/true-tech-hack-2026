@@ -37,7 +37,9 @@
 				</div>
 			</WebSearchResults>
 		{:else if status?.action === 'auto_routing'}
-			<div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50">
+			<div
+				class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50"
+			>
 				{#if status?.routing?.category === 'image_gen'}
 					<span class="text-sm">🎨</span>
 				{:else if status?.routing?.category === 'code'}

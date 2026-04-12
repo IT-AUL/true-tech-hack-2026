@@ -639,9 +639,14 @@
 
 		<div class="flex-auto w-0 pl-1 relative">
 			<Name>
-				{@const routingStatus = (message?.statusHistory ?? []).find((s) => s?.action === 'auto_routing')}
+				{@const routingStatus = (message?.statusHistory ?? []).find(
+					(s) => s?.action === 'auto_routing'
+				)}
 				<Tooltip content={routingStatus?.routing?.model_id ?? message.model} placement="top-start">
-					<span id="response-message-model-name" class="flex items-center gap-1 line-clamp-1 text-black dark:text-white">
+					<span
+						id="response-message-model-name"
+						class="flex items-center gap-1 line-clamp-1 text-black dark:text-white"
+					>
 						{#if routingStatus}
 							{routingStatus?.routing?.model_name ?? model?.name ?? message.model}
 						{:else}

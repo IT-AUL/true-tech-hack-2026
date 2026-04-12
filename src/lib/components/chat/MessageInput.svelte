@@ -1416,7 +1416,9 @@
 															navigator.maxTouchPoints > 0 ||
 															navigator.msMaxTouchPoints > 0
 														)}
-													placeholder={placeholder ? placeholder : $i18n.t('Ask anything, paste a link, or drop a file...')}
+													placeholder={placeholder
+														? placeholder
+														: $i18n.t('Ask anything, paste a link, or drop a file...')}
 													largeTextAsFile={($settings?.largeTextAsFile ?? false) && !shiftKey}
 													autocomplete={$config?.features?.enable_autocomplete_generation &&
 														($settings?.promptAutocomplete ?? false)}

@@ -106,7 +106,9 @@
 				/>
 			{:else}
 				<div class="flex flex-col items-center gap-1" in:fade={{ duration: 200 }}>
-					<div class="text-2xl @sm:text-3xl font-medium tracking-tight text-gray-900 dark:text-white">
+					<div
+						class="text-2xl @sm:text-3xl font-medium tracking-tight text-gray-900 dark:text-white"
+					>
 						{$i18n.t('How can I help you?')}
 					</div>
 				</div>
@@ -153,14 +155,7 @@
 	{:else}
 		<div class="mx-auto max-w-xl font-primary mt-1" in:fade={{ duration: 300, delay: 150 }}>
 			<div class="flex flex-wrap justify-center gap-2 px-4">
-				{#each [
-					{ text: 'Summarize this article', icon: '📝' },
-					{ text: 'Generate an image of ', icon: '🎨' },
-					{ text: 'Explain how ', icon: '💡' },
-					{ text: 'Write code for ', icon: '⌨️' },
-					{ text: 'Translate to English: ', icon: '🌐' },
-					{ text: 'Analyze this data ', icon: '📊' }
-				] as chip, idx}
+				{#each [{ text: 'Summarize this article', icon: '📝' }, { text: 'Generate an image of ', icon: '🎨' }, { text: 'Explain how ', icon: '💡' }, { text: 'Write code for ', icon: '⌨️' }, { text: 'Translate to English: ', icon: '🌐' }, { text: 'Analyze this data ', icon: '📊' }] as chip, idx}
 					<button
 						class="inline-flex items-center gap-1.5 px-3.5 py-2 text-[13px] rounded-full
 							border border-gray-200/80 dark:border-gray-700/60
