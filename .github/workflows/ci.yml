@@ -20,6 +20,11 @@ jobs:
         run: |
           BRANCH="${{ github.head_ref }}"
           echo "Branch: $BRANCH"
+          # develop and main are permanent integration branches — skip check
+          if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "develop" ]; then
+            echo "Skipping naming check for protected integration branch: $BRANCH"
+            exit 0
+          fi
           echo "$BRANCH" | grep -qE "^(feat|fix|chore|refactor|docs|test)/" || {
             echo ""
             echo "ERROR: Branch '$BRANCH' does not follow naming convention."
