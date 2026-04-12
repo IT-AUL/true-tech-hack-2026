@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Секции ниже без суффикса (`[0.8.12]`) — upstream Open WebUI changelog.
 
 ---
+
+## [0.8.12-gpthub.4] - 2026-04-12
+
+### Fixed
+
+- 🐳 **Docker ARM support.** Включена мультиплатформенная сборка Docker-образов (`linux/amd64` и `linux/arm64`) для поддержки Apple Silicon (M1/M2/M3) с помощью QEMU.
+- 🔖 **GitHub Release trigger.** Добавлена поддержка `workflow_dispatch` в `release.yml` для ручного запуска и перезапуска релизного пайплайна, а также исправлен регулярный паттерн для тегов.
+- 🔗 **README badge.** Исправлена ссылка на Docker Hub (`itaul/gpthub`) в бейдже загрузок.
+
 ## [0.8.12-gpthub.3] - 2026-04-12
 
 ### Fixed
