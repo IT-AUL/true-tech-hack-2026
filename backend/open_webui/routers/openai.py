@@ -526,6 +526,15 @@ async def get_all_models(request: Request, user: UserModel) -> dict[str, list]:
         return models
 
     models = get_merged_models(map(extract_data, responses))
+
+    # Inject virtual "auto" model for intelligent routing
+    models['auto'] = {
+        'id': 'auto',
+        'name': 'Auto (Intelligent Routing)',
+        'owned_by': 'openai',
+        'connection_type': 'internal',
+    }
+
     log.debug(f'models: {models}')
 
     request.app.state.OPENAI_MODELS = models
@@ -1016,9 +1025,10 @@ async def generate_chat_completion(
     model_id = form_data.get('model')
 
     if model_id == 'auto' or auto_route:
-        from open_webui.utils.auto_routing import get_auto_routed_model
+        from open_webui.utils.auto_routing import process_auto_routing
 
-        model_id = await get_auto_routed_model(payload)
+        model_id, payload = await process_auto_routing(request, payload, user)
+        log.info(f'Auto-routing selected model: {model_id}')
         payload['model'] = model_id
         form_data['model'] = model_id
 
@@ -1069,8 +1079,12 @@ async def generate_chat_completion(
     # Check if model is already in app state cache to avoid expensive get_all_models() call
     models = request.app.state.OPENAI_MODELS
     if not models or model_id not in models:
+        log.info(f'Model ID {model_id} not in cache, fetching all models...')
         await get_all_models(request, user=user)
         models = request.app.state.OPENAI_MODELS
+
+    log.info(f'Current model_id: {model_id}')
+    log.info(f'Available models in cache: {list(models.keys())[:10]}... (total {len(models)})')
     model = models.get(model_id)
 
     if model:
@@ -1116,6 +1130,14 @@ async def generate_chat_completion(
 
     if 'max_tokens' in payload and 'max_completion_tokens' in payload:
         del payload['max_tokens']
+
+    # Disable streaming for models that return massive chunks (images/audio) to avoid Chunk too big errors.
+    # We save this flag BEFORE json.dumps so we can check it later when the provider
+    # still responds with text/event-stream despite stream=False.
+    stream_explicitly_disabled = False
+    if 'model' in payload and ('flux' in payload['model'].lower() or 'lyria' in payload['model'].lower()):
+        payload['stream'] = False
+        stream_explicitly_disabled = True
 
     # Convert the modified body back to JSON
     if 'logit_bias' in payload and payload['logit_bias']:
@@ -1180,6 +1202,32 @@ async def generate_chat_completion(
 
         # Check if response is SSE
         if 'text/event-stream' in r.headers.get('Content-Type', ''):
+            # Image/audio models (flux, lyria) send a massive base64 SSE event even
+            # when stream=False was requested.  We MUST NOT use r.text() / r.json()
+            # here because those wait for EOF — SSE servers often keep the connection
+            # open indefinitely, causing multi-minute hangs.
+            # Instead we iterate line-by-line and stop as soon as we see [DONE].
+            if stream_explicitly_disabled:
+                sse_data = None
+                try:
+                    async for raw_line in r.content:
+                        line = raw_line.decode('utf-8', errors='replace').strip()
+                        if not line:
+                            continue
+                        if line == 'data: [DONE]':
+                            break
+                        if line.startswith('data: '):
+                            try:
+                                sse_data = json.loads(line[6:])
+                            except Exception:
+                                pass  # keep last successfully parsed event
+                except Exception as e:
+                    log.error(f'Error reading SSE response for image/audio model: {e}')
+                return JSONResponse(
+                    status_code=r.status,
+                    content=sse_data or {},
+                    headers={'x-selected-model': model_id},
+                )
             streaming = True
             res_headers = dict(r.headers)
             res_headers['x-selected-model'] = model_id
