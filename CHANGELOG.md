@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Секции ниже без суффикса (`[0.8.12]`) — upstream Open WebUI changelog.
 
 ---
+## [0.8.12-gpthub.8] - 2026-04-12
+
+### Fixed
+
+- 🔄 **MWS-backed RAG stabilization.** Стабилизированы загрузка и retrieval-пайплайн для MWS-based RAG: добавлены явные стадии обработки файлов и safeguards по timeout для embeddings, чтобы индексация PDF не зависала в `pending`, а ответы по контексту формировались стабильнее.
+
+### Changed
+
+- ⚙️ **RAG embedding defaults.** Обновлены дефолтные настройки embedding-конфигурации в backend и `docker-compose.dev.yml`: скорректированы модель embeddings, batch size и concurrency для более предсказуемой производительности и меньшей нагрузки на ресурсы.
+
 ## [0.8.12-gpthub.7] - 2026-04-12
 
 ### Fixed
