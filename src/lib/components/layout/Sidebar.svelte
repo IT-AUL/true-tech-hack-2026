@@ -1070,7 +1070,7 @@
 					</Folder>
 				{/if}
 
-				{#if $config?.features?.enable_channels && ($user?.role === 'admin' || ($user?.permissions?.features?.channels ?? true))}
+				{#if $config?.features?.enable_channels && ($user?.role === 'admin' || ($user?.permissions?.features?.channels ?? true)) && ($channels?.length > 0 || $user?.role === 'admin')}
 					<Folder
 						id="sidebar-channels"
 						bind:open={showChannels}

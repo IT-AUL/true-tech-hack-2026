@@ -228,6 +228,43 @@ select {
 	color: #9a9a9a;
 }
 
+.shimmer-block {
+	background: linear-gradient(
+		110deg,
+		#f0f0f0 0%,
+		#f0f0f0 40%,
+		#fafafa 50%,
+		#f0f0f0 60%,
+		#f0f0f0 100%
+	);
+	background-size: 200% 100%;
+	animation: shimmer 2s ease-in-out infinite;
+}
+
+:global(.dark) .shimmer-block {
+	background: linear-gradient(
+		110deg,
+		#2a2a2e 0%,
+		#2a2a2e 40%,
+		#3a3a40 50%,
+		#2a2a2e 60%,
+		#2a2a2e 100%
+	);
+	background-size: 200% 100%;
+	animation: shimmer 2s ease-in-out infinite;
+}
+
+@keyframes chipFadeIn {
+	from {
+		opacity: 0;
+		transform: translateY(6px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
 @keyframes smoothFadeIn {
 	0% {
 		opacity: 0;

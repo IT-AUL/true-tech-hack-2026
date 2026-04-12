@@ -41,6 +41,7 @@
 	import Name from './Name.svelte';
 	import ProfileImage from './ProfileImage.svelte';
 	import Skeleton from './Skeleton.svelte';
+	import ImageSkeleton from './ImageSkeleton.svelte';
 	import Image from '$lib/components/common/Image.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import RateComment from './RateComment.svelte';
@@ -627,6 +628,7 @@
 		id="message-{message.id}"
 		dir={$settings.chatDirection}
 		style="scroll-margin-top: 3rem;"
+		in:fade={{ duration: 150, delay: 50 }}
 	>
 		<div class={`shrink-0 ltr:mr-3 rtl:ml-3 hidden @lg:flex mt-1 `}>
 			<ProfileImage
@@ -637,9 +639,14 @@
 
 		<div class="flex-auto w-0 pl-1 relative">
 			<Name>
-				<Tooltip content={model?.name ?? message.model} placement="top-start">
-					<span id="response-message-model-name" class="line-clamp-1 text-black dark:text-white">
-						{model?.name ?? message.model}
+				{@const routingStatus = (message?.statusHistory ?? []).find((s) => s?.action === 'auto_routing')}
+				<Tooltip content={routingStatus?.routing?.model_id ?? message.model} placement="top-start">
+					<span id="response-message-model-name" class="flex items-center gap-1 line-clamp-1 text-black dark:text-white">
+						{#if routingStatus}
+							{routingStatus?.routing?.model_name ?? model?.name ?? message.model}
+						{:else}
+							{model?.name ?? message.model}
+						{/if}
 					</span>
 				</Tooltip>
 
@@ -786,7 +793,11 @@
 							id="response-content-container"
 						>
 							{#if message.content === '' && !message.done && !message.error && !hasVisibleStatus}
-								<Skeleton />
+								{#if (message?.statusHistory ?? []).some((s) => s?.routing?.category === 'image_gen')}
+									<ImageSkeleton />
+								{:else}
+									<Skeleton />
+								{/if}
 							{:else if message.content && message.error !== true}
 								<!-- always show message contents even if there's an error -->
 								<!-- unless message.error === true which is legacy error handling, where the error message is stored in message.content -->

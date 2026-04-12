@@ -1416,7 +1416,7 @@
 															navigator.maxTouchPoints > 0 ||
 															navigator.msMaxTouchPoints > 0
 														)}
-													placeholder={placeholder ? placeholder : $i18n.t('Send a Message')}
+													placeholder={placeholder ? placeholder : $i18n.t('Ask anything, paste a link, or drop a file...')}
 													largeTextAsFile={($settings?.largeTextAsFile ?? false) && !shiftKey}
 													autocomplete={$config?.features?.enable_autocomplete_generation &&
 														($settings?.promptAutocomplete ?? false)}
@@ -1519,11 +1519,19 @@
 													}}
 													on:paste={async (e) => {
 														e = e.detail.event;
-														console.log(e);
 
 														const clipboardData = e.clipboardData || window.clipboardData;
 
 														if (clipboardData && clipboardData.items) {
+															const plainText = clipboardData.getData('text/plain')?.trim();
+															const urlPattern = /^https?:\/\/[^\s]+$/;
+
+															if (plainText && urlPattern.test(plainText)) {
+																e.preventDefault();
+																onUpload({ type: 'web', data: [plainText] });
+																return;
+															}
+
 															for (const item of clipboardData.items) {
 																if (item.type === 'text/plain') {
 																	if (($settings?.largeTextAsFile ?? false) && !shiftKey) {
