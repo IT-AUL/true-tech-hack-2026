@@ -7,7 +7,7 @@ git diff --cached --name-only --diff-filter=ACM >"$list" || exit 0
 while IFS= read -r f; do
 	[ -z "$f" ] && continue
 	case "$f" in
-	*package-lock.json|*.lock|*.png) continue ;;
+	*package-lock.json|*.lock|*.png|CHANGELOG.md) continue ;;
 	esac
 	[ -f "$f" ] || continue
 	sz=$(wc -c <"$f" | tr -d ' ')

@@ -23,6 +23,9 @@ jobs:
     name: Build & push Docker image
     runs-on: ubuntu-latest
     needs: verify
+    permissions:
+      contents: read
+      packages: write  # required to push to ghcr.io org packages
     steps:
       - uses: actions/checkout@v4
 
@@ -54,6 +57,7 @@ jobs:
 
       - name: Build and push to GHCR + Docker Hub
         uses: docker/build-push-action@v5
+        continue-on-error: true  # don't block release if registry push fails
         with:
           context: .
           push: true
@@ -69,7 +73,7 @@ jobs:
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: build-push
+    needs: verify   # independent from build-push — release is always created
     permissions:
       contents: write
     steps:
@@ -87,11 +91,15 @@ jobs:
         id: changelog
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          # Extract upstream base version (e.g. 0.9.0 from 0.9.0-gpthub.1)
           BASE="${VERSION%%-*}"
 
-          # Find the section for this upstream base in CHANGELOG.md
-          NOTES=$(awk "/^## \[${BASE}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md | head -100)
+          # Try full version first (e.g. ## [0.8.12-gpthub.1])
+          NOTES=$(awk "/^\#\# \[${VERSION//./\\.}\]/{found=1; next} found && /^\#\# \[/{exit} found{print}" CHANGELOG.md | head -120)
+
+          # Fallback: upstream base section (e.g. ## [0.8.12])
+          if [ -z "$NOTES" ]; then
+            NOTES=$(awk "/^\#\# \[${BASE//./\\.}\]/{found=1; next} found && /^\#\# \[/{exit} found{print}" CHANGELOG.md | head -120)
+          fi
 
           if [ -z "$NOTES" ]; then
             NOTES="See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for full history."
