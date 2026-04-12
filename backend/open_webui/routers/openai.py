@@ -1130,6 +1130,14 @@ async def generate_chat_completion(
     if 'max_tokens' in payload and 'max_completion_tokens' in payload:
         del payload['max_tokens']
 
+    # Disable streaming for models that return massive chunks (images/audio) to avoid Chunk too big errors.
+    # We save this flag BEFORE json.dumps so we can check it later when the provider
+    # still responds with text/event-stream despite stream=False.
+    stream_explicitly_disabled = False
+    if 'model' in payload and ('flux' in payload['model'].lower() or 'lyria' in payload['model'].lower()):
+        payload['stream'] = False
+        stream_explicitly_disabled = True
+
     # Convert the modified body back to JSON
     if 'logit_bias' in payload and payload['logit_bias']:
         logit_bias = convert_logit_bias_input_to_json(payload['logit_bias'])
@@ -1193,6 +1201,32 @@ async def generate_chat_completion(
 
         # Check if response is SSE
         if 'text/event-stream' in r.headers.get('Content-Type', ''):
+            # Image/audio models (flux, lyria) send a massive base64 SSE event even
+            # when stream=False was requested.  We MUST NOT use r.text() / r.json()
+            # here because those wait for EOF — SSE servers often keep the connection
+            # open indefinitely, causing multi-minute hangs.
+            # Instead we iterate line-by-line and stop as soon as we see [DONE].
+            if stream_explicitly_disabled:
+                sse_data = None
+                try:
+                    async for raw_line in r.content:
+                        line = raw_line.decode('utf-8', errors='replace').strip()
+                        if not line:
+                            continue
+                        if line == 'data: [DONE]':
+                            break
+                        if line.startswith('data: '):
+                            try:
+                                sse_data = json.loads(line[6:])
+                            except Exception:
+                                pass  # keep last successfully parsed event
+                except Exception as e:
+                    log.error(f'Error reading SSE response for image/audio model: {e}')
+                return JSONResponse(
+                    status_code=r.status,
+                    content=sse_data or {},
+                    headers={'x-selected-model': model_id},
+                )
             streaming = True
             res_headers = dict(r.headers)
             res_headers['x-selected-model'] = model_id

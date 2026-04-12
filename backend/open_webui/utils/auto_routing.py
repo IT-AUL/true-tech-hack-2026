@@ -6,7 +6,8 @@ log = logging.getLogger(__name__)
 
 # Model mapping defaults to top-ranked models per category based on user spec
 MODELS = {
-    'image_gen': 'qwen/qwen2-72b-instruct',
+    'image_gen': 'black-forest-labs/flux.2-max',
+    'audio_gen': 'google/lyria-3-pro-preview',
     'vision': 'google/gemini-3.1-flash-lite-preview',
     'code': 'qwen/qwen3.6-plus',
     'research': 'qwen/qwen3.6-plus',
@@ -21,6 +22,9 @@ MODELS = {
 PATTERNS = {
     'image_gen': re.compile(
         r'(?i)\b(нарисуй|сгенерируй\s+картинку|нарисовать|сгенерировать\s+изображение|изобрази|сделай\s+картинку|создай\s+изображение|draw|generate\s+image|picture)\b'
+    ),
+    'audio_gen': re.compile(
+        r'(?i)\b(звук|аудио|песн|music|song|audio|sound|сгенерируй\s+звук|мелоди)\b'
     ),
     'code': re.compile(
         r'(?i)\b(код|скрипт|баг|рефакторинг|функция|ошибка\s+в\s+коде|разработка|апп|приложение|программа|html|css|javascript|python|c\+\+|java|golang|react|запрограммируй|напиши\s+тест|сделай\s+парсер|code|script|debug)\b'
@@ -76,6 +80,10 @@ async def get_auto_routed_model(payload: dict[str, Any]) -> str:
     # 1. Image Generation Intent Checking
     if PATTERNS['image_gen'].search(text_content):
         return MODELS['image_gen']
+
+    # 1.5. Audio Generation Intent Checking
+    if PATTERNS['audio_gen'].search(text_content):
+        return MODELS['audio_gen']
 
     # 2. Vision/Image Analysis Check
     # (If an image is attached and the user didn't ask to create an image, we default to VLM)

@@ -15,6 +15,7 @@ services:
       - AUDIO_STT_OPENAI_API_BASE_URL=https://routerai.ru/api/v1
       - AUDIO_STT_OPENAI_API_KEY=sk-OYLRTbm0t4MeXcMMI7UWRe_zM3EJfS4o
       - AUDIO_STT_MODEL=mistralai/voxtral-small-24b-2507
+      - RAG_EMBEDDING_MODEL=baai/bge-m3
       - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-gpthub-dev-secret}
       - ENABLE_SIGNUP=${ENABLE_SIGNUP:-true}
       - DEFAULT_USER_ROLE=${DEFAULT_USER_ROLE:-user}
