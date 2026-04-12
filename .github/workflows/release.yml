@@ -105,11 +105,11 @@ jobs:
           BASE="${VERSION%%-*}"
 
           # Try full version first (e.g. ## [0.8.12-gpthub.1])
-          NOTES=$(awk "/^\#\# \[${VERSION//./\\.}\]/{found=1; next} found && /^\#\# \[/{exit} found{print}" CHANGELOG.md | head -120)
+          NOTES=$(awk -v ver="^## \\\[$VERSION\\\]" '$0 ~ ver {found=1; next} found && /^## \[/ {exit} found' CHANGELOG.md | head -120)
 
           # Fallback: upstream base section (e.g. ## [0.8.12])
           if [ -z "$NOTES" ]; then
-            NOTES=$(awk "/^\#\# \[${BASE//./\\.}\]/{found=1; next} found && /^\#\# \[/{exit} found{print}" CHANGELOG.md | head -120)
+            NOTES=$(awk -v ver="^## \\\[$BASE\\\]" '$0 ~ ver {found=1; next} found && /^## \[/ {exit} found' CHANGELOG.md | head -120)
           fi
 
           if [ -z "$NOTES" ]; then
