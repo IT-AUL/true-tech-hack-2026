@@ -10,8 +10,10 @@ import httpx
 
 log = logging.getLogger(__name__)
 
-# Simple in-memory cache for decisions within a short timeframe/process life
 _ROUTING_CACHE: dict[str, str] = {}
+_ROUTING_CACHE_MAX_SIZE = 1000
+_REKA_API_URL_DEFAULT = 'https://api.reka.ai/v1'
+_REKA_ROUTER_MODEL_DEFAULT = 'rekaai/reka-edge'
 
 # ---------------------------------------------------------------------------
 # Routing Preferences (Dynamic Model Resolution)
@@ -45,13 +47,6 @@ NON_TEXT_MODEL_KEYWORDS = (
     'speech',
     'moderation',
 )
-
-# ---------------------------------------------------------------------------
-# Reka AI settings (used for intelligent classification)
-# ---------------------------------------------------------------------------
-REKA_API_KEY = os.environ.get('REKA_API_KEY') or os.environ.get('ROUTERAI_API_KEY', '')
-REKA_API_URL = os.environ.get('REKA_API_URL') or os.environ.get('ROUTERAI_API_URL', 'https://api.reka.ai/v1')
-REKA_ROUTER_MODEL = os.environ.get('REKA_ROUTER_MODEL', 'rekaai/reka-edge')
 
 # ---------------------------------------------------------------------------
 # Regex patterns (safety fallback for classification)
@@ -106,9 +101,22 @@ _ROUTER_SYSTEM_PROMPT = """\
 """
 
 
+def _get_reka_api_key() -> str:
+    return os.environ.get('REKA_API_KEY') or os.environ.get('ROUTERAI_API_KEY', '')
+
+
+def _get_reka_api_url() -> str:
+    return os.environ.get('REKA_API_URL') or os.environ.get('ROUTERAI_API_URL', _REKA_API_URL_DEFAULT)
+
+
+def _get_reka_router_model() -> str:
+    return os.environ.get('REKA_ROUTER_MODEL', _REKA_ROUTER_MODEL_DEFAULT)
+
+
 async def _classify_with_llm(text_content: str, has_image: bool) -> str | None:
-    if not REKA_API_KEY:
-        log.warning('REKA_API_KEY is not set — skipping LLM routing, using regex fallback.')
+    reka_api_key = _get_reka_api_key()
+    if not reka_api_key:
+        log.debug('Reka API key is not set; using regex fallback for auto-routing.')
         return None
 
     context_parts: list[str] = []
@@ -120,7 +128,7 @@ async def _classify_with_llm(text_content: str, has_image: bool) -> str | None:
     user_message = '\n'.join(context_parts) or '(empty message)'
 
     payload = {
-        'model': REKA_ROUTER_MODEL,
+        'model': _get_reka_router_model(),
         'messages': [
             {'role': 'system', 'content': _ROUTER_SYSTEM_PROMPT},
             {'role': 'user', 'content': user_message},
@@ -132,9 +140,9 @@ async def _classify_with_llm(text_content: str, has_image: bool) -> str | None:
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.post(
-                f'{REKA_API_URL}/chat/completions',
+                f'{_get_reka_api_url()}/chat/completions',
                 headers={
-                    'Authorization': f'Bearer {REKA_API_KEY}',
+                    'Authorization': f'Bearer {reka_api_key}',
                     'Content-Type': 'application/json',
                 },
                 json=payload,
@@ -290,11 +298,11 @@ async def get_auto_routed_route(payload: dict[str, Any]) -> str:
         category = _classify_with_regex(text_content, has_image)
         method = 'Regex (Fallback)'
 
-    log.info('--- AUTO-ROUTING: Detected route "%s" using %s ---', category, method)
+    log.info('Auto-routing classified route=%s via %s', category, method)
 
     if cache_key:
         _ROUTING_CACHE[cache_key] = category
-        if len(_ROUTING_CACHE) > 1000:
+        if len(_ROUTING_CACHE) > _ROUTING_CACHE_MAX_SIZE:
             _ROUTING_CACHE.clear()
 
     return category
@@ -317,23 +325,24 @@ async def process_auto_routing(
 
     messages = payload.get('messages', [])
     if not messages:
-        model_id, used_fallback = resolve_model_for_route('fallback', available_models)
+        model_id, _ = resolve_model_for_route('fallback', available_models)
         return model_id or 'fallback', payload
 
     has_vision = False
     for msg in messages:
         if msg.get('role') != 'user':
             continue
-        files = msg.get('files', [])
+        files = list(msg.get('files', []))
         if 'metadata' in payload and isinstance(payload['metadata'], dict):
             files.extend(payload['metadata'].get('files', []))
 
-        file_ids = list(set([f.get('id') or f.get('file_id') for f in files if isinstance(f, dict)]))
+        file_ids = [f.get('id') or f.get('file_id') for f in files if isinstance(f, dict)]
         content = msg.get('content', '')
         if isinstance(content, list):
             for part in content:
                 if part.get('type') == 'file' and 'file_id' in part:
                     file_ids.append(part['file_id'])
+        file_ids = list({file_id for file_id in file_ids if file_id})
 
         if not file_ids:
             continue
@@ -369,7 +378,7 @@ async def process_auto_routing(
                                 {'type': 'text', 'text': f'\\n[Audio Transcription: {transcription_text}]\\n'}
                             )
                     except Exception as e:
-                        log.error('Error transcribing audio: %s', e)
+                        log.error('Error transcribing auto-routing audio %s: %s', file_id, e)
             else:
                 text_content = file_item.data.get('content', '') if file_item.data else ''
                 if text_content:
