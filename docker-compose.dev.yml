@@ -21,6 +21,9 @@ services:
       - RAG_EMBEDDING_ENGINE=openai
       - RAG_EMBEDDING_MODEL=qwen3-embedding-8b
       - RAG_OPENAI_API_BASE_URL=${OPENAI_API_BASE_URL:-https://api.gpt.mws.ru/v1}
+      - RAG_OPENAI_API_KEY=${OPENAI_API_KEY}
+      - RAG_EMBEDDING_BATCH_SIZE=100
+      - RAG_EMBEDDING_CONCURRENT_REQUESTS=10
     volumes:
       - gpthub-data:/app/backend/data
     restart: unless-stopped

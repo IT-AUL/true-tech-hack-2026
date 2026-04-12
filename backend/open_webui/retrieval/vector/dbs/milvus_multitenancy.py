@@ -22,14 +22,6 @@ from open_webui.retrieval.vector.main import (
     VectorDBBase,
     VectorItem,
 )
-from pymilvus import (
-    Collection,
-    CollectionSchema,
-    DataType,
-    FieldSchema,
-    connections,
-    utility,
-)
 
 log = logging.getLogger(__name__)
 
@@ -38,6 +30,8 @@ RESOURCE_ID_FIELD = 'resource_id'
 
 class MilvusClient(VectorDBBase):
     def __init__(self):
+        from pymilvus import connections
+
         # Milvus collection names can only contain numbers, letters, and underscores.
         self.collection_prefix = MILVUS_COLLECTION_PREFIX.replace('-', '_')
         connections.connect(
@@ -86,6 +80,13 @@ class MilvusClient(VectorDBBase):
             return self.KNOWLEDGE_COLLECTION, resource_id
 
     def _create_shared_collection(self, mt_collection_name: str, dimension: int):
+        from pymilvus import (
+            Collection,
+            CollectionSchema,
+            DataType,
+            FieldSchema,
+        )
+
         fields = [
             FieldSchema(
                 name='id',
@@ -121,10 +122,14 @@ class MilvusClient(VectorDBBase):
         return collection
 
     def _ensure_collection(self, mt_collection_name: str, dimension: int):
+        from pymilvus import utility
+
         if not utility.has_collection(mt_collection_name):
             self._create_shared_collection(mt_collection_name, dimension)
 
     def has_collection(self, collection_name: str) -> bool:
+        from pymilvus import Collection, utility
+
         mt_collection, resource_id = self._get_collection_and_resource_id(collection_name)
         if not utility.has_collection(mt_collection):
             return False
@@ -135,6 +140,8 @@ class MilvusClient(VectorDBBase):
         return len(res) > 0
 
     def upsert(self, collection_name: str, items: list[VectorItem]):
+        from pymilvus import Collection
+
         if not items:
             return
         mt_collection, resource_id = self._get_collection_and_resource_id(collection_name)
@@ -161,6 +168,8 @@ class MilvusClient(VectorDBBase):
         filter: dict | None = None,
         limit: int = 10,
     ) -> SearchResult | None:
+        from pymilvus import Collection, utility
+
         if not vectors:
             return None
 
@@ -202,6 +211,8 @@ class MilvusClient(VectorDBBase):
         ids: list[str] | None = None,
         filter: dict[str, Any] | None = None,
     ):
+        from pymilvus import Collection, utility
+
         mt_collection, resource_id = self._get_collection_and_resource_id(collection_name)
         if not utility.has_collection(mt_collection):
             return
@@ -222,11 +233,15 @@ class MilvusClient(VectorDBBase):
         collection.delete(' and '.join(expr))
 
     def reset(self):
+        from pymilvus import utility
+
         for collection_name in self.shared_collections:
             if utility.has_collection(collection_name):
                 utility.drop_collection(collection_name)
 
     def delete_collection(self, collection_name: str):
+        from pymilvus import Collection, utility
+
         mt_collection, resource_id = self._get_collection_and_resource_id(collection_name)
         if not utility.has_collection(mt_collection):
             return
@@ -235,6 +250,8 @@ class MilvusClient(VectorDBBase):
         collection.delete(f"{RESOURCE_ID_FIELD} == '{resource_id}'")
 
     def query(self, collection_name: str, filter: dict[str, Any], limit: int | None = None) -> GetResult | None:
+        from pymilvus import Collection, utility
+
         mt_collection, resource_id = self._get_collection_and_resource_id(collection_name)
         if not utility.has_collection(mt_collection):
             return None

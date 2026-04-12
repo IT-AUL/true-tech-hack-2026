@@ -4,9 +4,7 @@ import sys
 
 import ftfy
 import requests
-from azure.identity import DefaultAzureCredential
 from langchain_community.document_loaders import (
-    AzureAIDocumentIntelligenceLoader,
     BSHTMLLoader,
     CSVLoader,
     Docx2txtLoader,
@@ -341,6 +339,9 @@ class Loader:
                 ]
             )
         ):
+            from azure.identity import DefaultAzureCredential
+            from langchain_community.document_loaders import AzureAIDocumentIntelligenceLoader
+
             if self.kwargs.get('DOCUMENT_INTELLIGENCE_KEY') != '':
                 loader = AzureAIDocumentIntelligenceLoader(
                     file_path=file_path,

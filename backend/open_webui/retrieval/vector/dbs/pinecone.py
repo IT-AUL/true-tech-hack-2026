@@ -2,24 +2,13 @@
 NOTE: This vector database integration is community-supported and maintained on a best-effort basis.
 """
 
-import logging
-import time  # for measuring elapsed time
-from typing import Any
-
-from pinecone import Pinecone, ServerlessSpec
-
-# Add gRPC support for better performance (Pinecone best practice)
-try:
-    from pinecone.grpc import PineconeGRPC
-
-    GRPC_AVAILABLE = True
-except ImportError:
-    GRPC_AVAILABLE = False
-
 import asyncio  # for async upserts
 import concurrent.futures  # for parallel batch upserts
 import functools  # for partial binding in async tasks
+import logging
 import random  # for jitter in retry backoff
+import time  # for measuring elapsed time
+from typing import Any
 
 from open_webui.config import (
     PINECONE_API_KEY,
@@ -45,6 +34,15 @@ log = logging.getLogger(__name__)
 
 class PineconeClient(VectorDBBase):
     def __init__(self):
+        try:
+            from pinecone.grpc import PineconeGRPC
+
+            grpc_available = True
+        except ImportError:
+            from pinecone import Pinecone
+
+            grpc_available = False
+
         self.collection_prefix = 'open-webui'
 
         # Validate required configuration
@@ -59,7 +57,7 @@ class PineconeClient(VectorDBBase):
         self.cloud = PINECONE_CLOUD
 
         # Initialize Pinecone client for improved performance
-        if GRPC_AVAILABLE:
+        if grpc_available:
             # Use gRPC client for better performance (Pinecone recommendation)
             self.client = PineconeGRPC(
                 api_key=self.api_key,
@@ -69,6 +67,8 @@ class PineconeClient(VectorDBBase):
             self.using_grpc = True
             log.info('Using Pinecone gRPC client for optimal performance')
         else:
+            from pinecone import Pinecone
+
             # Fallback to HTTP client with enhanced connection pooling
             self.client = Pinecone(
                 api_key=self.api_key,
@@ -107,6 +107,8 @@ class PineconeClient(VectorDBBase):
             # Check if index exists
             if self.index_name not in self.client.list_indexes().names():
                 log.info(f"Creating Pinecone index '{self.index_name}'...")
+                from pinecone import ServerlessSpec
+
                 self.client.create_index(
                     name=self.index_name,
                     dimension=self.dimension,

@@ -5,7 +5,6 @@ NOTE: This vector database integration is community-supported and maintained on 
 import logging
 from typing import Any
 
-import boto3
 from open_webui.config import S3_VECTOR_BUCKET_NAME, S3_VECTOR_REGION
 from open_webui.retrieval.vector.main import (
     GetResult,
@@ -35,6 +34,8 @@ class S3VectorClient(VectorDBBase):
 
         if self.bucket_name and self.region:
             try:
+                import boto3
+
                 self.client = boto3.client('s3vectors', region_name=self.region)
                 log.info(f"S3Vector client initialized for bucket '{self.bucket_name}' in region '{self.region}'")
             except Exception as e:

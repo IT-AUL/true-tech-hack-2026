@@ -6,7 +6,6 @@ import re
 import uuid
 from typing import Any
 
-import weaviate
 from open_webui.config import (
     WEAVIATE_API_KEY,
     WEAVIATE_GRPC_HOST,
@@ -56,6 +55,8 @@ def _convert_uuids_to_strings(obj: Any) -> Any:
 
 class WeaviateClient(VectorDBBase):
     def __init__(self):
+        import weaviate
+
         self.url = WEAVIATE_HTTP_HOST
         try:
             # Build connection parameters

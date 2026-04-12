@@ -24,14 +24,14 @@ from open_webui.retrieval.vector.main import (
     VectorItem,
 )
 from open_webui.retrieval.vector.utils import process_metadata
-from pymilvus import Collection, DataType, connections
-from pymilvus import MilvusClient as Client
 
 log = logging.getLogger(__name__)
 
 
 class MilvusClient(VectorDBBase):
     def __init__(self):
+        from pymilvus import MilvusClient as Client
+
         self.collection_prefix = 'open_webui'
         if MILVUS_TOKEN is None:
             self.client = Client(uri=MILVUS_URI, db_name=MILVUS_DB)
@@ -93,6 +93,8 @@ class MilvusClient(VectorDBBase):
         )
 
     def _create_collection(self, collection_name: str, dimension: int):
+        from pymilvus import DataType
+
         schema = self.client.create_schema(
             auto_id=False,
             enable_dynamic_field=True,
@@ -195,6 +197,8 @@ class MilvusClient(VectorDBBase):
         return self._result_to_search_result(result)
 
     def query(self, collection_name: str, filter: dict, limit: int = -1):
+        from pymilvus import Collection, connections
+
         connections.connect(uri=MILVUS_URI, token=MILVUS_TOKEN, db_name=MILVUS_DB)
 
         collection_name = collection_name.replace('-', '_')
