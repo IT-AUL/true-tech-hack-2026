@@ -3,7 +3,12 @@ name: Release
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+*'
+      - 'v[0-9]*.[0-9]*.[0-9]*'  # matches v0.8.12-gpthub.2 etc.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v0.8.12-gpthub.2)'
+        required: true
 
 jobs:
   verify:
@@ -11,13 +16,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Check tag matches package.json
         run: node scripts/check-version-tag.mjs
         env:
-          CI_COMMIT_TAG: ${{ github.ref_name }}
+          CI_COMMIT_TAG: ${{ github.event.inputs.tag || github.ref_name }}
 
   build-push:
     name: Build & push Docker image
