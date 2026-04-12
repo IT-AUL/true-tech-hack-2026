@@ -18,6 +18,9 @@ services:
       - SCARF_NO_ANALYTICS=true
       - DO_NOT_TRACK=true
       - ANONYMIZED_TELEMETRY=false
+      - RAG_EMBEDDING_ENGINE=openai
+      - RAG_EMBEDDING_MODEL=qwen3-embedding-8b
+      - RAG_OPENAI_API_BASE_URL=${OPENAI_API_BASE_URL:-https://api.gpt.mws.ru/v1}
     volumes:
       - gpthub-data:/app/backend/data
     restart: unless-stopped
