@@ -1,10 +1,19 @@
-import requests
 import json
+import os
 
-url = "https://routerai.ru/api/v1/models"
-headers = {
-    "Authorization": "Bearer sk-OYLRTbm0t4MeXcMMI7UWRe_zM3EJfS4o"
-}
+import requests
+
+base_url = os.environ.get('OPENAI_API_BASE_URL')
+api_key = os.environ.get('OPENAI_API_KEY')
+
+if not base_url:
+    raise RuntimeError('OPENAI_API_BASE_URL is required')
+
+if not api_key:
+    raise RuntimeError('OPENAI_API_KEY is required')
+
+url = f'{base_url.rstrip("/")}/models'
+headers = {'Authorization': f'Bearer {api_key}'}
 
 try:
     response = requests.get(url, headers=headers)
@@ -12,6 +21,6 @@ try:
         models = response.json()
         print(json.dumps(models, indent=2))
     else:
-        print(f"Error {response.status_code}: {response.text}")
+        print(f'Error {response.status_code}: {response.text}')
 except Exception as e:
-    print(f"Exception: {e}")
+    print(f'Exception: {e}')

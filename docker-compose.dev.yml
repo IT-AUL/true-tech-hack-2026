@@ -11,10 +11,10 @@ services:
     environment:
       - OPENAI_API_BASE_URL=${OPENAI_API_BASE_URL:-https://routerai.ru/api/v1}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - AUDIO_STT_ENGINE=openai
+      - AUDIO_STT_ENGINE=${AUDIO_STT_ENGINE:-openai}
       - AUDIO_STT_OPENAI_API_BASE_URL=${OPENAI_API_BASE_URL:-https://routerai.ru/api/v1}
       - AUDIO_STT_OPENAI_API_KEY=${OPENAI_API_KEY}
-      - AUDIO_STT_MODEL=mistralai/voxtral-small-24b-2507
+      - AUDIO_STT_MODEL=${AUDIO_STT_MODEL:-mistralai/voxtral-small-24b-2507}
       - RAG_EMBEDDING_MODEL=baai/bge-m3
       - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-gpthub-dev-secret}
       - ENABLE_SIGNUP=${ENABLE_SIGNUP:-true}
@@ -25,8 +25,6 @@ services:
       - ANONYMIZED_TELEMETRY=false
       - RAG_EMBEDDING_ENGINE=openai
       - RAG_EMBEDDING_MODEL=${RAG_EMBEDDING_MODEL:-bge-m3}
-      - RAG_OPENAI_API_BASE_URL=${OPENAI_API_BASE_URL:-https://api.gpt.mws.ru/v1}
-      - RAG_OPENAI_API_KEY=${OPENAI_API_KEY}
       - RAG_EMBEDDING_BATCH_SIZE=${RAG_EMBEDDING_BATCH_SIZE:-8}
       - RAG_EMBEDDING_CONCURRENT_REQUESTS=${RAG_EMBEDDING_CONCURRENT_REQUESTS:-1}
       - RAG_EMBEDDING_TIMEOUT=${RAG_EMBEDDING_TIMEOUT:-180}
@@ -37,6 +35,9 @@ services:
       - ENABLE_RETRIEVAL_QUERY_GENERATION=${ENABLE_RETRIEVAL_QUERY_GENERATION:-true}
       - TASK_MODEL_EXTERNAL=${TASK_MODEL_EXTERNAL:-qwen3-235b-a22b-instruct-2507}
       - RAG_GENERATION_MODEL_EXTERNAL=${RAG_GENERATION_MODEL_EXTERNAL:-qwen3-235b-a22b-instruct-2507}
+      - REKA_API_KEY=${REKA_API_KEY}
+      - REKA_API_URL=${REKA_API_URL:-https://api.reka.ai/v1}
+      - REKA_ROUTER_MODEL=${REKA_ROUTER_MODEL:-rekaai/reka-edge}
       # Web search for deep research tool
       - ENABLE_SEARCH_QUERY_GENERATION=true
       - WEB_SEARCH_ENGINE=${WEB_SEARCH_ENGINE:-tavily}
