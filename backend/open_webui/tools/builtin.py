@@ -260,9 +260,7 @@ async def deep_research(
         api_key = (api_keys.split(';')[0] if isinstance(api_keys, str) else api_keys[0]) if api_keys else ''
 
         task_model = (
-            getattr(cfg, 'TASK_MODEL_EXTERNAL', None)
-            or getattr(cfg, 'TASK_MODEL', None)
-            or 'qwen/qwen3.6-plus'
+            getattr(cfg, 'TASK_MODEL_EXTERNAL', None) or getattr(cfg, 'TASK_MODEL', None) or 'qwen/qwen3.6-plus'
         )
 
         async def llm(messages: list[dict], max_tokens: int = 512) -> str:
@@ -287,7 +285,7 @@ async def deep_research(
 
         async def generate_serp_queries(goal: str, learnings: list[str], n: int) -> list[str]:
             """Ask LLM to produce n targeted search queries for the current research goal."""
-            context = '\n'.join(f'- {l}' for l in learnings[-10:]) if learnings else 'none yet'
+            context = '\n'.join(f'- {item}' for item in learnings[-10:]) if learnings else 'none yet'
             prompt = (
                 f'You are a research assistant. Generate exactly {n} distinct, specific web search queries '
                 f'to investigate the following research goal.\n\n'
@@ -303,7 +301,7 @@ async def deep_research(
             except Exception:
                 pass
             # Fallback: split by newlines
-            lines = [l.strip().strip('"-') for l in raw.splitlines() if l.strip()]
+            lines = [line.strip().strip('"-') for line in raw.splitlines() if line.strip()]
             return lines[:n] if lines else [goal]
 
         async def extract_learnings(search_query: str, content: str) -> tuple[list[str], list[str]]:
@@ -360,12 +358,14 @@ async def deep_research(
                     learnings, directions = await extract_learnings(q, content)
                     all_learnings.extend(learnings)
                     new_directions.extend(directions)
-                    all_sources.append({
-                        'url': url,
-                        'title': getattr(result, 'title', url),
-                        'query': q,
-                        'snippet': getattr(result, 'snippet', ''),
-                    })
+                    all_sources.append(
+                        {
+                            'url': url,
+                            'title': getattr(result, 'title', url),
+                            'query': q,
+                            'snippet': getattr(result, 'snippet', ''),
+                        }
+                    )
 
             await asyncio.gather(*[process_query(q) for q in queries])
 
@@ -377,7 +377,9 @@ async def deep_research(
         await research_iteration(query, depth)
 
         if not all_sources:
-            return json.dumps({'error': 'No results found. Check that a web search engine is configured.', 'query': query})
+            return json.dumps(
+                {'error': 'No results found. Check that a web search engine is configured.', 'query': query}
+            )
 
         return json.dumps(
             {
