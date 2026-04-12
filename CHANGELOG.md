@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Секции ниже без суффикса (`[0.8.12]`) — upstream Open WebUI changelog.
 
 ---
-## [0.8.12-gpthub.2] - 2026-04-12
+## [0.8.12-gpthub.3] - 2026-04-12
 
 ### Fixed
 
