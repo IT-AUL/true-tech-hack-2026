@@ -69,25 +69,33 @@ async function main() {
 	const suggestions = [];
 	if (parsed) {
 		const f = parsed.fork !== null ? parsed.fork : -1;
+		const upstream = pkg.gpthub?.upstreamVersion ?? parsed.base;
+
+		// Fork releases — base stays the same, only N increments
 		suggestions.push({
-			label: 'gpthub (фикс/фича форка)',
+			label: `фича/фикс форка  ${dim('(upstream не менялся)')}`,
 			version: `${parsed.base}-gpthub.${f + 1}`,
 		});
+
+		// Upstream sync — bump upstream base, reset fork counter
+		const [umaj, umin, upat] = upstream.split('.').map(Number);
 		suggestions.push({
-			label: 'patch (базовый патч)',
-			version: `${parsed.major}.${parsed.minor}.${parsed.patch + 1}-gpthub.0`,
+			label: `синк upstream: patch  ${dim(`OWU ${umaj}.${umin}.${upat + 1}`)}`,
+			version: `${umaj}.${umin}.${upat + 1}-gpthub.0`,
 		});
 		suggestions.push({
-			label: 'minor (новый минор)',
-			version: `${parsed.major}.${parsed.minor + 1}.0-gpthub.0`,
+			label: `синк upstream: minor  ${dim(`OWU ${umaj}.${umin + 1}.0`)}`,
+			version: `${umaj}.${umin + 1}.0-gpthub.0`,
 		});
 		suggestions.push({
-			label: 'major (мажорный)',
-			version: `${parsed.major + 1}.0.0-gpthub.0`,
+			label: `синк upstream: major  ${dim(`OWU ${umaj + 1}.0.0`)}`,
+			version: `${umaj + 1}.0.0-gpthub.0`,
 		});
 	}
 
-	console.log(bold('  Выберите версию:'));
+	console.log(bold('  Выберите тип релиза:'));
+	console.log(dim('  ┌─ fork: только N меняется, upstream-база остаётся'));
+	console.log(dim('  └─ sync: апдейт до новой версии Open WebUI'));
 	console.log('');
 	suggestions.forEach((s, i) => {
 		console.log(`    ${bold(`${i + 1})`)}  ${green(s.version)}  ${dim(`— ${s.label}`)}`);
