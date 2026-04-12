@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.12-gpthub.6] - 2026-04-12
+
+### Fixed
+
+- 🧹 **No Space Left On Device.** Добавлен экшен `free-disk-space` в GitHub пайплайн релизов для очистки ~30 ГБ кэша перед тяжелой гибридной (amd64/arm64) сборкой Docker образов.
+
 ## [0.8.12-gpthub.5] - 2026-04-12
 
 ### Fixed
