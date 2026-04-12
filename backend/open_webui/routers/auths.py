@@ -10,8 +10,6 @@ from ssl import CERT_NONE, CERT_REQUIRED, PROTOCOL_TLS
 from aiohttp import ClientSession
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse, Response
-from ldap3 import NONE, Connection, Server, Tls
-from ldap3.utils.conv import escape_filter_chars
 from open_webui.config import (
     ENABLE_PASSWORD_AUTH,
     OAUTH_MERGE_ACCOUNTS_BY_EMAIL,
@@ -300,6 +298,9 @@ async def ldap_auth(
     form_data: LdapForm,
     db: Session = Depends(get_session),
 ):
+    from ldap3 import NONE, Connection, Server, Tls
+    from ldap3.utils.conv import escape_filter_chars
+
     # Security checks FIRST - before loading any config
     if not request.app.state.config.ENABLE_LDAP:
         raise HTTPException(400, detail='LDAP authentication is not enabled')
