@@ -23,9 +23,7 @@ PATTERNS = {
     'image_gen': re.compile(
         r'(?i)\b(нарисуй|сгенерируй\s+картинку|нарисовать|сгенерировать\s+изображение|изобрази|сделай\s+картинку|создай\s+изображение|draw|generate\s+image|picture)\b'
     ),
-    'audio_gen': re.compile(
-        r'(?i)\b(звук|аудио|песн|music|song|audio|sound|сгенерируй\s+звук|мелоди)\b'
-    ),
+    'audio_gen': re.compile(r'(?i)\b(звук|аудио|песн|music|song|audio|sound|сгенерируй\s+звук|мелоди)\b'),
     'code': re.compile(
         r'(?i)\b(код|скрипт|баг|рефакторинг|функция|ошибка\s+в\s+коде|разработка|апп|приложение|программа|html|css|javascript|python|c\+\+|java|golang|react|запрограммируй|напиши\s+тест|сделай\s+парсер|code|script|debug)\b'
     ),
@@ -191,16 +189,20 @@ async def process_auto_routing(request, payload: dict[str, Any], user) -> tuple[
                             file_data = file_item.data or {}
                             file_data['content'] = transcription_text
                             Files.update_file_data_by_id(file_id, file_data)
-                            content.append({'type': 'text', 'text': f'\\n[Audio Transcription: {transcription_text}]\\n'})
+                            content.append(
+                                {'type': 'text', 'text': f'\\n[Audio Transcription: {transcription_text}]\\n'}
+                            )
                     except Exception as e:
                         log.error(f'Error transcribing auto-routing audio {file_id}: {e}')
             else:
                 text_content = file_item.data.get('content', '') if file_item.data else ''
                 if text_content:
-                    content.append({'type': 'text', 'text': f'\\n[File Content ({file_item.filename}):\\n{text_content}]\\n'})
+                    content.append(
+                        {'type': 'text', 'text': f'\\n[File Content ({file_item.filename}):\\n{text_content}]\\n'}
+                    )
 
     model_id = await get_auto_routed_model(payload)
     if has_vision and model_id != MODELS['image_gen']:
-         model_id = MODELS['vision']
+        model_id = MODELS['vision']
 
     return model_id, payload
