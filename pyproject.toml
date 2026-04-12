@@ -252,6 +252,7 @@ ignore = [
   "E721",   # type comparison — upstream pattern
   "UP045",  # use X | None — upstream pattern
   "ICN003", # datetime member imports — upstream pattern
+  "T201",   # print found — upstream code
 ]
 
 # Plugin configs:
