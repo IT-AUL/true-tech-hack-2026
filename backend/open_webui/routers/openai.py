@@ -525,6 +525,15 @@ async def get_all_models(request: Request, user: UserModel) -> dict[str, list]:
         return models
 
     models = get_merged_models(map(extract_data, responses))
+    
+    # Inject virtual "auto" model for intelligent routing
+    models["auto"] = {
+        "id": "auto",
+        "name": "Auto (Intelligent Routing)",
+        "owned_by": "openai",
+        "connection_type": "internal",
+    }
+    
     log.debug(f'models: {models}')
 
     request.app.state.OPENAI_MODELS = models
@@ -1015,9 +1024,10 @@ async def generate_chat_completion(
     model_id = form_data.get('model')
 
     if model_id == 'auto' or auto_route:
-        from open_webui.utils.auto_routing import get_auto_routed_model
+        from open_webui.utils.auto_routing import process_auto_routing
 
-        model_id = await get_auto_routed_model(payload)
+        model_id, payload = await process_auto_routing(request, payload, user)
+        log.info(f"Auto-routing selected model: {model_id}")
         payload['model'] = model_id
         form_data['model'] = model_id
 
@@ -1068,8 +1078,12 @@ async def generate_chat_completion(
     # Check if model is already in app state cache to avoid expensive get_all_models() call
     models = request.app.state.OPENAI_MODELS
     if not models or model_id not in models:
+        log.info(f"Model ID {model_id} not in cache, fetching all models...")
         await get_all_models(request, user=user)
         models = request.app.state.OPENAI_MODELS
+    
+    log.info(f"Current model_id: {model_id}")
+    log.info(f"Available models in cache: {list(models.keys())[:10]}... (total {len(models)})")
     model = models.get(model_id)
 
     if model:

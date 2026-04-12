@@ -78,7 +78,9 @@
 			<div class="flex items-center min-w-fit">
 				<Tooltip content={$user?.role === 'admin' ? (item?.value ?? '') : ''} placement="top-start">
 					<img
-						src={`${WEBUI_API_BASE_URL}/models/model/profile/image?id=${item.model.id}&lang=${$i18n.language}`}
+						src={item.value === 'auto'
+							? '/favicon.png'
+							: `${WEBUI_API_BASE_URL}/models/model/profile/image?id=${item.model.id}&lang=${$i18n.language}`}
 						alt={$i18n.t('{{modelName}} profile image', { modelName: item.label })}
 						class="rounded-full size-5 flex items-center"
 						loading="lazy"
@@ -96,6 +98,16 @@
 					</div>
 				</Tooltip>
 			</div>
+
+			{#if item.value === 'auto'}
+				<div class="flex items-center">
+					<div
+						class="bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[0.6rem] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider"
+					>
+						Intelligent
+					</div>
+				</div>
+			{/if}
 
 			<div class=" shrink-0 flex items-center gap-2">
 				{#if item.model.owned_by === 'ollama'}
