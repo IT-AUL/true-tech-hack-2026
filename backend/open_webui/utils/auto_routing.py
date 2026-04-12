@@ -995,7 +995,7 @@ async def process_auto_routing(
     messages = payload.get('messages', [])
     if not messages:
         model_id, _ = select_model('fallback', 'low', registry) if registry else (None, True)
-        return model_id or 'fallback', payload
+        return model_id or 'fallback', payload, RoutingDecision('fallback', 'low', method='empty')
 
     has_vision = False
     for msg in messages:
