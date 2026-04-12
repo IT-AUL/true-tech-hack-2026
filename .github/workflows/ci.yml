@@ -132,7 +132,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install backend test dependencies
-        run: pip install -r backend/requirements-min.txt pytest pytest-asyncio
+        run: pip install -r backend/requirements.txt pytest pytest-asyncio
       - name: Run backend unit tests
         run: python -m pytest backend/open_webui/test/util
 
