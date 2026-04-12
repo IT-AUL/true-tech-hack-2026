@@ -530,7 +530,7 @@ async def get_all_models(request: Request, user: UserModel) -> dict[str, list]:
     # Inject virtual "auto" model for intelligent routing
     models['auto'] = {
         'id': 'auto',
-        'name': 'Auto (Intelligent Routing)',
+        'name': 'Auto',
         'owned_by': 'openai',
         'connection_type': 'internal',
     }
@@ -1025,6 +1025,7 @@ async def generate_chat_completion(
     model_id = form_data.get('model')
 
     if model_id == 'auto' or auto_route:
+        from open_webui.socket.main import get_event_emitter
         from open_webui.utils.auto_routing import process_auto_routing
 
         models = request.app.state.OPENAI_MODELS
@@ -1032,10 +1033,59 @@ async def generate_chat_completion(
             await get_all_models(request, user=user)
             models = request.app.state.OPENAI_MODELS
 
-        model_id, payload = await process_auto_routing(request, payload, user, available_models=models)
+        model_id, payload, routing_decision = await process_auto_routing(
+            request, payload, user, available_models=models
+        )
         log.info(f'Auto-routing selected model: {model_id}')
         payload['model'] = model_id
         form_data['model'] = model_id
+
+        CATEGORY_LABELS = {
+            'image_gen': 'Генерация изображения',
+            'audio_gen': 'Генерация аудио',
+            'code': 'Написание кода',
+            'vision': 'Анализ изображения',
+            'math_logic': 'Математика и логика',
+            'research': 'Исследование и анализ',
+            'analytics': 'Анализ данных',
+            'creative': 'Креативное письмо',
+            'document': 'Работа с документом',
+            'fallback': 'Текстовый ответ',
+        }
+
+        resolved_model = models.get(model_id, {})
+        model_display_name = resolved_model.get('name', model_id)
+        category_label = CATEGORY_LABELS.get(routing_decision.category, routing_decision.category)
+
+        if metadata and metadata.get('session_id') and metadata.get('chat_id') and metadata.get('message_id'):
+            try:
+                event_emitter = get_event_emitter(
+                    {
+                        'user_id': user.id,
+                        'chat_id': metadata['chat_id'],
+                        'message_id': metadata['message_id'],
+                        'session_id': metadata['session_id'],
+                    }
+                )
+                await event_emitter(
+                    {
+                        'type': 'status',
+                        'data': {
+                            'action': 'auto_routing',
+                            'description': f'{category_label} → {model_display_name}',
+                            'done': True,
+                            'routing': {
+                                'category': routing_decision.category,
+                                'model_id': model_id,
+                                'model_name': model_display_name,
+                                'method': routing_decision.method,
+                                'confidence': routing_decision.confidence,
+                            },
+                        },
+                    }
+                )
+            except Exception as e:
+                log.warning(f'Failed to emit auto-routing status: {e}')
 
     model_info = Models.get_model_by_id(model_id)
 
@@ -1136,11 +1186,25 @@ async def generate_chat_completion(
     if 'max_tokens' in payload and 'max_completion_tokens' in payload:
         del payload['max_tokens']
 
-    # Disable streaming for models that return massive chunks (images/audio) to avoid Chunk too big errors.
-    # We save this flag BEFORE json.dumps so we can check it later when the provider
-    # still responds with text/event-stream despite stream=False.
+    # Disable streaming for media generation models that return massive chunks
+    # (image/audio) to avoid chunk too big errors and hangs on endless SSE.
+    # We save this flag BEFORE json.dumps so we can check it later when the
+    # provider still responds with text/event-stream despite stream=False.
     stream_explicitly_disabled = False
-    if 'model' in payload and ('flux' in payload['model'].lower() or 'lyria' in payload['model'].lower()):
+    media_generation_keywords = (
+        'flux',
+        'lyria',
+        'gpt-image',
+        'gpt-5-image',
+        'dall-e',
+        'imagen',
+        '-image',
+        'image-preview',
+        'qwen-image',
+        'sd3',
+        'sdxl',
+    )
+    if 'model' in payload and any(keyword in payload['model'].lower() for keyword in media_generation_keywords):
         payload['stream'] = False
         stream_explicitly_disabled = True
 
@@ -1207,7 +1271,7 @@ async def generate_chat_completion(
 
         # Check if response is SSE
         if 'text/event-stream' in r.headers.get('Content-Type', ''):
-            # Image/audio models (flux, lyria) send a massive base64 SSE event even
+            # Media generation models send a massive base64 SSE event even
             # when stream=False was requested.  We MUST NOT use r.text() / r.json()
             # here because those wait for EOF — SSE servers often keep the connection
             # open indefinitely, causing multi-minute hangs.

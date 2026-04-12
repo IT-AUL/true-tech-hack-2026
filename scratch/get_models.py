@@ -3,8 +3,8 @@ import os
 
 import requests
 
-base_url = os.getenv('OPENAI_API_BASE_URL')
-api_key = os.getenv('OPENAI_API_KEY')
+base_url = os.environ.get('OPENAI_API_BASE_URL')
+api_key = os.environ.get('OPENAI_API_KEY')
 
 if not base_url:
     raise RuntimeError('OPENAI_API_BASE_URL is required')

@@ -1602,9 +1602,41 @@
 		}
 
 		if (choices) {
-			if (choices[0]?.message?.content) {
+			const assistantMessage = choices[0]?.message;
+			const generatedImages = assistantMessage?.images ?? [];
+			if (generatedImages.length > 0) {
+				const generatedImageFiles = generatedImages
+					.map((image, idx) => {
+						const imageUrl = image?.image_url?.url ?? image?.url;
+						if (!imageUrl) {
+							return null;
+						}
+
+						const mimeType = imageUrl.startsWith('data:image/')
+							? imageUrl.slice('data:'.length, imageUrl.indexOf(';'))
+							: 'image/png';
+
+						return {
+							type: 'image',
+							url: imageUrl,
+							content_type: mimeType,
+							name: `generated-image-${idx + 1}`
+						};
+					})
+					.filter(Boolean);
+
+				if (generatedImageFiles.length > 0) {
+					message.files = [...(message.files ?? []), ...generatedImageFiles];
+				}
+			}
+
+			if (assistantMessage?.content) {
 				// Non-stream response
-				message.content += choices[0]?.message?.content;
+				message.content += assistantMessage.content;
+			} else if (generatedImages.length > 0 && message.content === '') {
+				// Keep the response from rendering as a pending skeleton when the
+				// provider returned only generated images without text content.
+				message.content = ' ';
 			} else {
 				// Stream response
 				let value = choices[0]?.delta?.content ?? '';
@@ -2322,12 +2354,15 @@
 		if (res) {
 			if (res.error) {
 				await handleOpenAIError(res.error, responseMessage);
-			} else {
+			} else if (res.task_id) {
 				if (taskIds) {
 					taskIds.push(res.task_id);
 				} else {
 					taskIds = [res.task_id];
 				}
+			} else {
+				await chatCompletionEventHandler({ ...res, done: true }, responseMessage, _chatId);
+				await processNextInQueue(_chatId);
 			}
 		}
 

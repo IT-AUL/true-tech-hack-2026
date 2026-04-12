@@ -502,6 +502,14 @@
 				);
 			}
 
+			if (tab.id === 'audio') {
+				return $user?.role === 'admin';
+			}
+
+			if (tab.id === 'data_controls') {
+				return $user?.role === 'admin';
+			}
+
 			return true;
 		});
 	};

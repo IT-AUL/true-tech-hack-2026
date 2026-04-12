@@ -105,100 +105,11 @@
 					}}
 				/>
 			{:else}
-				<div class="flex flex-row justify-center gap-3 @sm:gap-3.5 w-fit px-5 max-w-xl">
-					<div class="flex shrink-0 justify-center">
-						<div class="flex -space-x-4 mb-0.5" in:fade={{ duration: 100 }}>
-							{#each models as model, modelIdx}
-								<Tooltip
-									content={(models[modelIdx]?.info?.meta?.tags ?? [])
-										.map((tag) => tag.name.toUpperCase())
-										.join(', ')}
-									placement="top"
-								>
-									<button
-										aria-hidden={models.length <= 1}
-										aria-label={$i18n.t('Get information on {{name}} in the UI', {
-											name: models[modelIdx]?.name
-										})}
-										on:click={() => {
-											selectedModelIdx = modelIdx;
-										}}
-									>
-										<img
-											src={`${WEBUI_API_BASE_URL}/models/model/profile/image?id=${model?.id}&lang=${$i18n.language}`}
-											class=" size-9 @sm:size-10 rounded-full border-[1px] border-gray-100 dark:border-none"
-											aria-hidden="true"
-											draggable="false"
-											on:error={(e) => {
-												e.currentTarget.src = '/favicon.png';
-											}}
-										/>
-									</button>
-								</Tooltip>
-							{/each}
-						</div>
-					</div>
-
+				<div class="flex flex-col items-center gap-1" in:fade={{ duration: 200 }}>
 					<div
-						class=" text-3xl @sm:text-3xl line-clamp-1 flex items-center"
-						in:fade={{ duration: 100 }}
+						class="text-2xl @sm:text-3xl font-medium tracking-tight text-gray-900 dark:text-white"
 					>
-						{#if models[selectedModelIdx]?.name}
-							<Tooltip
-								content={models[selectedModelIdx]?.name}
-								placement="top"
-								className=" flex items-center "
-							>
-								<span class="line-clamp-1">
-									{models[selectedModelIdx]?.name}
-								</span>
-							</Tooltip>
-						{:else}
-							{$i18n.t('Hello, {{name}}', { name: $user?.name })}
-						{/if}
-					</div>
-				</div>
-
-				<div class="flex mt-1 mb-2">
-					<div in:fade={{ duration: 100, delay: 50 }}>
-						{#if models[selectedModelIdx]?.info?.meta?.description ?? null}
-							<Tooltip
-								className=" w-fit"
-								content={marked.parse(
-									sanitizeResponseContent(
-										models[selectedModelIdx]?.info?.meta?.description ?? ''
-									).replaceAll('\n', '<br>')
-								)}
-								placement="top"
-							>
-								<div
-									class="mt-0.5 px-2 text-sm font-normal text-gray-500 dark:text-gray-400 line-clamp-2 max-w-xl markdown"
-								>
-									{@html marked.parse(
-										sanitizeResponseContent(
-											models[selectedModelIdx]?.info?.meta?.description ?? ''
-										).replaceAll('\n', '<br>')
-									)}
-								</div>
-							</Tooltip>
-
-							{#if models[selectedModelIdx]?.info?.meta?.user}
-								<div class="mt-0.5 text-sm font-normal text-gray-400 dark:text-gray-500">
-									By
-									{#if models[selectedModelIdx]?.info?.meta?.user.community}
-										<a
-											href="https://openwebui.com/m/{models[selectedModelIdx]?.info?.meta?.user
-												.username}"
-											>{models[selectedModelIdx]?.info?.meta?.user.name
-												? models[selectedModelIdx]?.info?.meta?.user.name
-												: `@${models[selectedModelIdx]?.info?.meta?.user.username}`}</a
-										>
-									{:else}
-										{models[selectedModelIdx]?.info?.meta?.user.name}
-									{/if}
-								</div>
-							{/if}
-						{/if}
+						{$i18n.t('How can I help you?')}
 					</div>
 				</div>
 			{/if}
@@ -223,7 +134,7 @@
 					{toolServers}
 					{stopResponse}
 					{createMessagePair}
-					placeholder={$i18n.t('How can I help you today?')}
+					placeholder={$i18n.t('Ask anything, paste a link, or drop a file...')}
 					{onChange}
 					{onUpload}
 					on:submit={(e) => {
@@ -242,16 +153,32 @@
 			<FolderPlaceholder folder={$selectedFolder} />
 		</div>
 	{:else}
-		<div class="mx-auto max-w-2xl font-primary mt-2" in:fade={{ duration: 200, delay: 200 }}>
-			<div class="mx-5">
-				<Suggestions
-					suggestionPrompts={atSelectedModel?.info?.meta?.suggestion_prompts ??
-						models[selectedModelIdx]?.info?.meta?.suggestion_prompts ??
-						$config?.default_prompt_suggestions ??
-						[]}
-					inputValue={prompt}
-					{onSelect}
-				/>
+		<div class="mx-auto max-w-xl font-primary mt-1" in:fade={{ duration: 300, delay: 150 }}>
+			<div class="flex flex-wrap justify-center gap-2 px-4">
+				{#each [{ text: 'Summarize this article', icon: '📝' }, { text: 'Generate an image of ', icon: '🎨' }, { text: 'Explain how ', icon: '💡' }, { text: 'Write code for ', icon: '⌨️' }, { text: 'Translate to English: ', icon: '🌐' }, { text: 'Analyze this data ', icon: '📊' }] as chip, idx}
+					<button
+						class="inline-flex items-center gap-1.5 px-3.5 py-2 text-[13px] rounded-full
+							border border-gray-200/80 dark:border-gray-700/60
+							text-gray-600 dark:text-gray-400
+							hover:border-gray-300 dark:hover:border-gray-600
+							hover:text-gray-900 dark:hover:text-gray-200
+							hover:bg-gray-50/80 dark:hover:bg-gray-800/50
+							active:scale-[0.97]
+							transition-all duration-150 cursor-pointer select-none"
+						style="animation: chipFadeIn 0.3s ease both; animation-delay: {idx * 60}ms"
+						on:click={() => {
+							messageInput?.setText(chip.text);
+						}}
+					>
+						<span class="text-sm leading-none">{chip.icon}</span>
+						<span>{chip.text}</span>
+					</button>
+				{/each}
+			</div>
+			<div class="text-center mt-4">
+				<span class="text-xs text-gray-400/70 dark:text-gray-600">
+					{$i18n.t('AI will select the best model automatically')}
+				</span>
 			</div>
 		</div>
 	{/if}
