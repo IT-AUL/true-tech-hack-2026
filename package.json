@@ -1,6 +1,6 @@
 {
 	"name": "open-webui",
-	"version": "0.8.12-gpthub.3",
+	"version": "0.8.12-gpthub.4",
 	"private": true,
 	"gpthub": {
 		"forkName": "GPTHub",
