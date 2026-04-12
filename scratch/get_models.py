@@ -3,15 +3,21 @@ import os
 
 import requests
 
-url = os.environ.get('ROUTERAI_API_URL', 'https://routerai.ru/api/v1') + '/models'
-api_key = os.environ.get('ROUTERAI_API_KEY', '')
+# Try multiple env var names to stay compatible with different dev setups
+base_url = (
+    os.environ.get('ROUTERAI_API_URL')
+    or os.environ.get('OPENAI_API_BASE_URL')
+    or 'https://routerai.ru/api/v1'
+)
+api_key = os.environ.get('ROUTERAI_API_KEY') or os.environ.get('OPENAI_API_KEY')
 
 if not api_key:
-    raise OSError(
-        'ROUTERAI_API_KEY environment variable is not set. '
-        'Please export it before running this script.'
+    raise EnvironmentError(
+        'Neither ROUTERAI_API_KEY nor OPENAI_API_KEY environment variable is set. '
+        'Please export one of them before running this script.'
     )
 
+url = f'{base_url.rstrip("/")}/models'
 headers = {'Authorization': f'Bearer {api_key}'}
 
 try:

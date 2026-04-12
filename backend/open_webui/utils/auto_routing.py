@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import re
+from collections.abc import Mapping
 from typing import Any
 
 import httpx
@@ -13,30 +14,47 @@ log = logging.getLogger(__name__)
 _ROUTING_CACHE: dict[str, str] = {}
 
 # ---------------------------------------------------------------------------
-# Model mapping — top-ranked models per category based on user spec
+# Routing Preferences (Dynamic Model Resolution)
 # ---------------------------------------------------------------------------
-MODELS = {
-    'image_gen': 'black-forest-labs/flux.2-max',
-    'audio_gen': 'google/lyria-3-pro-preview',
-    'vision': 'google/gemini-3.1-flash-lite-preview',
-    'code': 'qwen/qwen3.6-plus',
-    'research': 'qwen/qwen3.6-plus',
-    'math_logic': 'qwen/qwen3.6-plus',
-    'analytics': 'qwen/qwen3.6-plus',
-    'creative': 'qwen/qwen3.6-plus',
-    'document': 'qwen/qwen3.6-plus',
-    'fallback': 'qwen/qwen3.6-plus',
+ROUTE_MODEL_PREFERENCES = {
+    'image_gen': ('flux', 'gpt-image', 'dall-e', 'imagen'),
+    'audio_gen': ('lyria', 'music', 'audio-gen'),
+    'vision': ('vision', 'gemini', 'vl', 'gpt-4o', 'claude', 'omni'),
+    'code': ('coder', 'code', 'devstral', 'deepseek-coder'),
+    'research': ('research',),
+    'math_logic': ('reason', 'math'),
+    'analytics': ('analyst', 'analytics'),
+    'creative': ('creative', 'writer'),
+    'document': ('document', 'pdf'),
+    'fallback': ('qwen', 'gpt', 'claude', 'llama', 'mistral', 'gemini'),
 }
 
+NON_TEXT_MODEL_KEYWORDS = (
+    'embedding',
+    'rerank',
+    'whisper',
+    'tts',
+    'transcribe',
+    'transcription',
+    'stt',
+    'asr',
+    'flux',
+    'lyria',
+    'image',
+    'audio',
+    'speech',
+    'moderation',
+)
+
 # ---------------------------------------------------------------------------
-# Reka AI settings (read from environment — no hardcodes)
+# Reka AI settings (used for intelligent classification)
 # ---------------------------------------------------------------------------
 REKA_API_KEY = os.environ.get('REKA_API_KEY') or os.environ.get('ROUTERAI_API_KEY', '')
 REKA_API_URL = os.environ.get('REKA_API_URL') or os.environ.get('ROUTERAI_API_URL', 'https://api.reka.ai/v1')
 REKA_ROUTER_MODEL = os.environ.get('REKA_ROUTER_MODEL', 'rekaai/reka-edge')
 
 # ---------------------------------------------------------------------------
-# Regex fallback patterns (used when the LLM router is unavailable)
+# Regex patterns (safety fallback for classification)
 # ---------------------------------------------------------------------------
 PATTERNS = {
     'image_gen': re.compile(
@@ -64,7 +82,7 @@ PATTERNS = {
 }
 
 # ---------------------------------------------------------------------------
-# LLM routing via reka-edge
+# LLM classification logic
 # ---------------------------------------------------------------------------
 
 _ROUTER_SYSTEM_PROMPT = """\
@@ -89,20 +107,14 @@ _ROUTER_SYSTEM_PROMPT = """\
 
 
 async def _classify_with_llm(text_content: str, has_image: bool) -> str | None:
-    """
-    Call reka-edge to classify the user intent.
-    Returns a category key (str) or None on failure.
-    """
     if not REKA_API_KEY:
         log.warning('REKA_API_KEY is not set — skipping LLM routing, using regex fallback.')
         return None
 
-    # Build a short context string for the router
     context_parts: list[str] = []
     if has_image:
         context_parts.append('[User attached an image]')
     if text_content:
-        # Truncate to avoid excessive token usage
         context_parts.append(text_content[:2000])
 
     user_message = '\n'.join(context_parts) or '(empty message)'
@@ -131,8 +143,6 @@ async def _classify_with_llm(text_content: str, has_image: bool) -> str | None:
             data = resp.json()
 
         raw = data['choices'][0]['message']['content'].strip()
-
-        # Robust JSON extraction: find the first { and last }
         match = re.search(r'(\{.*\})', raw, re.DOTALL)
         if match:
             raw = match.group(1)
@@ -140,7 +150,7 @@ async def _classify_with_llm(text_content: str, has_image: bool) -> str | None:
         result = json.loads(raw)
         category = result.get('category', 'fallback')
 
-        if category not in MODELS:
+        if category not in ROUTE_MODEL_PREFERENCES:
             log.warning('LLM returned unknown category %r — defaulting to fallback', category)
             return 'fallback'
 
@@ -152,13 +162,7 @@ async def _classify_with_llm(text_content: str, has_image: bool) -> str | None:
         return None
 
 
-# ---------------------------------------------------------------------------
-# Regex-based fallback classifier (kept as safety net)
-# ---------------------------------------------------------------------------
-
-
 def _classify_with_regex(text_content: str, has_image: bool) -> str:
-    """Classify intent using regex patterns. Returns a MODELS key."""
     if PATTERNS['image_gen'].search(text_content):
         return 'image_gen'
     if PATTERNS['audio_gen'].search(text_content):
@@ -181,23 +185,75 @@ def _classify_with_regex(text_content: str, has_image: bool) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Helper functions for dynamic model matching
+# ---------------------------------------------------------------------------
+
+
+def _get_available_model_list(available_models: Any) -> list[dict[str, Any]]:
+    if isinstance(available_models, Mapping):
+        return [model for model in available_models.values() if isinstance(model, dict)]
+    if isinstance(available_models, list):
+        return [model for model in available_models if isinstance(model, dict)]
+    return []
+
+
+def _get_model_search_text(model: dict[str, Any]) -> str:
+    parts = [
+        model.get('id', ''),
+        model.get('name', ''),
+        model.get('owned_by', ''),
+        model.get('openai', {}).get('id', '') if isinstance(model.get('openai'), dict) else '',
+    ]
+    return ' '.join(part for part in parts if part).lower()
+
+
+def _match_preferred_model(route: str, available_models: list[dict[str, Any]]) -> str | None:
+    for keyword in ROUTE_MODEL_PREFERENCES.get(route, ()):
+        for model in available_models:
+            model_id = model.get('id')
+            if not model_id or model_id == 'auto':
+                continue
+            if keyword in _get_model_search_text(model):
+                return model_id
+    return None
+
+
+def _resolve_text_fallback(available_models: list[dict[str, Any]]) -> str | None:
+    preferred_fallback = _match_preferred_model('fallback', available_models)
+    if preferred_fallback:
+        return preferred_fallback
+    for model in available_models:
+        model_id = model.get('id')
+        if not model_id or model_id == 'auto':
+            continue
+        search_text = _get_model_search_text(model)
+        if not any(keyword in search_text for keyword in NON_TEXT_MODEL_KEYWORDS):
+            return model_id
+    return None
+
+
+def resolve_model_for_route(route: str, available_models: Any) -> tuple[str | None, bool]:
+    model_list = _get_available_model_list(available_models)
+    matched_model = _match_preferred_model(route, model_list)
+    if matched_model:
+        return matched_model, False
+    return _resolve_text_fallback(model_list), True
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
 
-async def get_auto_routed_model(payload: dict[str, Any]) -> str:
+async def get_auto_routed_route(payload: dict[str, Any]) -> str:
     """
-    Analyzes the payload (messages) to determine the best model based on intent
-    and content.  Uses reka-edge via the Reka AI API as the primary classifier;
-    falls back to regex patterns if the LLM call is unavailable or fails.
-    Returns the model ID string.
+    Analyzes the payload to determine the best route category.
+    Uses LLM classification with caching and regex fallback.
     """
     messages = payload.get('messages', [])
     if not messages:
-        return MODELS['fallback']
+        return 'fallback'
 
-    # Generate a cache key based on the conversation history
-    # This prevents multiple calls for title generation, etc.
     try:
         history_str = json.dumps(messages, sort_keys=True)
         cache_key = hashlib.md5(history_str.encode()).hexdigest()
@@ -209,7 +265,7 @@ async def get_auto_routed_model(payload: dict[str, Any]) -> str:
 
     last_user_message = next((msg for msg in reversed(messages) if msg.get('role') == 'user'), None)
     if not last_user_message:
-        return MODELS['fallback']
+        return 'fallback'
 
     content = last_user_message.get('content', '')
     has_image = False
@@ -225,33 +281,34 @@ async def get_auto_routed_model(payload: dict[str, Any]) -> str:
                 elif part.get('type') in ('image_url', 'input_image'):
                     has_image = True
 
-    # --- Primary: LLM router (reka-edge) ---
+    # --- Step 1: LLM classification ---
     category = await _classify_with_llm(text_content, has_image)
     method = 'LLM'
 
-    # --- Fallback: regex classifier ---
+    # --- Step 2: Fallback to Regex ---
     if category is None:
         category = _classify_with_regex(text_content, has_image)
         method = 'Regex (Fallback)'
 
-    model_id = MODELS.get(category, MODELS['fallback'])
-    log.info(f"--- AUTO-ROUTING: Selected category '{category}' using {method} ---")
+    log.info('--- AUTO-ROUTING: Detected route "%s" using %s ---', category, method)
 
-    # Store in cache
     if cache_key:
-        _ROUTING_CACHE[cache_key] = model_id
-        # Optional: simple cache cleanup if it grows too large
+        _ROUTING_CACHE[cache_key] = category
         if len(_ROUTING_CACHE) > 1000:
             _ROUTING_CACHE.clear()
 
-    return model_id
+    return category
 
 
-async def process_auto_routing(request, payload: dict[str, Any], user) -> tuple[str, dict[str, Any]]:
+async def process_auto_routing(
+    request,
+    payload: dict[str, Any],
+    user,
+    available_models: Any | None = None,
+) -> tuple[str, dict[str, Any]]:
     """
-    Processes the payload to extract files, audio, and images for automatic
-    injection into messages.  Returns the selected model ID and the modified
-    payload.
+    Main entry point for auto-routing. Resolves intent into a specific model ID
+    available in the current instance's model catalog.
     """
     from open_webui.models.files import Files
     from open_webui.routers.audio import transcribe
@@ -260,32 +317,23 @@ async def process_auto_routing(request, payload: dict[str, Any], user) -> tuple[
 
     messages = payload.get('messages', [])
     if not messages:
-        return MODELS['fallback'], payload
+        model_id, used_fallback = resolve_model_for_route('fallback', available_models)
+        return model_id or 'fallback', payload
 
     has_vision = False
-
     for msg in messages:
         if msg.get('role') != 'user':
             continue
-
-        files = []
-        if 'files' in msg:
-            files.extend(msg['files'])
-
+        files = msg.get('files', [])
         if 'metadata' in payload and isinstance(payload['metadata'], dict):
-            metadata_files = payload['metadata'].get('files', [])
-            if metadata_files:
-                files.extend(metadata_files)
+            files.extend(payload['metadata'].get('files', []))
 
-        file_ids = [f.get('id') or f.get('file_id') for f in files if isinstance(f, dict)]
-
+        file_ids = list(set([f.get('id') or f.get('file_id') for f in files if isinstance(f, dict)]))
         content = msg.get('content', '')
         if isinstance(content, list):
             for part in content:
                 if part.get('type') == 'file' and 'file_id' in part:
                     file_ids.append(part['file_id'])
-
-        file_ids = list(set([fid for fid in file_ids if fid]))
 
         if not file_ids:
             continue
@@ -298,13 +346,11 @@ async def process_auto_routing(request, payload: dict[str, Any], user) -> tuple[
             file_item = Files.get_file_by_id(file_id)
             if not file_item:
                 continue
-
             content_type = file_item.meta.get('content_type', '')
-
             if content_type.startswith('image/'):
-                has_vision = True
                 b64 = get_image_base64_from_file_id(file_id)
                 if b64:
+                    has_vision = True
                     content.append({'type': 'image_url', 'image_url': {'url': f'data:{content_type};base64,{b64}'}})
             elif content_type.startswith('audio/') or content_type.startswith('video/'):
                 cached_text = file_item.data.get('content', '') if file_item.data else ''
@@ -323,19 +369,25 @@ async def process_auto_routing(request, payload: dict[str, Any], user) -> tuple[
                                 {'type': 'text', 'text': f'\\n[Audio Transcription: {transcription_text}]\\n'}
                             )
                     except Exception as e:
-                        log.error('Error transcribing auto-routing audio %s: %s', file_id, e)
+                        log.error('Error transcribing audio: %s', e)
             else:
                 text_content = file_item.data.get('content', '') if file_item.data else ''
                 if text_content:
                     content.append(
-                        {
-                            'type': 'text',
-                            'text': f'\\n[File Content ({file_item.filename}):\\n{text_content}]\\n',
-                        }
+                        {'type': 'text', 'text': f'\\n[File Content ({file_item.filename}):\\n{text_content}]\\n'}
                     )
 
-    model_id = await get_auto_routed_model(payload)
-    if has_vision and model_id != MODELS['image_gen']:
-        model_id = MODELS['vision']
+    route = await get_auto_routed_route(payload)
+    if has_vision and route != 'image_gen':
+        route = 'vision'
 
+    if available_models is None:
+        available_models = getattr(getattr(request, 'app', None), 'state', None)
+        available_models = getattr(available_models, 'OPENAI_MODELS', None)
+
+    model_id, used_fallback = resolve_model_for_route(route, available_models)
+    if not model_id:
+        raise ValueError(f'Could not resolve model for route {route}')
+
+    log.info('Auto-routing resolved route=%s -> model=%s (fallback=%s)', route, model_id, used_fallback)
     return model_id, payload
