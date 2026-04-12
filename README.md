@@ -1,10 +1,10 @@
 # GPTHub — Единое ИИ-пространство
 
-[![pipeline](https://git.truetecharena.ru/tta/true-tech-hack-in2026-gpthub-git/it-aul-misisxcuxkfu/task-repo/badges/develop/pipeline.svg)](https://git.truetecharena.ru/tta/true-tech-hack-in2026-gpthub-git/it-aul-misisxcuxkfu/task-repo/-/pipelines)
-[![release](https://img.shields.io/static/v1?label=release&message=0.9.0-gpthub.1&color=blue)](https://git.truetecharena.ru/tta/true-tech-hack-in2026-gpthub-git/it-aul-misisxcuxkfu/task-repo/-/tags)
+[![CI](https://github.com/IT-AUL/true-tech-hack-2026/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/IT-AUL/true-tech-hack-2026/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/IT-AUL/true-tech-hack-2026?label=release&color=blue)](https://github.com/IT-AUL/true-tech-hack-2026/releases/latest)
 [![upstream](https://img.shields.io/static/v1?label=upstream&message=Open%20WebUI%200.9.0&color=8A2BE2&logo=github)](https://github.com/open-webui/open-webui)
 [![license](https://img.shields.io/badge/license-BSD--3--Clause-green.svg)](LICENSE)
-[![docker](https://img.shields.io/badge/docker-ready-2496ED.svg?logo=docker&logoColor=white)](#быстрый-старт)
+[![Docker Hub](https://img.shields.io/docker/pulls/gpthub/gpthub?logo=docker&logoColor=white)](https://hub.docker.com/r/gpthub/gpthub)
 [![self-hosted](https://img.shields.io/badge/self--hosted-supported-success.svg)](#деплой-для-компаний-self-hosted)
 
 [![SvelteKit](https://img.shields.io/badge/SvelteKit-2-FF3E00.svg?logo=svelte&logoColor=white)](https://kit.svelte.dev/)
@@ -108,7 +108,7 @@ docker compose -f docker-compose.prod.yml up -d
 npm run release   # интерактивный выбор версии → коммит → тег → пуш
 ```
 
-При пуше тега CI собирает Docker-образ и создаёт GitLab Release.
+При пуше тега CI собирает Docker-образ и публикует его на [Docker Hub](https://hub.docker.com/r/gpthub/gpthub) и [GHCR](https://github.com/IT-AUL/true-tech-hack-2026/pkgs/container/true-tech-hack-2026), а также создаёт [GitHub Release](https://github.com/IT-AUL/true-tech-hack-2026/releases) с changelog.
 
 ## Структура проекта
 

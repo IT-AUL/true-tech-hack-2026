@@ -83,27 +83,62 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "ghcr_image=${GHCR_IMAGE}" >> $GITHUB_OUTPUT
           echo "dh_image=${DH_IMAGE}" >> $GITHUB_OUTPUT
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          # Extract upstream base version (e.g. 0.9.0 from 0.9.0-gpthub.1)
+          BASE="${VERSION%%-*}"
+
+          # Find the section for this upstream base in CHANGELOG.md
+          NOTES=$(awk "/^## \[${BASE}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md | head -100)
+
+          if [ -z "$NOTES" ]; then
+            NOTES="See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for full history."
+          fi
+
+          # Save multiline to output
+          {
+            echo "notes<<CHANGELOG_EOF"
+            echo "$NOTES"
+            echo "CHANGELOG_EOF"
+          } >> $GITHUB_OUTPUT
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: GPTHub ${{ steps.version.outputs.version }}
+          name: "🚀 GPTHub ${{ steps.version.outputs.version }}"
           body: |
-            ## GPTHub ${{ steps.version.outputs.version }}
+            ## 🚀 GPTHub ${{ steps.version.outputs.version }}
+
+            > Форк [Open WebUI](https://github.com/open-webui/open-webui) с интеллектуальной маршрутизацией моделей и долгосрочной памятью.
+
+            ---
+
+            ### 📦 Установка
 
             | Реестр | Команда |
             |--------|---------|
             | **Docker Hub** | `docker pull ${{ steps.version.outputs.dh_image }}:${{ steps.version.outputs.version }}` |
             | **GHCR** | `docker pull ${{ steps.version.outputs.ghcr_image }}:${{ steps.version.outputs.version }}` |
 
-            ### Быстрый запуск
-
+            **Быстрый запуск:**
             ```bash
             docker run -d -p 3000:8080 \
               -e OPENAI_API_KEY=your-key \
               -v gpthub_data:/app/backend/data \
               ${{ steps.version.outputs.dh_image }}:${{ steps.version.outputs.version }}
             ```
+            Открой → http://localhost:3000
 
-            Затем открой http://localhost:3000
-          generate_release_notes: true
+            ---
+
+            ### 📋 Что изменилось в этой версии (upstream)
+
+            ${{ steps.changelog.outputs.notes }}
+
+            ---
+
+            📖 Полный журнал изменений: [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)
+          generate_release_notes: false
