@@ -311,8 +311,6 @@ async def process_auto_routing(
     available in the current instance's model catalog.
     """
     from open_webui.models.files import Files
-    from open_webui.routers.audio import transcribe
-    from open_webui.storage.provider import Storage
     from open_webui.utils.files import get_image_base64_from_file_id
 
     messages = payload.get('messages', [])
@@ -352,24 +350,6 @@ async def process_auto_routing(
                 if b64:
                     has_vision = True
                     content.append({'type': 'image_url', 'image_url': {'url': f'data:{content_type};base64,{b64}'}})
-            elif content_type.startswith('audio/') or content_type.startswith('video/'):
-                cached_text = file_item.data.get('content', '') if file_item.data else ''
-                if cached_text:
-                    content.append({'type': 'text', 'text': f'\\n[Audio Transcription: {cached_text}]\\n'})
-                else:
-                    try:
-                        file_path = Storage.get_file(file_item.path)
-                        res = transcribe(request, file_path, None, user)
-                        transcription_text = res.get('text', '')
-                        if transcription_text:
-                            file_data = file_item.data or {}
-                            file_data['content'] = transcription_text
-                            Files.update_file_data_by_id(file_id, file_data)
-                            content.append(
-                                {'type': 'text', 'text': f'\\n[Audio Transcription: {transcription_text}]\\n'}
-                            )
-                    except Exception as e:
-                        log.error('Error transcribing audio: %s', e)
             else:
                 text_content = file_item.data.get('content', '') if file_item.data else ''
                 if text_content:
