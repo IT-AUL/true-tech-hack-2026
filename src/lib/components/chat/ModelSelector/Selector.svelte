@@ -158,7 +158,13 @@
 							return item.model?.direct;
 						}
 					})
-	).filter((item) => !(item.model?.info?.meta?.hidden ?? false));
+	)
+		.filter((item) => !(item.model?.info?.meta?.hidden ?? false))
+		.sort((a, b) => {
+			if (a.value === 'auto') return -1;
+			if (b.value === 'auto') return 1;
+			return 0;
+		});
 
 	$: if (
 		selectedTag !== undefined ||
@@ -428,7 +434,12 @@
 			}}
 		>
 			{#if selectedModel}
-				{selectedModel.label}
+				<span class="flex items-center gap-1">
+					{#if value === 'auto'}
+						<span class="text-base leading-none">✨</span>
+					{/if}
+					{selectedModel.label}
+				</span>
 			{:else}
 				{placeholder}
 			{/if}
@@ -513,7 +524,7 @@
 												class="flex gap-1 w-fit text-center text-sm rounded-full bg-transparent px-1.5 whitespace-nowrap"
 												bind:this={tagsContainerElement}
 											>
-												{#if items.find((item) => item.model?.connection_type === 'local') || items.find((item) => item.model?.connection_type === 'external') || items.find((item) => item.model?.direct) || tags.length > 0}
+												{#if tags.length > 0}
 													<button
 														class="min-w-fit outline-none px-1.5 py-0.5 {selectedTag === '' &&
 														selectedConnectionType === ''
@@ -526,54 +537,6 @@
 														}}
 													>
 														{$i18n.t('All')}
-													</button>
-												{/if}
-
-												{#if items.find((item) => item.model?.connection_type === 'local')}
-													<button
-														class="min-w-fit outline-none px-1.5 py-0.5 {selectedConnectionType ===
-														'local'
-															? ''
-															: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition capitalize"
-														aria-pressed={selectedConnectionType === 'local'}
-														on:click={() => {
-															selectedTag = '';
-															selectedConnectionType = 'local';
-														}}
-													>
-														{$i18n.t('Local')}
-													</button>
-												{/if}
-
-												{#if items.find((item) => item.model?.connection_type === 'external')}
-													<button
-														class="min-w-fit outline-none px-1.5 py-0.5 {selectedConnectionType ===
-														'external'
-															? ''
-															: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition capitalize"
-														aria-pressed={selectedConnectionType === 'external'}
-														on:click={() => {
-															selectedTag = '';
-															selectedConnectionType = 'external';
-														}}
-													>
-														{$i18n.t('External')}
-													</button>
-												{/if}
-
-												{#if items.find((item) => item.model?.direct)}
-													<button
-														class="min-w-fit outline-none px-1.5 py-0.5 {selectedConnectionType ===
-														'direct'
-															? ''
-															: 'text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'} transition capitalize"
-														aria-pressed={selectedConnectionType === 'direct'}
-														on:click={() => {
-															selectedTag = '';
-															selectedConnectionType = 'direct';
-														}}
-													>
-														{$i18n.t('Direct')}
 													</button>
 												{/if}
 
@@ -658,7 +621,7 @@
 										</div>
 									{/if}
 
-									{#if !(searchValue.trim() in $MODEL_DOWNLOAD_POOL) && searchValue && ollamaVersion && $user?.role === 'admin'}
+									{#if $config?.features?.enable_ollama_api !== false && !(searchValue.trim() in $MODEL_DOWNLOAD_POOL) && searchValue && ollamaVersion && $user?.role === 'admin'}
 										<Tooltip
 											content={$i18n.t(`Pull "{{searchValue}}" from Ollama.com`, {
 												searchValue: searchValue
@@ -680,7 +643,7 @@
 										</Tooltip>
 									{/if}
 
-									{#each Object.keys($MODEL_DOWNLOAD_POOL) as model}
+									{#each $config?.features?.enable_ollama_api !== false ? Object.keys($MODEL_DOWNLOAD_POOL) : [] as model}
 										<div
 											class="flex w-full justify-between font-medium select-none rounded-button py-2 pl-3 pr-1.5 text-sm text-gray-700 dark:text-gray-100 outline-hidden transition-all duration-75 rounded-xl cursor-pointer data-highlighted:bg-muted"
 										>
