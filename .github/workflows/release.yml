@@ -57,6 +57,7 @@ jobs:
 
       - name: Build and push to GHCR + Docker Hub
         uses: docker/build-push-action@v5
+        continue-on-error: true  # don't block release if registry push fails
         with:
           context: .
           push: true
@@ -72,7 +73,7 @@ jobs:
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: build-push
+    needs: verify   # independent from build-push — release is always created
     permissions:
       contents: write
     steps:

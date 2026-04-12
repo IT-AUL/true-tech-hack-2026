@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Секции ниже без суффикса (`[0.8.12]`) — upstream Open WebUI changelog.
 
 ---
+## [0.8.12-gpthub.2] - 2026-04-12
+
+### Fixed
+
+- 🔄 **GitLab sync via MR.** Синхронизация GitHub `main` → GitLab теперь создаёт Merge Request вместо прямого push в защищённую ветку.
+- 🏷️ **GHCR lowercase.** Исправлена ошибка `repository name must be lowercase` при пуше образа в `ghcr.io/IT-AUL/...`.
+- 🔐 **GHCR org packages:write.** Добавлен `packages: write` в GitHub Actions для публикации в организационный реестр пакетов.
+- 🌿 **CI branch naming.** `develop` и `main` исключены из проверки именования веток (они постоянные интеграционные ветки).
+- 📦 **Docker secrets warning.** Разделены sensitive ENV-переменные в Dockerfile для устранения предупреждений Hadolint.
+
+### Added
+
+- 🐳 **Docker Hub publish.** Образ публикуется на Docker Hub (`gpthub/gpthub`) при каждом релизном теге.
+- 📋 **Rich release notes.** GitHub Release автоматически подтягивает changelog из `CHANGELOG.md` для текущей версии.
+- 🔢 **Fork versioning fix.** Скрипт `npm run release` теперь разделяет fork-релизы (N++) и upstream-синки (смена базы).
+- 🔖 **Universal README badges.** Бейджи CI и release теперь работают как на GitHub, так и на GitLab; версия upstream отображается корректно.
+
 
 ## [0.8.12-gpthub.1] - 2026-04-12
 
