@@ -23,6 +23,9 @@ log = logging.getLogger(__name__)
 # belong to the one who first opened them, now and always.
 _CONNECTION_CACHE = {}
 
+# Backward-compatible alias used by the util test suite.
+MAX_RETRY_COUNT = REDIS_SENTINEL_MAX_RETRY_COUNT
+
 
 class SentinelRedisProxy:
     def __init__(self, sentinel, service, *, async_mode: bool = True, **kw):

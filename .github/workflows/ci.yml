@@ -98,6 +98,44 @@ jobs:
       - run: ruff check backend/
       - run: ruff format --check backend/
 
+  # ──────────────────────────────────────────────
+  # TEST
+  # ──────────────────────────────────────────────
+
+  test-frontend:
+    name: Test frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:frontend
+
+  test-backend:
+    name: Test backend
+    runs-on: ubuntu-latest
+    env:
+      OPENAI_API_BASE_URL: https://example.com/v1
+      OPENAI_API_KEY: test-key
+      AUDIO_STT_OPENAI_API_BASE_URL: https://example.com/v1
+      AUDIO_STT_OPENAI_API_KEY: test-key
+      RAG_OPENAI_API_BASE_URL: https://example.com/v1
+      RAG_OPENAI_API_KEY: test-key
+      WEBUI_SECRET_KEY: test-secret
+      PYTHONPATH: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install backend test dependencies
+        run: pip install -r backend/requirements.txt pytest pytest-asyncio
+      - name: Run backend unit tests
+        run: python -m pytest backend/open_webui/test/util
+
 
   # ──────────────────────────────────────────────
   # BUILD
@@ -107,7 +145,7 @@ jobs:
     name: Build Docker image
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
-    needs: [lint-frontend, lint-backend]
+    needs: [lint-frontend, lint-backend, test-frontend, test-backend]
     steps:
       - uses: actions/checkout@v4
       - name: Set up Docker Buildx

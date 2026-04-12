@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Секции ниже без суффикса (`[0.8.12]`) — upstream Open WebUI changelog.
 
 ---
+## [0.8.12-gpthub.10] - 2026-04-12
+
+### Added
+
+- 🤖 **Интеллектуальный авторутинг (`auto`).** В каталог моделей инжектируется виртуальная модель `Auto (Intelligent Routing)`, доступная прямо в UI.
+- 🧪 **CI unit tests.** В GitHub Actions добавлены отдельные jobs для frontend и backend тестов; Docker build теперь стартует только после успешных lint и test стадий.
+
+### Changed
+
+- 🧠 **Dynamic model resolution для auto-routing.** Авторутинг больше не опирается на захардкоженные model IDs: маршрут (`image_gen`, `vision`, `code`, `document`, `fallback` и др.) теперь резолвится по runtime-каталогу `OPENAI_MODELS` с предсказуемой fallback-цепочкой и логированием выбранного route/model.
+- 🔐 **ENV-first конфигурация провайдеров.** Из dev-compose и вспомогательных скриптов убран хардкод API URL/ключей; добавлены явные переменные в `.env.example` для main OpenAI-compatible provider, STT и RAG embeddings.
+- 🎛️ **UI для `auto` модели.** В селекторе моделей `auto` теперь отображается с отдельным бейджем `Intelligent` и fallback-иконкой.
+
+### Fixed
+
+- 🧩 **"Chunk too big" для image/audio SSE-моделей.** Для `flux` и `lyria` отключается stream-режим в payload, а ответ читается построчно до `data: [DONE]`, после чего возвращается обычный `JSONResponse` без поломанного chunk handling.
+- ⏳ **Зависание ответа на несколько минут.** Вместо `await r.json()` / `await r.text()`, которые ждут EOF у бесконечного SSE-соединения, используется асинхронная построчная итерация по `r.content`.
+- 🧪 **Redis util test compatibility.** В `backend/open_webui/utils/redis.py` добавлен backward-compatible alias `MAX_RETRY_COUNT`, а тесты приведены к реальному контракту `SentinelRedisProxy` для retry и factory methods.
+- 🛡️ **no-secrets hook на удалениях.** Хук проверки секретов теперь смотрит только на добавленные строки staged diff, поэтому удаление уже существующих ключей больше не блокирует commit.
+
 ## [0.8.12-gpthub.8] - 2026-04-12
 
 ### Fixed
