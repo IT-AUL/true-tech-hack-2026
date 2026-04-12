@@ -2801,7 +2801,7 @@ PDF_LOADER_MODE = PersistentConfig(
 RAG_EMBEDDING_MODEL = PersistentConfig(
     'RAG_EMBEDDING_MODEL',
     'rag.embedding_model',
-    os.environ.get('RAG_EMBEDDING_MODEL', 'qwen3-embedding-8b'),
+    os.environ.get('RAG_EMBEDDING_MODEL', 'bge-m3'),
 )
 log.info(f'Embedding model set: {RAG_EMBEDDING_MODEL.value}')
 
@@ -2816,7 +2816,7 @@ RAG_EMBEDDING_MODEL_TRUST_REMOTE_CODE = (
 RAG_EMBEDDING_BATCH_SIZE = PersistentConfig(
     'RAG_EMBEDDING_BATCH_SIZE',
     'rag.embedding_batch_size',
-    int(os.environ.get('RAG_EMBEDDING_BATCH_SIZE') or os.environ.get('RAG_EMBEDDING_OPENAI_BATCH_SIZE', '32')),
+    int(os.environ.get('RAG_EMBEDDING_BATCH_SIZE') or os.environ.get('RAG_EMBEDDING_OPENAI_BATCH_SIZE', '8')),
 )
 
 ENABLE_ASYNC_EMBEDDING = PersistentConfig(
@@ -2828,7 +2828,7 @@ ENABLE_ASYNC_EMBEDDING = PersistentConfig(
 RAG_EMBEDDING_CONCURRENT_REQUESTS = PersistentConfig(
     'RAG_EMBEDDING_CONCURRENT_REQUESTS',
     'rag.embedding_concurrent_requests',
-    int(os.getenv('RAG_EMBEDDING_CONCURRENT_REQUESTS', '2')),
+    int(os.getenv('RAG_EMBEDDING_CONCURRENT_REQUESTS', '1')),
 )
 
 RAG_EMBEDDING_QUERY_PREFIX = os.environ.get('RAG_EMBEDDING_QUERY_PREFIX', None)
