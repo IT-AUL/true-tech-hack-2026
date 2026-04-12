@@ -65,6 +65,17 @@ async function main() {
 		console.log(`  Upstream (база):  ${dim(`Open WebUI ${pkg.gpthub.upstreamVersion}`)}`);
 	}
 	console.log('');
+	console.log(yellow('  ⚠️  Перед релизом убедись, что CHANGELOG.md обновлён!'));
+	console.log(dim('     Добавь секцию ## [<новая-версия>] - <дата> с описанием изменений.'));
+	console.log(dim('     GitHub Release автоматически подтянет её текст.'));
+	console.log('');
+	const clOk = await ask('  CHANGELOG.md обновлён? [Y/n]: ');
+	if (clOk && clOk.toLowerCase() !== 'y' && clOk !== '') {
+		console.log(yellow('\n  Открой CHANGELOG.md, добавь запись и запусти скрипт снова.'));
+		rl.close();
+		process.exit(0);
+	}
+	console.log('');
 
 	const suggestions = [];
 	if (parsed) {

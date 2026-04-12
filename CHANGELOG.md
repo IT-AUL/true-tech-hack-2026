@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+---
+
+> Версии вида `X.Y.Z-gpthub.N` — релизы форка GPTHub на базе Open WebUI `X.Y.Z`.
+> Секции ниже без суффикса (`[0.8.12]`) — upstream Open WebUI changelog.
+
+---
+
+## [0.8.12-gpthub.1] - 2026-04-12
+
+### Added
+
+- 🚀 **CI/CD pipeline.** Настроен полный GitHub Actions pipeline: линтинг (ESLint, Ruff), сборка Docker-образа, публикация на Docker Hub и GHCR, создание GitHub Release с автоматическим changelog.
+- 🔄 **GitLab sync.** Автоматическая синхронизация `main` → GitLab через Merge Request (не прямым push в защищённую ветку).
+- 📦 **Docker Hub publish.** Образ форка публикуется на Docker Hub при каждом релизном теге.
+- 🪝 **Pre-commit хуки.** Автоматическая установка через `npm install` (скрипт `prepare`). Проверки: whitespace, YAML, большие файлы, конфликты, branch naming, ruff, ESLint, секреты, debug-следы.
+- 📋 **Версионирование.** Интерактивный скрипт `npm run release` с разделением fork-релизов и upstream-синков.
+
+### Fixed
+
+- 🐳 **Docker OOM.** Включён `NODE_OPTIONS="--max-old-space-size=4096"` для сборки фронтенда в Docker.
+- 🏷️ **GHCR lowercase.** Исправлена ошибка `repository name must be lowercase` при пуше образа в ghcr.io.
+- 🔐 **GHCR org permissions.** Добавлен `packages: write` в GitHub Actions для пуша в организационный реестр.
+
 ## [0.8.12] - 2026-03-26
 
 ### Added
