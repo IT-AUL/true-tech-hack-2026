@@ -36,7 +36,6 @@ import time
 from decimal import Decimal
 from typing import Any
 
-import oracledb
 from open_webui.config import (
     ORACLE_DB_DSN,
     ORACLE_DB_PASSWORD,
@@ -103,6 +102,8 @@ class Oracle23aiClient(VectorDBBase):
             raise
 
     def _create_adb_pool(self) -> None:
+        import oracledb
+
         """
         Create connection pool for Oracle Autonomous Database.
 
@@ -122,6 +123,8 @@ class Oracle23aiClient(VectorDBBase):
         log.info('Created ADB connection pool with wallet authentication.')
 
     def _create_dbcs_pool(self) -> None:
+        import oracledb
+
         """
         Create connection pool for Oracle Database Cloud Service.
 
@@ -150,9 +153,12 @@ class Oracle23aiClient(VectorDBBase):
                 connection = self.pool.acquire()
                 connection.outputtypehandler = self._output_type_handler
                 return connection
-            except oracledb.DatabaseError as e:
-                (error_obj,) = e.args
-                log.exception(f'Connection attempt {attempt + 1} failed: {error_obj.message}')
+            except Exception as e:
+                import oracledb
+
+                if isinstance(e, oracledb.DatabaseError):
+                    (error_obj,) = e.args
+                    log.exception(f'Connection attempt {attempt + 1} failed: {error_obj.message}')
 
                 if attempt < max_retries - 1:
                     wait_time = 2**attempt
@@ -221,15 +227,11 @@ class Oracle23aiClient(VectorDBBase):
             self._reconnect_pool()
 
     def _output_type_handler(self, cursor, metadata):
+        import oracledb
+
         """
         Handle Oracle vector type conversion.
-
-        Args:
-            cursor: Oracle database cursor
-            metadata: Metadata for the column
-
-        Returns:
-            A variable with appropriate conversion for vector types
+        ...
         """
         if metadata.type_code is oracledb.DB_TYPE_VECTOR:
             return cursor.var(metadata.type_code, arraysize=cursor.arraysize, outconverter=list)
@@ -577,6 +579,8 @@ class Oracle23aiClient(VectorDBBase):
                         results = cursor.fetchall()
 
                         for row in results:
+                            import oracledb
+
                             ids[qid].append(row[0])
                             documents[qid].append(row[1].read() if isinstance(row[1], oracledb.LOB) else str(row[1]))
                             # 🔧 FIXED: Parse JSON metadata properly

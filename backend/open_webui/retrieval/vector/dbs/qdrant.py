@@ -21,9 +21,6 @@ from open_webui.retrieval.vector.main import (
     VectorDBBase,
     VectorItem,
 )
-from qdrant_client import QdrantClient as Qclient
-from qdrant_client.http.models import PointStruct
-from qdrant_client.models import models
 
 NO_LIMIT = 999999999
 
@@ -32,6 +29,8 @@ log = logging.getLogger(__name__)
 
 class QdrantClient(VectorDBBase):
     def __init__(self):
+        from qdrant_client import QdrantClient as Qclient
+
         self.collection_prefix = QDRANT_COLLECTION_PREFIX
         self.QDRANT_URI = QDRANT_URI
         self.QDRANT_API_KEY = QDRANT_API_KEY
@@ -86,6 +85,8 @@ class QdrantClient(VectorDBBase):
         )
 
     def _create_collection(self, collection_name: str, dimension: int):
+        from qdrant_client.models import models
+
         collection_name_with_prefix = f'{self.collection_prefix}_{collection_name}'
         self.client.create_collection(
             collection_name=collection_name_with_prefix,
@@ -125,6 +126,8 @@ class QdrantClient(VectorDBBase):
             self._create_collection(collection_name=collection_name, dimension=dimension)
 
     def _create_points(self, items: list[VectorItem]):
+        from qdrant_client.http.models import PointStruct
+
         return [
             PointStruct(
                 id=item['id'],
@@ -166,6 +169,8 @@ class QdrantClient(VectorDBBase):
         )
 
     def query(self, collection_name: str, filter: dict, limit: int | None = None):
+        from qdrant_client.models import models
+
         # Construct the filter string for querying
         if not self.has_collection(collection_name):
             return None
@@ -215,6 +220,8 @@ class QdrantClient(VectorDBBase):
         ids: list[str] | None = None,
         filter: dict | None = None,
     ):
+        from qdrant_client.models import models
+
         # Delete the items from the collection based on the ids.
         field_conditions = []
 
