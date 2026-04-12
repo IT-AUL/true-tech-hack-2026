@@ -1880,6 +1880,28 @@ async def chat_completion_files_handler(
             except Exception:
                 pass
 
+            normalized_queries = []
+            seen_queries = set()
+            for query in queries:
+                if not isinstance(query, str):
+                    continue
+                normalized_query = ' '.join(query.split())
+                if not normalized_query:
+                    continue
+                normalized_key = normalized_query.casefold()
+                if normalized_key in seen_queries:
+                    continue
+                seen_queries.add(normalized_key)
+                normalized_queries.append(normalized_query)
+
+            last_user_query = get_last_user_message(body['messages'])
+            if isinstance(last_user_query, str):
+                fallback_query = ' '.join(last_user_query.split())
+                if fallback_query and fallback_query.casefold() not in seen_queries:
+                    normalized_queries.append(fallback_query)
+
+            queries = normalized_queries[:4]
+
             await __event_emitter__(
                 {
                     'type': 'status',
@@ -1946,6 +1968,22 @@ async def chat_completion_files_handler(
                 },
             }
         )
+
+        if sources_count > 0:
+            if getattr(request.state, 'direct', False) and hasattr(request.state, 'model'):
+                models = {request.state.model['id']: request.state.model}
+            else:
+                models = request.app.state.MODELS
+
+            if body['model'] in models:
+                rag_model_id = get_task_model_id(
+                    body['model'],
+                    request.app.state.config.RAG_GENERATION_MODEL,
+                    request.app.state.config.RAG_GENERATION_MODEL_EXTERNAL,
+                    models,
+                )
+                if rag_model_id in models:
+                    body['model'] = rag_model_id
 
     return body, {'sources': sources}
 
