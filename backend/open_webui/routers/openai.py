@@ -1027,7 +1027,12 @@ async def generate_chat_completion(
     if model_id == 'auto' or auto_route:
         from open_webui.utils.auto_routing import process_auto_routing
 
-        model_id, payload = await process_auto_routing(request, payload, user)
+        models = request.app.state.OPENAI_MODELS
+        if not models:
+            await get_all_models(request, user=user)
+            models = request.app.state.OPENAI_MODELS
+
+        model_id, payload = await process_auto_routing(request, payload, user, available_models=models)
         log.info(f'Auto-routing selected model: {model_id}')
         payload['model'] = model_id
         form_data['model'] = model_id

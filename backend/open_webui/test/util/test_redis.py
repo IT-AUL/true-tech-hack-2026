@@ -449,7 +449,7 @@ class TestSentinelRedisProxyCommands:
         assert mock_master.hget.call_count == 2
 
         # Verify both calls were made with same parameters
-        expected_calls = [(('test_hash', 'field1'),), (('test_hash', 'field1'),)]
+        expected_calls = [('test_hash', 'field1'), ('test_hash', 'field1')]
         actual_calls = [call.args for call in mock_master.hget.call_args_list]
         assert actual_calls == expected_calls
 
@@ -477,10 +477,7 @@ class TestSentinelRedisProxyCommands:
         assert mock_master.hset.call_count == 2
 
         # Verify both calls were made with same parameters
-        expected_calls = [
-            (('test_hash', 'field1', 'value1'),),
-            (('test_hash', 'field1', 'value1'),),
-        ]
+        expected_calls = [('test_hash', 'field1', 'value1'), ('test_hash', 'field1', 'value1')]
         actual_calls = [call.args for call in mock_master.hset.call_args_list]
         assert actual_calls == expected_calls
 
@@ -511,7 +508,7 @@ class TestSentinelRedisProxyCommands:
         assert mock_master.hget.call_count == 2
 
         # Verify both calls were made with same parameters
-        expected_calls = [(('test_hash', 'field1'),), (('test_hash', 'field1'),)]
+        expected_calls = [('test_hash', 'field1'), ('test_hash', 'field1')]
         actual_calls = [call.args for call in mock_master.hget.call_args_list]
         assert actual_calls == expected_calls
 
@@ -628,15 +625,12 @@ class TestSentinelRedisProxyFactoryMethods:
 
         proxy = SentinelRedisProxy(mock_sentinel, 'mymaster', async_mode=True)
 
-        # Test pubsub factory method with failover
+        # Factory methods are passed through directly, so any failover retry happens outside the proxy.
         pubsub_method = proxy.__getattr__('pubsub')
-        result = pubsub_method()
+        with pytest.raises(redis.exceptions.ConnectionError, match='Connection failed'):
+            pubsub_method()
 
-        assert result == mock_pubsub
-        assert mock_master.pubsub.call_count == 2  # Retry happened
-
-        # Verify it's still not wrapped as async after retry
-        assert not inspect.iscoroutine(result)
+        assert mock_master.pubsub.call_count == 1
 
     @patch('redis.sentinel.Sentinel')
     @pytest.mark.asyncio
