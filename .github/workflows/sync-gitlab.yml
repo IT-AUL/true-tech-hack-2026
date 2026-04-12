@@ -3,6 +3,7 @@ name: Sync main → GitLab MR
 on:
   push:
     branches: [main]
+    tags: ['v*']
 
 jobs:
   sync:
@@ -13,33 +14,38 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Push sync branch to GitLab and create MR
+      - name: Push to GitLab
         env:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
           COMMIT_SHA: ${{ github.sha }}
           REPO: ${{ github.repository }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          SYNC_BRANCH="sync/github-main-$(date +%Y%m%d-%H%M%S)"
-          SHORT_SHA="${COMMIT_SHA:0:7}"
-
-          # Push to GitLab sync branch
           git remote add gitlab "https://oauth2:${GITLAB_TOKEN}@git.truetecharena.ru/tta/true-tech-hack-in2026-gpthub-git/it-aul-misisxcuxkfu/task-repo.git"
-          git push gitlab "HEAD:refs/heads/${SYNC_BRANCH}"
 
-          # Project path URL-encoded (/ → %2F)
-          PROJECT_ID="tta%2Ftrue-tech-hack-in2026-gpthub-git%2Fit-aul-misisxcuxkfu%2Ftask-repo"
+          if [ "$REF_TYPE" = "tag" ]; then
+            echo "Pushing tag $REF_NAME to GitLab..."
+            git push gitlab "refs/tags/${REF_NAME}:refs/tags/${REF_NAME}"
+          else
+            SYNC_BRANCH="sync/github-main-$(date +%Y%m%d-%H%M%S)"
+            SHORT_SHA="${COMMIT_SHA:0:7}"
+            echo "Pushing branch $SYNC_BRANCH to GitLab..."
+            git push gitlab "HEAD:refs/heads/${SYNC_BRANCH}"
 
-          # Create Merge Request via GitLab API
-          curl --fail-with-body \
-            --request POST \
-            --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
-            --header "Content-Type: application/json" \
-            --data "{
-              \"source_branch\": \"${SYNC_BRANCH}\",
-              \"target_branch\": \"main\",
-              \"title\": \"chore: sync from GitHub main (${SHORT_SHA})\",
-              \"description\": \"Automated sync from GitHub commit [${SHORT_SHA}](https://github.com/${REPO}/commit/${COMMIT_SHA}).\",
-              \"remove_source_branch\": true,
-              \"squash\": false
-            }" \
-            "https://git.truetecharena.ru/api/v4/projects/${PROJECT_ID}/merge_requests"
+            PROJECT_ID="tta%2Ftrue-tech-hack-in2026-gpthub-git%2Fit-aul-misisxcuxkfu%2Ftask-repo"
+            # Create Merge Request
+            curl --fail-with-body \
+              --request POST \
+              --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
+              --header "Content-Type: application/json" \
+              --data "{
+                \"source_branch\": \"${SYNC_BRANCH}\",
+                \"target_branch\": \"main\",
+                \"title\": \"chore: sync from GitHub main (${SHORT_SHA})\",
+                \"description\": \"Automated sync from GitHub commit [${SHORT_SHA}](https://github.com/${REPO}/commit/${COMMIT_SHA}).\",
+                \"remove_source_branch\": true,
+                \"squash\": false
+              }" \
+              "https://git.truetecharena.ru/api/v4/projects/${PROJECT_ID}/merge_requests"
+          fi
