@@ -88,6 +88,11 @@ def process_uploaded_file(
 ):
     def _process_handler(db_session):
         try:
+            Files.update_file_data_by_id(
+                file_item.id,
+                {'status': 'processing', 'stage': 'routing', 'error': None},
+                db=db_session,
+            )
             content_type = file.content_type
 
             # Detect mis-labeled text files (e.g. .ts → video/mp2t)
@@ -99,6 +104,11 @@ def process_uploaded_file(
                 stt_supported_content_types = getattr(request.app.state.config, 'STT_SUPPORTED_CONTENT_TYPES', [])
 
                 if strict_match_mime_type(stt_supported_content_types, content_type):
+                    Files.update_file_data_by_id(
+                        file_item.id,
+                        {'status': 'processing', 'stage': 'transcribing', 'error': None},
+                        db=db_session,
+                    )
                     file_path_processed = Storage.get_file(file_path)
                     result = transcribe(request, file_path_processed, file_metadata, user)
 
@@ -111,6 +121,11 @@ def process_uploaded_file(
                 elif (not content_type.startswith(('image/', 'video/'))) or (
                     request.app.state.config.CONTENT_EXTRACTION_ENGINE == 'external'
                 ):
+                    Files.update_file_data_by_id(
+                        file_item.id,
+                        {'status': 'processing', 'stage': 'extracting', 'error': None},
+                        db=db_session,
+                    )
                     process_file(
                         request,
                         ProcessFileForm(file_id=file_item.id),
@@ -129,11 +144,12 @@ def process_uploaded_file(
                 )
 
         except Exception as e:
-            log.error(f'Error processing file: {file_item.id}')
+            log.exception(f'Error processing file: {file_item.id}')
             Files.update_file_data_by_id(
                 file_item.id,
                 {
                     'status': 'failed',
+                    'stage': 'failed',
                     'error': str(e.detail) if hasattr(e, 'detail') else str(e),
                 },
                 db=db_session,
@@ -450,7 +466,9 @@ async def get_file_process_status(
 
                         if status:
                             event = {'status': status}
-                            if status == 'failed':
+                            if data.get('stage'):
+                                event['stage'] = data.get('stage')
+                            if data.get('error'):
                                 event['error'] = data.get('error')
 
                             yield f'data: {json.dumps(event)}\n\n'
@@ -470,7 +488,12 @@ async def get_file_process_status(
                 media_type='text/event-stream',
             )
         else:
-            return {'status': file.data.get('status', 'pending')}
+            data = file.data or {}
+            return {
+                'status': data.get('status', 'pending'),
+                'stage': data.get('stage'),
+                'error': data.get('error'),
+            }
     else:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

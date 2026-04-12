@@ -242,6 +242,8 @@ async def get_status(request: Request):
         'CHUNK_SIZE': request.app.state.config.CHUNK_SIZE,
         'CHUNK_OVERLAP': request.app.state.config.CHUNK_OVERLAP,
         'RAG_TEMPLATE': request.app.state.config.RAG_TEMPLATE,
+        'RAG_GENERATION_MODEL': request.app.state.config.RAG_GENERATION_MODEL,
+        'RAG_GENERATION_MODEL_EXTERNAL': request.app.state.config.RAG_GENERATION_MODEL_EXTERNAL,
         'RAG_EMBEDDING_ENGINE': request.app.state.config.RAG_EMBEDDING_ENGINE,
         'RAG_EMBEDDING_MODEL': request.app.state.config.RAG_EMBEDDING_MODEL,
         'RAG_RERANKING_MODEL': request.app.state.config.RAG_RERANKING_MODEL,
@@ -421,6 +423,8 @@ async def get_rag_config(request: Request, user=Depends(get_admin_user)):
         'status': True,
         # RAG settings
         'RAG_TEMPLATE': request.app.state.config.RAG_TEMPLATE,
+        'RAG_GENERATION_MODEL': request.app.state.config.RAG_GENERATION_MODEL,
+        'RAG_GENERATION_MODEL_EXTERNAL': request.app.state.config.RAG_GENERATION_MODEL_EXTERNAL,
         'TOP_K': request.app.state.config.TOP_K,
         'BYPASS_EMBEDDING_AND_RETRIEVAL': request.app.state.config.BYPASS_EMBEDDING_AND_RETRIEVAL,
         'RAG_FULL_CONTEXT': request.app.state.config.RAG_FULL_CONTEXT,
@@ -621,6 +625,8 @@ class WebConfig(BaseModel):
 class ConfigForm(BaseModel):
     # RAG settings
     RAG_TEMPLATE: str | None = None
+    RAG_GENERATION_MODEL: str | None = None
+    RAG_GENERATION_MODEL_EXTERNAL: str | None = None
     TOP_K: int | None = None
     BYPASS_EMBEDDING_AND_RETRIEVAL: bool | None = None
     RAG_FULL_CONTEXT: bool | None = None
@@ -703,6 +709,16 @@ async def update_rag_config(request: Request, form_data: ConfigForm, user=Depend
     # RAG settings
     request.app.state.config.RAG_TEMPLATE = (
         form_data.RAG_TEMPLATE if form_data.RAG_TEMPLATE is not None else request.app.state.config.RAG_TEMPLATE
+    )
+    request.app.state.config.RAG_GENERATION_MODEL = (
+        form_data.RAG_GENERATION_MODEL
+        if form_data.RAG_GENERATION_MODEL is not None
+        else request.app.state.config.RAG_GENERATION_MODEL
+    )
+    request.app.state.config.RAG_GENERATION_MODEL_EXTERNAL = (
+        form_data.RAG_GENERATION_MODEL_EXTERNAL
+        if form_data.RAG_GENERATION_MODEL_EXTERNAL is not None
+        else request.app.state.config.RAG_GENERATION_MODEL_EXTERNAL
     )
     request.app.state.config.TOP_K = form_data.TOP_K if form_data.TOP_K is not None else request.app.state.config.TOP_K
     request.app.state.config.BYPASS_EMBEDDING_AND_RETRIEVAL = (
@@ -1086,6 +1102,8 @@ async def update_rag_config(request: Request, form_data: ConfigForm, user=Depend
         'status': True,
         # RAG settings
         'RAG_TEMPLATE': request.app.state.config.RAG_TEMPLATE,
+        'RAG_GENERATION_MODEL': request.app.state.config.RAG_GENERATION_MODEL,
+        'RAG_GENERATION_MODEL_EXTERNAL': request.app.state.config.RAG_GENERATION_MODEL_EXTERNAL,
         'TOP_K': request.app.state.config.TOP_K,
         'BYPASS_EMBEDDING_AND_RETRIEVAL': request.app.state.config.BYPASS_EMBEDDING_AND_RETRIEVAL,
         'RAG_FULL_CONTEXT': request.app.state.config.RAG_FULL_CONTEXT,
@@ -1462,9 +1480,14 @@ def save_docs_to_vector_db(
             concurrent_requests=request.app.state.config.RAG_EMBEDDING_CONCURRENT_REQUESTS,
         )
 
-        # Run async embedding in sync context using the main event loop
-        # This allows the main loop to stay responsive to health checks during long operations
+        # Run async embedding in sync context using the main event loop.
+        # Remote OpenAI-compatible providers should never wait forever.
         embedding_timeout = RAG_EMBEDDING_TIMEOUT
+        if embedding_timeout is None and request.app.state.config.RAG_EMBEDDING_ENGINE in {
+            'openai',
+            'azure_openai',
+        }:
+            embedding_timeout = 180
 
         future = asyncio.run_coroutine_threadsafe(
             embedding_function(
@@ -1526,12 +1549,22 @@ def process_file(
 
     if file:
         try:
+
+            def update_processing_state(stage: str, status_value: str = 'processing', error: str | None = None):
+                payload = {
+                    'status': status_value,
+                    'stage': stage,
+                    'error': error,
+                }
+                Files.update_file_data_by_id(file.id, payload, db=db)
+
             collection_name = form_data.collection_name
 
             if collection_name is None:
                 collection_name = f'file-{file.id}'
 
             if form_data.content:
+                update_processing_state('normalizing_content')
                 # Update the content in the file
                 # Usage: /files/{file_id}/data/content/update, /files/ (audio file upload pipeline)
 
@@ -1557,6 +1590,7 @@ def process_file(
 
                 text_content = form_data.content
             elif form_data.collection_name:
+                update_processing_state('loading_existing_chunks')
                 # Check if the file has already been processed and save the content
                 # Usage: /knowledge/{id}/file/add, /knowledge/{id}/file/update
 
@@ -1586,6 +1620,7 @@ def process_file(
 
                 text_content = file.data.get('content', '')
             else:
+                update_processing_state('extracting')
                 # Process the file and save the content
                 # Usage: /files/
                 file_path = file.path
@@ -1657,13 +1692,17 @@ def process_file(
             log.debug(f'text_content: {text_content}')
             Files.update_file_data_by_id(
                 file.id,
-                {'content': text_content},
+                {'content': text_content, 'stage': 'content_extracted', 'error': None},
                 db=db,
             )
             hash = calculate_sha256_string(text_content)
 
             if request.app.state.config.BYPASS_EMBEDDING_AND_RETRIEVAL:
-                Files.update_file_data_by_id(file.id, {'status': 'completed'}, db=db)
+                Files.update_file_data_by_id(
+                    file.id,
+                    {'status': 'completed', 'stage': 'completed', 'error': None},
+                    db=db,
+                )
                 Files.update_file_hash_by_id(file.id, hash, db=db)
                 return {
                     'status': True,
@@ -1673,6 +1712,7 @@ def process_file(
                 }
             else:
                 try:
+                    update_processing_state('embedding')
                     # Commit any pending changes before the slow embedding step.
                     # Note: file is already a Pydantic model (not ORM), so no expunge needed.
                     db.commit()
@@ -1706,7 +1746,7 @@ def process_file(
 
                             Files.update_file_data_by_id(
                                 file.id,
-                                {'status': 'completed'},
+                                {'status': 'completed', 'stage': 'completed', 'error': None},
                                 db=session,
                             )
                             Files.update_file_hash_by_id(file.id, hash, db=session)
@@ -1728,7 +1768,11 @@ def process_file(
             with get_db() as session:
                 Files.update_file_data_by_id(
                     file.id,
-                    {'status': 'failed'},
+                    {
+                        'status': 'failed',
+                        'stage': 'failed',
+                        'error': str(e.detail) if hasattr(e, 'detail') else str(e),
+                    },
                     db=session,
                 )
                 # Clear the hash so the file can be re-uploaded after fixing the issue
