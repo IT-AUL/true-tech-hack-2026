@@ -15,8 +15,6 @@ import aiohttp
 import certifi
 import validators
 from fastapi.concurrency import run_in_threadpool
-from langchain_community.document_loaders import PlaywrightURLLoader, WebBaseLoader
-from langchain_community.document_loaders.base import BaseLoader
 from langchain_core.documents import Document
 from open_webui.config import (
     ENABLE_RAG_LOCAL_WEB_FETCH,
@@ -169,6 +167,14 @@ class URLProcessingMixin:
             raise ValueError(f'SSL certificate verification failed for {url}')
         self._sync_wait_for_rate_limit()
         return True
+
+
+try:
+    from langchain_community.document_loaders.base import BaseLoader
+except ImportError:
+    # Fallback if langchain-community is somehow missing
+    class BaseLoader:
+        pass
 
 
 class SafeFireCrawlLoader(BaseLoader, RateLimitMixin, URLProcessingMixin):
@@ -419,7 +425,16 @@ class SafeTavilyLoader(BaseLoader, RateLimitMixin, URLProcessingMixin):
                 raise e
 
 
-class SafePlaywrightURLLoader(PlaywrightURLLoader, RateLimitMixin, URLProcessingMixin):
+def get_playwright_loader():
+    try:
+        from langchain_community.document_loaders import PlaywrightURLLoader
+
+        return PlaywrightURLLoader
+    except ImportError:
+        return BaseLoader
+
+
+class SafePlaywrightURLLoader(get_playwright_loader(), RateLimitMixin, URLProcessingMixin):
     """Load HTML pages safely with Playwright, supporting SSL verification, rate limiting, and remote browser connection.
 
     Attributes:
@@ -533,7 +548,16 @@ class SafePlaywrightURLLoader(PlaywrightURLLoader, RateLimitMixin, URLProcessing
             await browser.close()
 
 
-class SafeWebBaseLoader(WebBaseLoader):
+def get_web_base_loader():
+    try:
+        from langchain_community.document_loaders import WebBaseLoader
+
+        return WebBaseLoader
+    except ImportError:
+        return BaseLoader
+
+
+class SafeWebBaseLoader(get_web_base_loader()):
     """WebBaseLoader with enhanced error handling for URLs."""
 
     def __init__(self, trust_env: bool = False, *args, **kwargs):

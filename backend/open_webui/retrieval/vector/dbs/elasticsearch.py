@@ -2,8 +2,6 @@
 NOTE: This vector database integration is community-supported and maintained on a best-effort basis.
 """
 
-from elasticsearch import Elasticsearch
-from elasticsearch.helpers import bulk, scan
 from open_webui.config import (
     ELASTICSEARCH_API_KEY,
     ELASTICSEARCH_CA_CERTS,
@@ -32,6 +30,8 @@ class ElasticsearchClient(VectorDBBase):
     """
 
     def __init__(self):
+        from elasticsearch import Elasticsearch
+
         self.index_prefix = ELASTICSEARCH_INDEX_PREFIX
         self.client = Elasticsearch(
             hosts=[ELASTICSEARCH_URL],
@@ -213,6 +213,8 @@ class ElasticsearchClient(VectorDBBase):
 
     # Status: works
     def get(self, collection_name: str) -> GetResult | None:
+        from elasticsearch.helpers import scan
+
         # Get all the items in the collection.
         query = {
             'query': {'bool': {'filter': [{'term': {'collection': collection_name}}]}},
@@ -224,6 +226,8 @@ class ElasticsearchClient(VectorDBBase):
 
     # Status: works
     def insert(self, collection_name: str, items: list[VectorItem]):
+        from elasticsearch.helpers import bulk
+
         if not self._has_index(dimension=len(items[0]['vector'])):
             self._create_index(dimension=len(items[0]['vector']))
 
@@ -245,6 +249,8 @@ class ElasticsearchClient(VectorDBBase):
 
     # Upsert documents using the update API with doc_as_upsert=True.
     def upsert(self, collection_name: str, items: list[VectorItem]):
+        from elasticsearch.helpers import bulk
+
         if not self._has_index(dimension=len(items[0]['vector'])):
             self._create_index(dimension=len(items[0]['vector']))
         for batch in self._create_batches(items):
