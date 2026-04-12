@@ -1837,16 +1837,19 @@ QUERY_GENERATION_PROMPT_TEMPLATE = PersistentConfig(
 )
 
 DEFAULT_QUERY_GENERATION_PROMPT_TEMPLATE = """### Task:
-Analyze the chat history to determine the necessity of generating search queries, in the given language. By default, **prioritize generating 1-3 broad and relevant search queries** unless it is absolutely certain that no additional information is required. The aim is to retrieve comprehensive, updated, and valuable information even with minimal uncertainty. If no search is unequivocally needed, return an empty list.
+Analyze the chat history and generate high-recall retrieval queries in the same language as the user. Default to **2-4 complementary queries** unless it is absolutely certain that retrieval is unnecessary.
 
 ### Guidelines:
 - Respond **EXCLUSIVELY** with a JSON object. Any form of extra commentary, explanation, or additional text is strictly prohibited.
-- When generating search queries, respond in the format: { "queries": ["query1", "query2"] }, ensuring each query is distinct, concise, and relevant to the topic.
+- When generating queries, respond in the format: { "queries": ["query1", "query2"] }.
 - If and only if it is entirely certain that no useful results can be retrieved by a search, return: { "queries": [] }.
-- Err on the side of suggesting search queries if there is **any chance** they might provide useful or updated information.
-- Be concise and focused on composing high-quality search queries, avoiding unnecessary elaboration, commentary, or assumptions.
+- Preserve important named entities, product names, acronyms, error messages, identifiers, filenames, quoted terms, and domain-specific vocabulary from the chat history.
+- Make the queries complementary: one may be broad, one more specific, one may include synonyms or abbreviations, and one may quote rare terms verbatim when useful.
+- Do not over-normalize or translate away critical terms that may exist in the source documents exactly as written.
+- Prefer retrieval-friendly phrasing over conversational phrasing.
+- Err on the side of suggesting queries if there is **any chance** they improve recall.
 - Today's date is: {{CURRENT_DATE}}.
-- Always prioritize providing actionable and broad queries that maximize informational coverage.
+- Always prioritize coverage and recall over elegance.
 
 ### Output:
 Strictly return in JSON format:
@@ -2711,11 +2714,11 @@ BYPASS_EMBEDDING_AND_RETRIEVAL = PersistentConfig(
 )
 
 
-RAG_TOP_K = PersistentConfig('RAG_TOP_K', 'rag.top_k', int(os.environ.get('RAG_TOP_K', '3')))
+RAG_TOP_K = PersistentConfig('RAG_TOP_K', 'rag.top_k', int(os.environ.get('RAG_TOP_K', '8')))
 RAG_TOP_K_RERANKER = PersistentConfig(
     'RAG_TOP_K_RERANKER',
     'rag.top_k_reranker',
-    int(os.environ.get('RAG_TOP_K_RERANKER', '3')),
+    int(os.environ.get('RAG_TOP_K_RERANKER', '8')),
 )
 RAG_RELEVANCE_THRESHOLD = PersistentConfig(
     'RAG_RELEVANCE_THRESHOLD',
@@ -2731,13 +2734,13 @@ RAG_HYBRID_BM25_WEIGHT = PersistentConfig(
 ENABLE_RAG_HYBRID_SEARCH = PersistentConfig(
     'ENABLE_RAG_HYBRID_SEARCH',
     'rag.enable_hybrid_search',
-    os.environ.get('ENABLE_RAG_HYBRID_SEARCH', '').lower() == 'true',
+    os.environ.get('ENABLE_RAG_HYBRID_SEARCH', 'True').lower() == 'true',
 )
 
 ENABLE_RAG_HYBRID_SEARCH_ENRICHED_TEXTS = PersistentConfig(
     'ENABLE_RAG_HYBRID_SEARCH_ENRICHED_TEXTS',
     'rag.enable_hybrid_search_enriched_texts',
-    os.environ.get('ENABLE_RAG_HYBRID_SEARCH_ENRICHED_TEXTS', 'False').lower() == 'true',
+    os.environ.get('ENABLE_RAG_HYBRID_SEARCH_ENRICHED_TEXTS', 'True').lower() == 'true',
 )
 
 RAG_FULL_CONTEXT = PersistentConfig(
@@ -2780,7 +2783,7 @@ RAG_ALLOWED_FILE_EXTENSIONS = PersistentConfig(
 RAG_EMBEDDING_ENGINE = PersistentConfig(
     'RAG_EMBEDDING_ENGINE',
     'rag.embedding_engine',
-    os.environ.get('RAG_EMBEDDING_ENGINE', ''),
+    os.environ.get('RAG_EMBEDDING_ENGINE', 'openai'),
 )
 
 PDF_EXTRACT_IMAGES = PersistentConfig(
@@ -2798,7 +2801,7 @@ PDF_LOADER_MODE = PersistentConfig(
 RAG_EMBEDDING_MODEL = PersistentConfig(
     'RAG_EMBEDDING_MODEL',
     'rag.embedding_model',
-    os.environ.get('RAG_EMBEDDING_MODEL', 'sentence-transformers/all-MiniLM-L6-v2'),
+    os.environ.get('RAG_EMBEDDING_MODEL', 'qwen3-embedding-8b'),
 )
 log.info(f'Embedding model set: {RAG_EMBEDDING_MODEL.value}')
 
@@ -2813,7 +2816,7 @@ RAG_EMBEDDING_MODEL_TRUST_REMOTE_CODE = (
 RAG_EMBEDDING_BATCH_SIZE = PersistentConfig(
     'RAG_EMBEDDING_BATCH_SIZE',
     'rag.embedding_batch_size',
-    int(os.environ.get('RAG_EMBEDDING_BATCH_SIZE') or os.environ.get('RAG_EMBEDDING_OPENAI_BATCH_SIZE', '1')),
+    int(os.environ.get('RAG_EMBEDDING_BATCH_SIZE') or os.environ.get('RAG_EMBEDDING_OPENAI_BATCH_SIZE', '32')),
 )
 
 ENABLE_ASYNC_EMBEDDING = PersistentConfig(
@@ -2825,7 +2828,7 @@ ENABLE_ASYNC_EMBEDDING = PersistentConfig(
 RAG_EMBEDDING_CONCURRENT_REQUESTS = PersistentConfig(
     'RAG_EMBEDDING_CONCURRENT_REQUESTS',
     'rag.embedding_concurrent_requests',
-    int(os.getenv('RAG_EMBEDDING_CONCURRENT_REQUESTS', '0')),
+    int(os.getenv('RAG_EMBEDDING_CONCURRENT_REQUESTS', '2')),
 )
 
 RAG_EMBEDDING_QUERY_PREFIX = os.environ.get('RAG_EMBEDDING_QUERY_PREFIX', None)
@@ -2912,18 +2915,21 @@ CHUNK_OVERLAP = PersistentConfig(
 )
 
 DEFAULT_RAG_TEMPLATE = """### Task:
-Respond to the user query using the provided context, incorporating inline citations in the format [id] **only when the <source> tag includes an explicit id attribute** (e.g., <source id="1">).
+Answer the user using only the provided context. Incorporate inline citations in the format [id] **only when the <source> tag includes an explicit id attribute** (e.g., <source id="1">).
 
 ### Guidelines:
-- If you don't know the answer, clearly state that.
+- Use the context as the primary and only factual basis for the answer.
+- If the context does not contain enough information, clearly say so.
 - If uncertain, ask the user for clarification.
 - Respond in the same language as the user's query.
-- If the context is unreadable or of poor quality, inform the user and provide the best possible answer.
-- If the answer isn't present in the context but you possess the knowledge, explain this to the user and provide the answer using your own understanding.
+- If the context is unreadable or poor quality, say that the answer cannot be grounded reliably.
+- Do not fill gaps with outside knowledge, guesses, or unstated assumptions.
+- Do not claim that a fact is supported unless it is grounded in the context.
 - **Only include inline citations using [id] (e.g., [1], [2]) when the <source> tag includes an id attribute.**
 - Do not cite if the <source> tag does not contain an id attribute.
 - Do not use XML tags in your response.
 - Ensure citations are concise and directly related to the information provided.
+- When helpful, briefly mention what information is missing and what document or detail the user should provide next.
 
 ### Example of Citation:
 If the user asks about a specific topic and the information is found in a source with a provided id attribute, the response should include the citation like in the following example:
@@ -2941,6 +2947,18 @@ RAG_TEMPLATE = PersistentConfig(
     'RAG_TEMPLATE',
     'rag.template',
     os.environ.get('RAG_TEMPLATE', DEFAULT_RAG_TEMPLATE),
+)
+
+RAG_GENERATION_MODEL = PersistentConfig(
+    'RAG_GENERATION_MODEL',
+    'rag.generation_model',
+    os.environ.get('RAG_GENERATION_MODEL', ''),
+)
+
+RAG_GENERATION_MODEL_EXTERNAL = PersistentConfig(
+    'RAG_GENERATION_MODEL_EXTERNAL',
+    'rag.generation_model_external',
+    os.environ.get('RAG_GENERATION_MODEL_EXTERNAL', ''),
 )
 
 RAG_OPENAI_API_BASE_URL = PersistentConfig(
