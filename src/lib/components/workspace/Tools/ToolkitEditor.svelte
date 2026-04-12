@@ -60,7 +60,7 @@ class Tools:
         pass
 
     # Add your custom tools using pure Python code here, make sure to add type hints and descriptions
-	
+
     def get_user_name_and_email_and_id(self, __user__: dict = {}) -> str:
         """
         Get the user name, Email and ID from the user object.

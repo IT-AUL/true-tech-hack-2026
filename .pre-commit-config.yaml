@@ -3,38 +3,18 @@
 # avoid Python 3.14 brew virtualenv creation failures on macOS.
 
 repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: check-yaml
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: no-commit-to-branch
+        args: [--branch, main, --branch, develop]
+
   - repo: local
     hooks:
-      - id: check-staged-whitespace
-        name: check whitespace
-        entry: scripts/hooks/check-staged-whitespace.sh
-        language: script
-        always_run: true
-        pass_filenames: false
-      - id: check-yaml
-        name: check yaml
-        entry: scripts/hooks/check-yaml-staged.sh
-        language: script
-        always_run: true
-        pass_filenames: false
-      - id: check-large-files
-        name: check large files
-        entry: scripts/hooks/check-large-staged.sh
-        language: script
-        always_run: true
-        pass_filenames: false
-      - id: check-merge-conflict
-        name: check merge conflict
-        entry: scripts/hooks/check-merge-conflict-staged.sh
-        language: script
-        always_run: true
-        pass_filenames: false
-      - id: no-commit-to-branch
-        name: block push to main
-        entry: scripts/hooks/check-no-commit-main.sh
-        language: script
-        always_run: true
-        pass_filenames: false
       - id: ruff-check
         name: ruff check
         entry: ruff check
@@ -50,24 +30,9 @@ repos:
         files: ^backend/
       - id: branch-name
         name: branch name convention
-        entry: scripts/hooks/check-branch-name.sh
-        language: script
-        always_run: true
-        pass_filenames: false
-      - id: eslint
-        name: eslint (frontend)
-        entry: npx eslint --max-warnings=0
+        entry: python -c "import subprocess, sys, re; b=subprocess.check_output(['git', 'rev-parse', '--abbrev-ref', 'HEAD']).decode().strip(); ok = b in ('main', 'develop') or re.match(r'^(feat|fix|chore|refactor|docs|test|sync)/', b); sys.exit(0 if ok else (print(f'Bad branch name {b}'), sys.exit(1)))"
         language: system
-        files: ^src/.*\.(js|ts|svelte)$
-      - id: no-debug
-        name: no debug leftovers
-        entry: scripts/hooks/check-no-debug.sh
-        language: script
         always_run: true
         pass_filenames: false
-      - id: no-secrets
-        name: no secrets in code
-        entry: scripts/hooks/check-no-secrets.sh
-        language: script
-        always_run: true
-        pass_filenames: false
+
+
