@@ -219,6 +219,188 @@ async def fetch_url(
         return json.dumps({'error': str(e)})
 
 
+async def deep_research(
+    query: str,
+    breadth: int = 3,
+    depth: int = 2,
+    __request__: Request = None,
+    __user__: dict = None,
+) -> str:
+    """
+    Perform iterative deep research on a topic using the recursive search-learn-refine
+    algorithm (inspired by dzhng/deep-research). Each iteration: generates targeted SERP
+    queries via LLM → searches → reads full page content → LLM extracts key learnings and
+    new research directions → recurses. Returns accumulated findings for final synthesis.
+
+    :param query: The main research question or topic
+    :param breadth: Number of parallel SERP queries per iteration (default: 3, max: 5)
+    :param depth: Number of recursive refinement iterations (default: 2, max: 3)
+    :return: JSON with all learnings, sources, and synthesis instructions
+    """
+    if __request__ is None:
+        return json.dumps({'error': 'Request context not available'})
+
+    breadth = max(1, min(breadth, 5))
+    depth = max(0, min(depth, 3))
+
+    try:
+        import httpx
+
+        cfg = __request__.app.state.config
+        engine = cfg.WEB_SEARCH_ENGINE
+        user = UserModel(**__user__) if __user__ else None
+        max_content = getattr(cfg, 'WEB_FETCH_MAX_CONTENT_LENGTH', 6000) or 6000
+
+        # Resolve LLM endpoint from app config (same as used for chat completions)
+        api_base = str(getattr(cfg, 'OPENAI_API_BASE_URLS', None) or [None])[2:-2].strip("'")
+        if not api_base:
+            keys_attr = getattr(cfg, 'OPENAI_API_BASE_URLS', [])
+            api_base = keys_attr[0] if keys_attr else 'https://api.openai.com/v1'
+        api_keys = getattr(cfg, 'OPENAI_API_KEYS', '') or getattr(cfg, 'OPENAI_API_KEY', '')
+        api_key = (api_keys.split(';')[0] if isinstance(api_keys, str) else api_keys[0]) if api_keys else ''
+
+        task_model = (
+            getattr(cfg, 'TASK_MODEL_EXTERNAL', None)
+            or getattr(cfg, 'TASK_MODEL', None)
+            or 'qwen/qwen3.6-plus'
+        )
+
+        async def llm(messages: list[dict], max_tokens: int = 512) -> str:
+            """Thin async wrapper for a single non-streaming LLM call."""
+            try:
+                async with httpx.AsyncClient(timeout=60) as client:
+                    resp = await client.post(
+                        f'{api_base}/chat/completions',
+                        headers={'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'},
+                        json={
+                            'model': task_model,
+                            'messages': messages,
+                            'max_tokens': max_tokens,
+                            'stream': False,
+                        },
+                    )
+                    resp.raise_for_status()
+                    return resp.json()['choices'][0]['message']['content'].strip()
+            except Exception as e:
+                log.warning(f'deep_research llm call failed: {e}')
+                return ''
+
+        async def generate_serp_queries(goal: str, learnings: list[str], n: int) -> list[str]:
+            """Ask LLM to produce n targeted search queries for the current research goal."""
+            context = '\n'.join(f'- {l}' for l in learnings[-10:]) if learnings else 'none yet'
+            prompt = (
+                f'You are a research assistant. Generate exactly {n} distinct, specific web search queries '
+                f'to investigate the following research goal.\n\n'
+                f'Research goal: {goal}\n\n'
+                f'Already known:\n{context}\n\n'
+                f'Return ONLY a JSON array of {n} query strings, no explanation. Example: ["query 1", "query 2"]'
+            )
+            raw = await llm([{'role': 'user', 'content': prompt}], max_tokens=256)
+            try:
+                queries = json.loads(raw)
+                if isinstance(queries, list):
+                    return [str(q) for q in queries[:n]]
+            except Exception:
+                pass
+            # Fallback: split by newlines
+            lines = [l.strip().strip('"-') for l in raw.splitlines() if l.strip()]
+            return lines[:n] if lines else [goal]
+
+        async def extract_learnings(search_query: str, content: str) -> tuple[list[str], list[str]]:
+            """Extract key learnings and new research directions from scraped content."""
+            prompt = (
+                f'You are a research analyst. Given the search query and web page content below, extract:\n'
+                f'1. Up to 5 key factual learnings relevant to the query (concise bullet points)\n'
+                f'2. Up to 3 follow-up research directions worth investigating\n\n'
+                f'Query: {search_query}\n\n'
+                f'Content (may be truncated):\n{content[:3000]}\n\n'
+                f'Respond with JSON only:\n'
+                f'{{"learnings": ["...", "..."], "directions": ["...", "..."]}}'
+            )
+            raw = await llm([{'role': 'user', 'content': prompt}], max_tokens=400)
+            try:
+                parsed = json.loads(raw)
+                return parsed.get('learnings', []), parsed.get('directions', [])
+            except Exception:
+                return [], []
+
+        # ── Main recursive research loop ──────────────────────────────────────
+
+        all_learnings: list[str] = []
+        all_sources: list[dict] = []
+        seen_urls: set[str] = set()
+
+        async def research_iteration(goal: str, current_depth: int) -> None:
+            if current_depth < 0:
+                return
+
+            queries = await generate_serp_queries(goal, all_learnings, breadth)
+            new_directions: list[str] = []
+
+            async def process_query(q: str) -> None:
+                try:
+                    results = await asyncio.to_thread(_search_web, __request__, engine, q, user)
+                except Exception as e:
+                    log.warning(f'deep_research search error for "{q}": {e}')
+                    return
+
+                for result in (results or [])[:2]:
+                    url = getattr(result, 'link', None)
+                    if not url or url in seen_urls:
+                        continue
+                    seen_urls.add(url)
+
+                    try:
+                        content, _ = await asyncio.to_thread(get_content_from_url, __request__, url)
+                        if len(content) > max_content:
+                            content = content[:max_content] + '\n[truncated]'
+                    except Exception:
+                        content = getattr(result, 'snippet', '')
+
+                    learnings, directions = await extract_learnings(q, content)
+                    all_learnings.extend(learnings)
+                    new_directions.extend(directions)
+                    all_sources.append({
+                        'url': url,
+                        'title': getattr(result, 'title', url),
+                        'query': q,
+                        'snippet': getattr(result, 'snippet', ''),
+                    })
+
+            await asyncio.gather(*[process_query(q) for q in queries])
+
+            # Recurse on the most promising new direction
+            if current_depth > 0 and new_directions:
+                next_goal = new_directions[0]
+                await research_iteration(next_goal, current_depth - 1)
+
+        await research_iteration(query, depth)
+
+        if not all_sources:
+            return json.dumps({'error': 'No results found. Check that a web search engine is configured.', 'query': query})
+
+        return json.dumps(
+            {
+                'query': query,
+                'depth_used': depth,
+                'breadth_used': breadth,
+                'sources_count': len(all_sources),
+                'learnings': list(dict.fromkeys(all_learnings)),  # deduplicated
+                'sources': all_sources,
+                'instruction': (
+                    'Using the learnings and sources above, write a comprehensive, well-structured research report. '
+                    'Organise into sections with headers. Cite sources inline as [Title](URL). '
+                    'Highlight key findings, conflicting data, and open questions.'
+                ),
+            },
+            ensure_ascii=False,
+        )
+
+    except Exception as e:
+        log.exception(f'deep_research error: {e}')
+        return json.dumps({'error': str(e)})
+
+
 # =============================================================================
 # IMAGE GENERATION TOOLS
 # =============================================================================
