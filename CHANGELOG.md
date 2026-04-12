@@ -12,6 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.12-gpthub.5] - 2026-04-12
+
+### Fixed
+
+- 🚀 **Docker CI Cache Optimization.** Убран динамический \`BUILD_HASH\` из \`ci.yml\`, что полностью решило проблему инвалидации кэша и ускорило Docker-проверку для \`develop\` ветки в несколько раз.
+- 🦊 **GitLab Tag Sync.** Автоматическое проксирование и зеркалирование Git-тегов в репозиторий GitLab при билде.
+- 🔧 **Release Changelog extraction.** Исправлена ошибка экранирования в регулярном выражении `awk`, из-за которой в GitHub Releases ошибочно подтягивался только upstream-чейнджлог Open WebUI.
+- 🔗 **README badge (Private Repo).** Бейдж релизов заменен на статический, так как динамические бейджи `shields.io` GitHub Release не работают для приватных репозиториев (версия инжектится скриптом релиза).
+
 ## [0.8.12-gpthub.4] - 2026-04-12
 
 ### Fixed
