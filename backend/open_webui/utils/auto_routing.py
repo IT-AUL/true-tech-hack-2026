@@ -125,9 +125,9 @@ async def process_auto_routing(request, payload: dict[str, Any], user) -> tuple[
     Returns the selected model ID and the modified payload.
     """
     from open_webui.models.files import Files
-    from open_webui.utils.files import get_image_base64_from_file_id
     from open_webui.routers.audio import transcribe
     from open_webui.storage.provider import Storage
+    from open_webui.utils.files import get_image_base64_from_file_id
 
     messages = payload.get('messages', [])
     if not messages:
@@ -142,36 +142,36 @@ async def process_auto_routing(request, payload: dict[str, Any], user) -> tuple[
         files = []
         if 'files' in msg:
             files.extend(msg['files'])
-            
+
         if 'metadata' in payload and isinstance(payload['metadata'], dict):
             metadata_files = payload['metadata'].get('files', [])
             if metadata_files:
                 files.extend(metadata_files)
-                
+
         file_ids = [f.get('id') or f.get('file_id') for f in files if isinstance(f, dict)]
-        
+
         content = msg.get('content', '')
         if isinstance(content, list):
             for part in content:
                 if part.get('type') == 'file' and 'file_id' in part:
                     file_ids.append(part['file_id'])
-                    
+
         file_ids = list(set([fid for fid in file_ids if fid]))
 
         if not file_ids:
             continue
-            
+
         if isinstance(content, str):
             msg['content'] = [{'type': 'text', 'text': content}]
             content = msg['content']
-            
+
         for file_id in file_ids:
             file_item = Files.get_file_by_id(file_id)
             if not file_item:
                 continue
-                
+
             content_type = file_item.meta.get('content_type', '')
-            
+
             if content_type.startswith('image/'):
                 has_vision = True
                 b64 = get_image_base64_from_file_id(file_id)
@@ -180,7 +180,7 @@ async def process_auto_routing(request, payload: dict[str, Any], user) -> tuple[
             elif content_type.startswith('audio/') or content_type.startswith('video/'):
                 cached_text = file_item.data.get('content', '') if file_item.data else ''
                 if cached_text:
-                    content.append({'type': 'text', 'text': f"\\n[Audio Transcription: {cached_text}]\\n"})
+                    content.append({'type': 'text', 'text': f'\\n[Audio Transcription: {cached_text}]\\n'})
                 else:
                     try:
                         file_path = Storage.get_file(file_item.path)
@@ -191,16 +191,16 @@ async def process_auto_routing(request, payload: dict[str, Any], user) -> tuple[
                             file_data = file_item.data or {}
                             file_data['content'] = transcription_text
                             Files.update_file_data_by_id(file_id, file_data)
-                            content.append({'type': 'text', 'text': f"\\n[Audio Transcription: {transcription_text}]\\n"})
+                            content.append({'type': 'text', 'text': f'\\n[Audio Transcription: {transcription_text}]\\n'})
                     except Exception as e:
-                        log.error(f"Error transcribing auto-routing audio {file_id}: {e}")
+                        log.error(f'Error transcribing auto-routing audio {file_id}: {e}')
             else:
                 text_content = file_item.data.get('content', '') if file_item.data else ''
                 if text_content:
-                    content.append({'type': 'text', 'text': f"\\n[File Content ({file_item.filename}):\\n{text_content}]\\n"})
-    
+                    content.append({'type': 'text', 'text': f'\\n[File Content ({file_item.filename}):\\n{text_content}]\\n'})
+
     model_id = await get_auto_routed_model(payload)
     if has_vision and model_id != MODELS['image_gen']:
          model_id = MODELS['vision']
-         
+
     return model_id, payload
