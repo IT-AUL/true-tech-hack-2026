@@ -2354,9 +2354,7 @@
 		if (res) {
 			if (res.error) {
 				await handleOpenAIError(res.error, responseMessage);
-			} else if (
-				res.task_id
-			) {
+			} else if (res.task_id) {
 				if (taskIds) {
 					taskIds.push(res.task_id);
 				} else {
