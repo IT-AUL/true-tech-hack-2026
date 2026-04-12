@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Секции ниже без суффикса (`[0.8.12]`) — upstream Open WebUI changelog.
 
 ---
+## [0.8.12-gpthub.11] - 2026-04-12
+
+### Added
+
+- 🧠 **LLM-based intent classification для auto-routing.** В `backend/open_webui/utils/auto_routing.py` добавлена интеллектуальная классификация запросов через внешний router-модельный вызов с короткоживущим in-memory cache для повторяющихся диалогов.
+
+### Changed
+
+- 🔀 **Hybrid routing pipeline.** Автоматическая маршрутизация теперь сначала пытается определить категорию через LLM-классификатор, а при недоступности ключа, таймауте или ошибке ответа безопасно откатывается на regex fallback.
+- 🔐 **Новые env-переменные для LLM routing.** В конфигурацию добавлены `REKA_API_KEY`, `REKA_API_URL` и `REKA_ROUTER_MODEL` для внешнего классификатора без хардкода.
+- 🛠️ **Явная конфигурация dev-утилит.** `scratch/get_models.py` снова использует основной `OPENAI_API_BASE_URL` / `OPENAI_API_KEY`, без скрытых fallback-URL и дублирующих provider alias.
+
+### Fixed
+
+- 🧯 **Безопасный fallback при сбое роутера.** Если внешний LLM-классификатор недоступен или возвращает некорректный ответ, auto-routing не падает, а продолжает работу через локальную regex-классификацию.
+
 ## [0.8.12-gpthub.10] - 2026-04-12
 
 ### Added

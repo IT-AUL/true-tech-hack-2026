@@ -32,11 +32,9 @@ services:
       - ENABLE_RETRIEVAL_QUERY_GENERATION=${ENABLE_RETRIEVAL_QUERY_GENERATION:-true}
       - TASK_MODEL_EXTERNAL=${TASK_MODEL_EXTERNAL:-qwen3-235b-a22b-instruct-2507}
       - RAG_GENERATION_MODEL_EXTERNAL=${RAG_GENERATION_MODEL_EXTERNAL:-qwen3-235b-a22b-instruct-2507}
-      - ROUTERAI_API_URL=${ROUTERAI_API_URL:-https://routerai.ru/api/v1}
-      - ROUTERAI_API_KEY=${ROUTERAI_API_KEY}
       - REKA_API_KEY=${REKA_API_KEY}
       - REKA_API_URL=${REKA_API_URL:-https://api.reka.ai/v1}
-      - REKA_ROUTER_MODEL=${REKA_ROUTER_MODEL:-reka-edge}
+      - REKA_ROUTER_MODEL=${REKA_ROUTER_MODEL:-rekaai/reka-edge}
     volumes:
       - gpthub-data:/app/backend/data
     restart: unless-stopped
