@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Секции ниже без суффикса (`[0.8.12]`) — upstream Open WebUI changelog.
 
 ---
+## [0.8.12-gpthub.16] - 2026-04-13
+
+### Fixed
+
+- 🐳 **Docker build: cleanup step no longer purges a non-installed package.** После удаления `python3-dev` из install-списка сборка всё ещё падала на `apt-get purge ... python3-dev` в cleanup-этапе. Cleanup синхронизирован с текущим набором пакетов, поэтому release image снова собирается и пушится корректно.
+
+---
+
 ## [0.8.12-gpthub.15] - 2026-04-13
 
 ### Fixed
