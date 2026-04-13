@@ -2511,3 +2511,96 @@ async def view_skill(
     except Exception as e:
         log.exception(f'view_skill error: {e}')
         return json.dumps({'error': str(e)})
+
+
+# =============================================================================
+# AUDIO TOOLS
+# =============================================================================
+
+
+async def transcribe_audio(
+    file_id: str,
+    __request__: Request = None,
+    __user__: dict = None,
+) -> str:
+    """
+    Transcribe an audio file. Use this when the user asks you to describe,
+    transcribe, or process an audio file attached to the context.
+
+    :param file_id: The ID of the audio file to transcribe (e.g. from file metadata attached to the message).
+    :return: The generated text transcription of the audio file.
+    """
+    import base64
+    import os
+
+    import requests
+
+    from open_webui.models.files import Files
+    from open_webui.storage.provider import Storage
+
+    if __request__ is None:
+        return json.dumps({'error': 'Request context not available'})
+
+    try:
+        file_item = Files.get_file_by_id(file_id)
+        if not file_item:
+            return json.dumps({'error': f'File {file_id} not found'})
+
+        file_path = Storage.get_file(file_item.path)
+        if not os.path.exists(file_path):
+            return json.dumps({'error': f'File path {file_path} not found'})
+
+        api_key = __request__.app.state.config.AUDIO_STT_MISTRAL_API_KEY
+        if not api_key:
+            api_key = os.environ.get('ROUTERAI_API_KEY', '')
+
+        api_base_url = __request__.app.state.config.AUDIO_STT_MISTRAL_API_BASE_URL
+        if not api_base_url or api_base_url == 'https://api.mistral.ai/v1':
+            api_base_url = os.environ.get('ROUTERAI_API_URL') or 'https://api.mistral.ai/v1'
+
+        if not api_key:
+            return json.dumps({'error': 'Mistral API key (or ROUTERAI_API_KEY) is required'})
+
+        with open(file_path, 'rb') as audio_file:
+            audio_base64 = base64.b64encode(audio_file.read()).decode('utf-8')
+
+        url = f'{api_base_url}/chat/completions'
+        payload = {
+            'model': 'openai/gpt-audio',
+            'messages': [
+                {
+                    'role': 'user',
+                    'content': [
+                        {
+                            'type': 'input_audio',
+                            'input_audio': {
+                                'data': audio_base64,
+                                'format': 'wav' if file_path.lower().endswith('.wav') else 'mp3',
+                            },
+                        },
+                        {'type': 'text', 'text': 'Transcribe this audio exactly as spoken.'},
+                    ],
+                }
+            ],
+        }
+
+        r = requests.post(
+            url=url,
+            json=payload,
+            headers={
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json',
+            },
+            timeout=300,
+        )
+
+        r.raise_for_status()
+        response = r.json()
+
+        transcript = response.get('choices', [{}])[0].get('message', {}).get('content', '').strip()
+
+        return json.dumps({'status': 'success', 'transcription': transcript}, ensure_ascii=False)
+
+    except Exception as e:
+        log.exception(f'transcribe_audio error: {e}')
+        return json.dumps({'error': str(e)})

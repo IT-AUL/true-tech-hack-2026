@@ -2801,7 +2801,7 @@ PDF_LOADER_MODE = PersistentConfig(
 RAG_EMBEDDING_MODEL = PersistentConfig(
     'RAG_EMBEDDING_MODEL',
     'rag.embedding_model',
-    os.environ.get('RAG_EMBEDDING_MODEL', 'bge-m3'),
+    os.environ.get('RAG_EMBEDDING_MODEL', 'baai/bge-m3'),
 )
 log.info(f'Embedding model set: {RAG_EMBEDDING_MODEL.value}')
 
@@ -2964,12 +2964,12 @@ RAG_GENERATION_MODEL_EXTERNAL = PersistentConfig(
 RAG_OPENAI_API_BASE_URL = PersistentConfig(
     'RAG_OPENAI_API_BASE_URL',
     'rag.openai_api_base_url',
-    os.getenv('RAG_OPENAI_API_BASE_URL', OPENAI_API_BASE_URL),
+    os.getenv('RAG_OPENAI_API_BASE_URL', os.getenv('ROUTERAI_API_URL', OPENAI_API_BASE_URL)),
 )
 RAG_OPENAI_API_KEY = PersistentConfig(
     'RAG_OPENAI_API_KEY',
     'rag.openai_api_key',
-    os.getenv('RAG_OPENAI_API_KEY', OPENAI_API_KEY),
+    os.getenv('RAG_OPENAI_API_KEY', os.getenv('ROUTERAI_API_KEY', OPENAI_API_KEY)),
 )
 
 RAG_AZURE_OPENAI_BASE_URL = PersistentConfig(
@@ -3857,13 +3857,16 @@ AUDIO_STT_AZURE_MAX_SPEAKERS = PersistentConfig(
 AUDIO_STT_MISTRAL_API_KEY = PersistentConfig(
     'AUDIO_STT_MISTRAL_API_KEY',
     'audio.stt.mistral.api_key',
-    os.getenv('AUDIO_STT_MISTRAL_API_KEY', ''),
+    os.getenv('AUDIO_STT_MISTRAL_API_KEY', os.getenv('ROUTERAI_API_KEY', '')),
 )
 
 AUDIO_STT_MISTRAL_API_BASE_URL = PersistentConfig(
     'AUDIO_STT_MISTRAL_API_BASE_URL',
     'audio.stt.mistral.api_base_url',
-    os.getenv('AUDIO_STT_MISTRAL_API_BASE_URL', 'https://api.mistral.ai/v1'),
+    os.getenv(
+        'AUDIO_STT_MISTRAL_API_BASE_URL',
+        os.getenv('ROUTERAI_API_URL', 'https://api.mistral.ai/v1'),
+    ),
 )
 
 AUDIO_STT_MISTRAL_USE_CHAT_COMPLETIONS = PersistentConfig(

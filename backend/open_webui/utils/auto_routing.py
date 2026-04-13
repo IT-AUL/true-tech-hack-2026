@@ -1033,7 +1033,7 @@ async def process_auto_routing(
             elif content_type.startswith('audio/') or content_type.startswith('video/'):
                 cached_text = file_item.data.get('content', '') if file_item.data else ''
                 if cached_text:
-                    content.append({'type': 'text', 'text': f'\\n[Audio Transcription: {cached_text}]\\n'})
+                    content.append({'type': 'text', 'text': f'\n[Audio Transcription: {cached_text}]\n'})
                 else:
                     try:
                         file_path = Storage.get_file(file_item.path)
@@ -1043,16 +1043,14 @@ async def process_auto_routing(
                             file_data = file_item.data or {}
                             file_data['content'] = transcription_text
                             Files.update_file_data_by_id(file_id, file_data)
-                            content.append(
-                                {'type': 'text', 'text': f'\\n[Audio Transcription: {transcription_text}]\\n'}
-                            )
+                            content.append({'type': 'text', 'text': f'\n[Audio Transcription: {transcription_text}]\n'})
                     except Exception as e:
                         log.error('Error transcribing auto-routing audio %s: %s', file_id, e)
             else:
                 text_content = file_item.data.get('content', '') if file_item.data else ''
                 if text_content:
                     content.append(
-                        {'type': 'text', 'text': f'\\n[File Content ({file_item.filename}):\\n{text_content}]\\n'}
+                        {'type': 'text', 'text': f'\n[File Content ({file_item.filename}):\n{text_content}]\n'}
                     )
 
     decision = await get_auto_routed_route(payload, request=request, registry=registry)
