@@ -92,11 +92,15 @@ Ruff в хуках идёт как **`ruff` в PATH** (без отдельног
 ## Деплой для компаний (self-hosted)
 
 ```bash
-cd deploy/
-cp .env.example .env
-# Отредактируйте .env — укажите OPENAI_API_KEY и WEBUI_SECRET_KEY
-docker compose -f docker-compose.prod.yml up -d
+sudo mkdir -p /opt/gpthub
+cp deploy/.env.example /opt/gpthub/.env
+# Отредактируйте /opt/gpthub/.env — укажите OPENAI_API_KEY и WEBUI_SECRET_KEY
+bash deploy/deploy.sh
 ```
+
+Для демо-стенда на VPS с self-hosted runner используйте отдельный workflow `Deploy Demo` в GitHub Actions:
+- release workflow публикует образ
+- `Deploy Demo` вручную выкатывает нужную `version` или `image` на сервер
 
 Подробная инструкция: [deploy/DEPLOY.md](deploy/DEPLOY.md)
 

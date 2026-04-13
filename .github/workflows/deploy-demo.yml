@@ -1,0 +1,80 @@
+name: Deploy Demo
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version without leading v (for example 0.8.12-gpthub.16)'
+        required: false
+      image:
+        description: 'Full image override (for example ghcr.io/it-aul/true-tech-hack-2026:0.8.12-gpthub.16)'
+        required: false
+      prune_images:
+        description: 'Prune dangling Docker images after deploy'
+        required: true
+        default: 'true'
+
+concurrency:
+  group: demo-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy demo stand
+    runs-on: [self-hosted, deploy]
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve image
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${{ github.event.inputs.image }}" ]; then
+            IMAGE="${{ github.event.inputs.image }}"
+          elif [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+            VERSION="${VERSION#v}"
+            IMAGE="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]'):${VERSION}"
+          else
+            echo "Either 'image' or 'version' input must be provided." >&2
+            exit 1
+          fi
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure runtime env exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /opt/gpthub
+          if [ ! -f /opt/gpthub/.env ]; then
+            cp deploy/.env.example /opt/gpthub/.env
+            echo "Created /opt/gpthub/.env from deploy/.env.example" >&2
+            echo "Fill in OPENAI_API_KEY, WEBUI_SECRET_KEY, and other secrets, then rerun deploy." >&2
+            exit 1
+          fi
+
+      - name: Roll out demo stand
+        shell: bash
+        env:
+          DEPLOY_ROOT: /opt/gpthub
+          GPTHUB_IMAGE: ${{ steps.image.outputs.image }}
+          PRUNE_IMAGES: ${{ github.event.inputs.prune_images }}
+        run: |
+          set -euo pipefail
+          bash deploy/deploy.sh
+
+      - name: Show running containers
+        if: always()
+        shell: bash
+        run: docker compose -f /opt/gpthub/docker-compose.prod.yml --env-file /opt/gpthub/.env ps

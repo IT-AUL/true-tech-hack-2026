@@ -10,13 +10,34 @@
 ## Quick Start
 
 ```bash
-cd deploy/
-cp .env.example .env
-# Edit .env — set OPENAI_API_KEY and WEBUI_SECRET_KEY at minimum
-docker compose -f docker-compose.prod.yml up -d
+sudo mkdir -p /opt/gpthub
+cp deploy/.env.example /opt/gpthub/.env
+# Edit /opt/gpthub/.env — set OPENAI_API_KEY and WEBUI_SECRET_KEY at minimum
+bash deploy/deploy.sh
 ```
 
-The application will be available at `http://localhost:3000` (or the port you set in `.env`).
+The application will be available at `http://localhost:3000` (or the port you set in `/opt/gpthub/.env`).
+
+`deploy.sh` copies the latest [`docker-compose.prod.yml`](docker-compose.prod.yml) into `/opt/gpthub/`, reads runtime secrets from `/opt/gpthub/.env`, rolls out the selected image, waits for `/health`, and optionally prunes dangling Docker images.
+
+## Demo Stand Workflow
+
+For the demo VPS, the recommended path is a manual GitHub Actions rollout:
+
+1. Push a release tag so the image is built and published.
+2. Open `Actions -> Deploy Demo`.
+3. Run the workflow with either:
+   - `version=0.8.12-gpthub.16`
+   - or a full `image=ghcr.io/...:0.8.12-gpthub.16`
+4. The deploy runner on the VPS will:
+   - sync `docker-compose.prod.yml` into `/opt/gpthub/`
+   - reuse `/opt/gpthub/.env`
+   - set `GPTHUB_IMAGE`
+   - run `docker compose pull && docker compose up -d`
+   - wait for `/health`
+   - prune dangling images
+
+This keeps release and rollout separate: you can redeploy the same image without creating a new tag.
 
 ## Configuration
 
@@ -29,17 +50,16 @@ The application will be available at `http://localhost:3000` (or the port you se
 | `ENABLE_SIGNUP` | No | `false` | Allow new user registration |
 | `DEFAULT_USER_ROLE` | No | `user` | Default role for new users |
 | `DATABASE_URL` | No | SQLite | PostgreSQL connection string |
-| `GPTHUB_IMAGE` | No | `gpthub-app:latest` | Docker image to use |
+| `GPTHUB_IMAGE` | No | `gpthub-app:latest` | Docker image to use; updated automatically by the demo deploy workflow |
 
 ## Upgrading
 
 ```bash
-cd deploy/
-./upgrade.sh          # upgrade to latest
-./upgrade.sh v1.0.0   # upgrade to specific version
+bash deploy/upgrade.sh latest                 # upgrade to latest image
+bash deploy/upgrade.sh 0.8.12-gpthub.16      # upgrade to specific version
 ```
 
-The upgrade script automatically backs up your data before pulling the new version.
+The upgrade script automatically backs up your data from the running container before calling `deploy.sh`.
 
 ## Backup & Restore
 
@@ -98,11 +118,11 @@ curl -s http://localhost:3000/health | jq .
 
 **View logs:**
 ```bash
-docker compose -f docker-compose.prod.yml logs -f gpthub
+docker compose -f /opt/gpthub/docker-compose.prod.yml --env-file /opt/gpthub/.env logs -f gpthub
 ```
 
 **Reset data (caution — deletes all data):**
 ```bash
-docker compose -f docker-compose.prod.yml down -v
-docker compose -f docker-compose.prod.yml up -d
+docker compose -f /opt/gpthub/docker-compose.prod.yml --env-file /opt/gpthub/.env down -v
+bash deploy/deploy.sh
 ```
