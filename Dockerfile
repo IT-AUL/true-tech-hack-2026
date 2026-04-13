@@ -129,10 +129,9 @@ RUN chown -R $UID:$GID /app $HOME
 # Install common system dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    git build-essential pandoc gcc netcat-openbsd curl jq \
-    libmariadb-dev \
-    python3-dev \
-    ffmpeg libsm6 libxext6 zstd \
+    git build-essential gcc netcat-openbsd curl jq \
+    libmariadb-dev libmariadb3 \
+    ffmpeg libsm6 libxext6 \
     && rm -rf /var/lib/apt/lists/*
 
 # install python dependencies
