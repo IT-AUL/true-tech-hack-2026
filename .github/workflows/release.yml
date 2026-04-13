@@ -28,7 +28,7 @@ jobs:
 
   build-push:
     name: Build & push Docker image
-    runs-on: self-hosted
+    runs-on: [self-hosted, deploy]
     needs: verify
     permissions:
       contents: read
@@ -93,7 +93,7 @@ jobs:
 
   release:
     name: Create GitHub Release
-    runs-on: self-hosted
+    runs-on: [self-hosted, deploy]
     needs: verify   # independent from build-push — release is always created
     permissions:
       contents: write
