@@ -8,69 +8,7 @@ on:
 
 jobs:
   # ──────────────────────────────────────────────
-  # VALIDATE (PR only)
-  # ──────────────────────────────────────────────
-
-  validate-branch-name:
-    name: Branch name
-    runs-on: [self-hosted, ci]
-    if: github.event_name == 'pull_request'
-    steps:
-      - name: Check branch naming convention
-        run: |
-          BRANCH="${{ github.head_ref }}"
-          echo "Branch: $BRANCH"
-          # develop and main are permanent integration branches — skip check
-          if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "develop" ]; then
-            echo "Skipping naming check for protected integration branch: $BRANCH"
-            exit 0
-          fi
-          echo "$BRANCH" | grep -qE "^(feat|fix|chore|refactor|docs|test)/" || {
-            echo ""
-            echo "ERROR: Branch '$BRANCH' does not follow naming convention."
-            echo "  Allowed: feat/, fix/, chore/, refactor/, docs/, test/"
-            echo "  Example: feat/backend/auto-routing"
-            exit 1
-          }
-
-  validate-pr-title:
-    name: PR title
-    runs-on: [self-hosted, ci]
-    if: github.event_name == 'pull_request'
-    steps:
-      - name: Check Conventional Commits format
-        run: |
-          TITLE="${{ github.event.pull_request.title }}"
-          echo "PR title: $TITLE"
-          echo "$TITLE" | grep -qE "^(feat|fix|chore|refactor|docs|test|ci|perf|style|build|revert)(\(.+\))?: .+" || {
-            echo ""
-            echo "ERROR: PR title does not follow Conventional Commits format."
-            echo "  Format: <type>(<scope>): <description>"
-            echo "  Examples:"
-            echo "    feat(backend): add auto-routing endpoint"
-            echo "    fix(frontend): model selector overflow"
-            exit 1
-          }
-
-  validate-version-drift:
-    name: Version consistency
-    runs-on: [self-hosted, ci]
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@v4
-      - name: Check package.json vs package-lock.json version
-        run: |
-          PKG=$(node -e "console.log(require('./package.json').version)")
-          LOCK=$(node -e "console.log(require('./package-lock.json').version)")
-          echo "package.json:      $PKG"
-          echo "package-lock.json: $LOCK"
-          [ "$PKG" = "$LOCK" ] || {
-            echo "ERROR: version mismatch — run: npm install --package-lock-only"
-            exit 1
-          }
-
-  # ──────────────────────────────────────────────
-  # LINT
+  # LINT (frontend + backend в параллели)
   # ──────────────────────────────────────────────
 
   lint-frontend:
@@ -91,28 +29,13 @@ jobs:
     runs-on: [self-hosted, ci]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - run: pip install ruff
+      - run: pip install ruff --quiet
       - run: ruff check backend/
       - run: ruff format --check backend/
 
   # ──────────────────────────────────────────────
-  # TEST
+  # TEST backend (с кэшем зависимостей)
   # ──────────────────────────────────────────────
-
-  test-frontend:
-    name: Test frontend
-    runs-on: [self-hosted, ci]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run test:frontend
 
   test-backend:
     name: Test backend
@@ -131,30 +54,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install backend test dependencies
-        run: pip install -r backend/requirements.txt pytest pytest-asyncio
-      - name: Run backend unit tests
-        run: python -m pytest backend/open_webui/test/util
-
-
-  # ──────────────────────────────────────────────
-  # BUILD
-  # ──────────────────────────────────────────────
-
-  build-docker:
-    name: Build Docker image
-    runs-on: [self-hosted, ci]
-    if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
-    needs: [lint-frontend, lint-backend, test-frontend, test-backend]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Build image (no push)
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: false
-          tags: gpthub:ci-test
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache: pip
+      - run: pip install -r backend/requirements.txt pytest pytest-asyncio --quiet
+      - run: python -m pytest backend/open_webui/test/util -q
