@@ -28,9 +28,9 @@ jobs:
     runs-on: [self-hosted, ci]
     steps:
       - uses: actions/checkout@v4
-      - run: pip install ruff --quiet
-      - run: ruff check backend/
-      - run: ruff format --check backend/
+      - run: python3.11 -m pip install ruff --quiet
+      - run: python3.11 -m ruff check backend/
+      - run: python3.11 -m ruff format --check backend/
 
   test-backend:
     name: Test backend
@@ -46,5 +46,5 @@ jobs:
       PYTHONPATH: backend
     steps:
       - uses: actions/checkout@v4
-      - run: pip install -r backend/requirements.txt pytest pytest-asyncio --quiet
-      - run: python -m pytest backend/open_webui/test/util -q
+      - run: python3.11 -m pip install -r backend/requirements.txt pytest pytest-asyncio --quiet
+      - run: python3.11 -m pytest backend/open_webui/test/util -q
