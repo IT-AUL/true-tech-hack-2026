@@ -29,6 +29,9 @@ jobs:
     runs-on: [self-hosted, ci]
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
       - run: pip install ruff --quiet
       - run: ruff check backend/
       - run: ruff format --check backend/
