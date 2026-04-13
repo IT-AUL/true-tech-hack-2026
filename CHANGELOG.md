@@ -11,6 +11,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Секции ниже без суффикса (`[0.8.12]`) — upstream Open WebUI changelog.
 
 ---
+## [0.8.12-gpthub.12] - 2026-04-13
+
+### Added
+
+- 🔗 **URL auto-attach при вставке.** Если вставить голый URL в поле ввода (`Ctrl+V`), он автоматически прикрепляется как веб-страница для анализа — как в Perplexity.
+- 🧠 **`has_url` feature flag в auto-routing.** Наличие URL в запросе теперь выделено в отдельный признак, включён в ключ TTL-кэша и направляет запрос в категорию `research`.
+- 🎨 **Pill-чипы подсказок на стартовой странице.** Заменили 4-карточный грид на 6 аккуратных pill-кнопок с emoji и staggered-анимацией — только вставляют текст в поле, не отправляют автоматически.
+- 🖼️ **Улучшенный ImageSkeleton.** Лоадер при генерации изображений переработан: emoji-иконка 🎨, uppercase-подпись, subtle border.
+- 📊 **Полный набор категорий в CATEGORY_LABELS.** Добавлены русские метки для `research`, `analytics`, `document`, `audio_gen`, `math_logic`.
+
+### Changed
+
+- 🤖 **Название модели вместо "Auto" в ответах.** В шапке сообщения теперь показывается реальная выбранная модель (например "Qwen3 235B"), а не просто "Auto". Tooltip — model ID.
+- 🏷️ **Минималистичный "auto" маркер.** Громоздкий gradient-badge "Авто-выбор" заменён на лаконичный `— auto` серым текстом в списке моделей и подписи ответа.
+- ✨ **Model selector trigger.** Звезда-SVG в кнопке выбора модели заменена на emoji `✨`.
+- 🏷️ **StatusItem auto_routing.** Дешёвый SVG-спрайт заменён на pill с фоном и emoji-иконкой по категории (🎨⌨️👁️🎵📐🔍📊✍️📄✨).
+- 🔑 **Model preferences по реальным ID.** `research`, `analytics`, `creative`, `document` теперь ссылаются на реальные model ID провайдера вместо несуществующих алиасов.
+- 🛡️ **Fallback в `select_model`.** При отсутствии кандидатов приоритет отдаётся `mid/cheap text`-моделям, а не первой попавшейся (включая media-gen).
+- 📝 **Placeholder в поле ввода.** Обновлён на «Спросите что угодно, вставьте ссылку или файл...».
+- 🌐 **Prettier config.** Удалена устаревшая опция `pluginSearchDirs` (убрана в Prettier 3), исправлены style issues в 8 Svelte-файлах.
+
+### Fixed
+
+- 🐛 **`process_auto_routing` возвращал 2 значения при пустых messages.** Ранний `return` возвращал `(model_id, payload)` вместо ожидаемого 3-tuple, что ломало тест `test_empty_messages_returns_fallback`.
+- 🔄 **Cache hit перебивал URL-роутинг.** Ключ кэша не включал `has_url`, поэтому старый cached-результат мог вернуть неверную категорию для запроса с URL.
+- 🗂️ **Встроенная категория `research` выбирала audio-модель.** Исправлена цепочка fallback в `select_model` — media-gen модели исключены из текстового fallback.
+- 💅 **"Auto · auto" дубль в шапке ответа.** Убрано двойное повторение, когда имя модели уже было "Auto".
+
+---
+
 ## [0.8.12-gpthub.11] - 2026-04-12
 
 ### Added
