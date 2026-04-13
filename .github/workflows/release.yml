@@ -13,7 +13,7 @@ on:
 jobs:
   verify:
     name: Verify version tag
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
         with:
@@ -28,7 +28,7 @@ jobs:
 
   build-push:
     name: Build & push Docker image
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: verify
     permissions:
       contents: read
@@ -93,7 +93,7 @@ jobs:
 
   release:
     name: Create GitHub Release
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: verify   # independent from build-push — release is always created
     permissions:
       contents: write
