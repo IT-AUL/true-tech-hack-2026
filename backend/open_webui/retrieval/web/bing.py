@@ -1,6 +1,5 @@
 import argparse
 import logging
-from pprint import pprint
 
 import requests
 from open_webui.retrieval.web.main import SearchResult, get_filtered_results
@@ -63,4 +62,4 @@ def main():
     args = parser.parse_args()
 
     results = search_bing(args.locale, args.query, args.count, args.filter)
-    pprint(results)
+    print(results)

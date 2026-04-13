@@ -11,6 +11,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Секции ниже без суффикса (`[0.8.12]`) — upstream Open WebUI changelog.
 
 ---
+## [0.8.12-gpthub.16] - 2026-04-13
+
+### Fixed
+
+- 🐳 **Docker build: cleanup step no longer purges a non-installed package.** После удаления `python3-dev` из install-списка сборка всё ещё падала на `apt-get purge ... python3-dev` в cleanup-этапе. Cleanup синхронизирован с текущим набором пакетов, поэтому release image снова собирается и пушится корректно.
+
+---
+
+## [0.8.12-gpthub.15] - 2026-04-13
+
+### Fixed
+
+- 🐳 **Docker build: apt-get exit code 100.** Убраны `pandoc` (~60MB, вешал скачивание), `python3-dev` (уже в base image), `zstd` (не используется). Добавлен `libmariadb3` (runtime-зависимость `libmariadb-dev`).
+
+---
+
+## [0.8.12-gpthub.14] - 2026-04-13
+
+### Changed
+
+- 🏃 **CI/CD переведён на self-hosted раннеры.** Все job'ы в `ci.yml`, `release.yml` и `sync-gitlab.yml` переключены с `ubuntu-latest` на `self-hosted`.
+- 🚀 **Отдельный раннер для деплоя.** Job'ы `build-push` и `release` в `release.yml` теперь требуют метку `deploy` (`runs-on: [self-hosted, deploy]`) и идут только на выделенный деплой-раннер `selfhosted-deploy`. Остальные CI-job'ы остаются на обычных self-hosted раннерах без метки `deploy`.
+
+---
+
+## [0.8.12-gpthub.13] - 2026-04-13
+
+### Added
+
+- 🔬 **Deep Research plugin.** Новый встроенный инструмент `backend/open_webui/tools/builtin.py` — агент глубокого исследования: декомпозирует запрос на подзадачи, параллельно ищет в вебе, синтезирует финальный ответ с источниками.
+- 🎙️ **Intelligent audio transcription.** Переработан `backend/open_webui/routers/audio.py`: поддержка RouterAI и Mistral `gpt-audio` моделей с автоматическим выбором провайдера ASR через конфигурацию.
+- 📂 **Расширен `files.py` router.** Добавлена обработка аудио-файлов при загрузке — автоматическая транскрипция и сохранение текста в метаданные файла для последующего RAG.
+
+### Changed
+
+- ⚙️ **Модульная конфигурация audio/file/routing сервисов.** Настройки ASR, файлового хранилища и роутинга вынесены в явные env-переменные без хардкода провайдеров.
+- 🛠️ **pre-commit config для Windows.** Исправлена совместимость `.pre-commit-config.yaml` и `pyproject.toml` — ruff хуки теперь работают на Windows без ошибок путей.
+- 🐍 **ruff E741 fix.** Устранены неоднозначные имена переменных (`l`, `O`, `I`) в `deep_research` tool.
+
+---
+
 ## [0.8.12-gpthub.12] - 2026-04-13
 
 ### Added

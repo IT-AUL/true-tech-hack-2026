@@ -110,11 +110,32 @@ def process_uploaded_file(
                         db=db_session,
                     )
                     file_path_processed = Storage.get_file(file_path)
-                    result = transcribe(request, file_path_processed, file_metadata, user)
+
+                    try:
+                        from open_webui.config import AUDIO_STT_MISTRAL_API_KEY
+
+                        stt_engine = None
+                        stt_model = None
+
+                        if AUDIO_STT_MISTRAL_API_KEY.value or os.environ.get('ROUTERAI_API_KEY'):
+                            stt_engine = 'mistral'
+                            stt_model = 'openai/gpt-audio'
+
+                        result = transcribe(
+                            request, file_path_processed, file_metadata, user, engine=stt_engine, model=stt_model
+                        )
+                        text_content = result.get('text', '')
+                        if not text_content:
+                            text_content = '[Audio transcription failed or empty]'
+                    except Exception as e:
+                        log.warning(
+                            f'Auto-transcription during upload failed (will fall back to tool call if needed): {e}'
+                        )
+                        text_content = '[Audio transcription failed: ' + str(e) + ']'
 
                     process_file(
                         request,
-                        ProcessFileForm(file_id=file_item.id, content=result.get('text', '')),
+                        ProcessFileForm(file_id=file_item.id, content=text_content),
                         user=user,
                         db=db_session,
                     )
