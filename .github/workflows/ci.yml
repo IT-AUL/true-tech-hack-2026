@@ -6,39 +6,31 @@ on:
   pull_request:
     branches: [develop, main]
 
-jobs:
-  # ──────────────────────────────────────────────
-  # LINT (frontend + backend в параллели)
-  # ──────────────────────────────────────────────
+# Отменяем старый запуск при новом пуше в ту же ветку
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
+jobs:
   lint-frontend:
     name: Lint frontend
     runs-on: [self-hosted, ci]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
       - run: npm ci
       - run: npx eslint src --max-warnings=0
       - run: npx prettier --check "src/**/*.{js,ts,svelte,css,json}"
+      - if: always()
+        run: rm -rf node_modules
 
   lint-backend:
     name: Lint backend
     runs-on: [self-hosted, ci]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
       - run: pip install ruff --quiet
       - run: ruff check backend/
       - run: ruff format --check backend/
-
-  # ──────────────────────────────────────────────
-  # TEST backend (с кэшем зависимостей)
-  # ──────────────────────────────────────────────
 
   test-backend:
     name: Test backend
@@ -54,9 +46,5 @@ jobs:
       PYTHONPATH: backend
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: pip
       - run: pip install -r backend/requirements.txt pytest pytest-asyncio --quiet
       - run: python -m pytest backend/open_webui/test/util -q
