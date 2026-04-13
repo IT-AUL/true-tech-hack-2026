@@ -3154,24 +3154,85 @@ async def non_streaming_chat_response_handler(response, ctx):
                             **({'usage': usage} if usage else {}),
                         },
                     )
+            elif choices and choices[0].get('message', {}).get('images'):
+                generated_images = choices[0]['message'].get('images', [])
+                generated_files = []
+                for idx, image in enumerate(generated_images):
+                    image_url = image.get('image_url', {}).get('url') or image.get('url')
+                    if not image_url:
+                        continue
 
-                    # Send a webhook notification if the user is not active
-                    if request.app.state.config.ENABLE_USER_WEBHOOKS and not Users.is_user_active(user.id):
-                        webhook_url = Users.get_user_webhook_url_by_id(user.id)
-                        if webhook_url:
-                            await post_webhook(
-                                request.app.state.WEBUI_NAME,
-                                webhook_url,
-                                f'{title} - {request.app.state.config.WEBUI_URL}/c/{metadata["chat_id"]}\n\n{content}',
-                                {
-                                    'action': 'chat',
-                                    'message': content,
-                                    'title': title,
-                                    'url': f'{request.app.state.config.WEBUI_URL}/c/{metadata["chat_id"]}',
-                                },
-                            )
+                    if image_url.startswith('data:image/') and ';' in image_url:
+                        content_type = image_url[len('data:') : image_url.index(';')]
+                    else:
+                        content_type = 'image/png'
 
-                    await background_tasks_handler(ctx)
+                    generated_files.append(
+                        {
+                            'type': 'image',
+                            'url': image_url,
+                            'content_type': content_type,
+                            'name': f'generated-image-{idx + 1}',
+                        }
+                    )
+
+                if generated_files:
+                    await event_emitter(
+                        {
+                            'type': 'chat:message:files',
+                            'data': {
+                                'files': generated_files,
+                            },
+                        }
+                    )
+
+                title = Chats.get_chat_title_by_id(metadata['chat_id'])
+                response_output = response_data.get('output') or []
+                usage = normalize_usage(response_data.get('usage', {}) or {})
+
+                await event_emitter(
+                    {
+                        'type': 'chat:completion',
+                        'data': {
+                            'done': True,
+                            'content': '',
+                            'files': generated_files,
+                            'output': response_output,
+                            'title': title,
+                        },
+                    }
+                )
+
+                Chats.upsert_message_to_chat_by_id_and_message_id(
+                    metadata['chat_id'],
+                    metadata['message_id'],
+                    {
+                        'done': True,
+                        'role': 'assistant',
+                        'content': '',
+                        'files': generated_files,
+                        'output': response_output,
+                        **({'usage': usage} if usage else {}),
+                    },
+                )
+
+                # Send a webhook notification if the user is not active
+                if request.app.state.config.ENABLE_USER_WEBHOOKS and not Users.is_user_active(user.id):
+                    webhook_url = Users.get_user_webhook_url_by_id(user.id)
+                    if webhook_url:
+                        await post_webhook(
+                            request.app.state.WEBUI_NAME,
+                            webhook_url,
+                            f'{title} - {request.app.state.config.WEBUI_URL}/c/{metadata["chat_id"]}\n\n{content}',
+                            {
+                                'action': 'chat',
+                                'message': content,
+                                'title': title,
+                                'url': f'{request.app.state.config.WEBUI_URL}/c/{metadata["chat_id"]}',
+                            },
+                        )
+
+                await background_tasks_handler(ctx)
 
             response = build_response_object(response, merge_events_into_response(response_data, events))
         except Exception as e:

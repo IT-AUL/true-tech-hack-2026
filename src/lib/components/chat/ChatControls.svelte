@@ -70,7 +70,7 @@
 
 	$: hasMessages = history?.messages && Object.keys(history.messages).length > 0;
 
-	$: showControlsTab = $user?.role === 'admin' || ($user?.permissions?.chat?.controls ?? true);
+	$: showControlsTab = $user?.role === 'admin';
 	$: showFilesTab =
 		!!$selectedTerminalId ||
 		(codeInterpreterEnabled && $config?.code?.interpreter_engine !== 'jupyter');
