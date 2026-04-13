@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Секции ниже без суффикса (`[0.8.12]`) — upstream Open WebUI changelog.
 
 ---
+## [0.8.12-gpthub.14] - 2026-04-13
+
+### Changed
+
+- 🏃 **CI/CD переведён на self-hosted раннеры.** Все job'ы в `ci.yml`, `release.yml` и `sync-gitlab.yml` переключены с `ubuntu-latest` на `self-hosted`.
+- 🚀 **Отдельный раннер для деплоя.** Job'ы `build-push` и `release` в `release.yml` теперь требуют метку `deploy` (`runs-on: [self-hosted, deploy]`) и идут только на выделенный деплой-раннер `selfhosted-deploy`. Остальные CI-job'ы остаются на обычных self-hosted раннерах без метки `deploy`.
+
+---
+
 ## [0.8.12-gpthub.13] - 2026-04-13
 
 ### Added
