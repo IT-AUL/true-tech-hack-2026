@@ -13,7 +13,7 @@ jobs:
 
   validate-branch-name:
     name: Branch name
-    runs-on: self-hosted
+    runs-on: [self-hosted, ci]
     if: github.event_name == 'pull_request'
     steps:
       - name: Check branch naming convention
@@ -35,7 +35,7 @@ jobs:
 
   validate-pr-title:
     name: PR title
-    runs-on: self-hosted
+    runs-on: [self-hosted, ci]
     if: github.event_name == 'pull_request'
     steps:
       - name: Check Conventional Commits format
@@ -54,7 +54,7 @@ jobs:
 
   validate-version-drift:
     name: Version consistency
-    runs-on: self-hosted
+    runs-on: [self-hosted, ci]
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
@@ -75,7 +75,7 @@ jobs:
 
   lint-frontend:
     name: Lint frontend
-    runs-on: self-hosted
+    runs-on: [self-hosted, ci]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -88,7 +88,7 @@ jobs:
 
   lint-backend:
     name: Lint backend
-    runs-on: self-hosted
+    runs-on: [self-hosted, ci]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -104,7 +104,7 @@ jobs:
 
   test-frontend:
     name: Test frontend
-    runs-on: self-hosted
+    runs-on: [self-hosted, ci]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -116,7 +116,7 @@ jobs:
 
   test-backend:
     name: Test backend
-    runs-on: self-hosted
+    runs-on: [self-hosted, ci]
     env:
       OPENAI_API_BASE_URL: https://example.com/v1
       OPENAI_API_KEY: test-key
@@ -143,7 +143,7 @@ jobs:
 
   build-docker:
     name: Build Docker image
-    runs-on: self-hosted
+    runs-on: [self-hosted, ci]
     if: github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main'
     needs: [lint-frontend, lint-backend, test-frontend, test-backend]
     steps:
