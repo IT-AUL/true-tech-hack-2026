@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Секции ниже без суффикса (`[0.8.12]`) — upstream Open WebUI changelog.
 
 ---
+## [0.8.12-gpthub.17] - 2026-04-13
+
+### Added
+
+- 🚀 **Manual VPS demo rollout workflow.** Добавлен отдельный GitHub Actions workflow `Deploy Demo`, который вручную выкатывает выбранную версию или полный image tag на self-hosted runner с меткой `deploy`.
+
+### Changed
+
+- 🗂️ **Deploy runtime moved to `/opt/gpthub`.** Скрипты деплоя теперь используют внешний runtime `.env` и production compose в `/opt/gpthub`, чтобы секреты и runtime overrides не лежали в репозитории.
+- 🩺 **Deploy script health check.** `deploy.sh` теперь ждёт `/health`, показывает `docker compose ps` и умеет чистить dangling Docker images после успешной выкладки.
+- 🔄 **Upgrade flow simplified.** `upgrade.sh` теперь делает backup данных и переиспользует общий `deploy.sh` вместо дублирования логики rollout.
+
+### Fixed
+
+- 🔒 **Production port binding restricted to localhost.** В `deploy/docker-compose.prod.yml` порт приложения теперь публикуется как `127.0.0.1:${PORT:-3000}:8080`, чтобы доступ снаружи шёл только через nginx, а не напрямую в контейнер.
+
+---
+
 ## [0.8.12-gpthub.16] - 2026-04-13
 
 ### Fixed
