@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Секции ниже без суффикса (`[0.8.12]`) — upstream Open WebUI changelog.
 
 ---
+## [0.8.12-gpthub.15] - 2026-04-13
+
+### Fixed
+
+- 🐳 **Docker build: apt-get exit code 100.** Убраны `pandoc` (~60MB, вешал скачивание), `python3-dev` (уже в base image), `zstd` (не используется). Добавлен `libmariadb3` (runtime-зависимость `libmariadb-dev`).
+
+---
+
 ## [0.8.12-gpthub.14] - 2026-04-13
 
 ### Changed
