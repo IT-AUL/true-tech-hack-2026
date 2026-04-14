@@ -12,7 +12,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import FileResponse, StreamingResponse
-from open_webui.config import BYPASS_ADMIN_ACCESS_CONTROL, STATIC_DIR
+from open_webui.config import BYPASS_ADMIN_ACCESS_CONTROL, get_default_favicon_path
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.internal.db import get_session
 from open_webui.models.access_grants import AccessGrants
@@ -401,9 +401,15 @@ def get_model_profile_image(id: str, user=Depends(get_verified_user)):
                 except Exception:
                     pass
 
-        return FileResponse(f'{STATIC_DIR}/favicon.png')
+        icon = get_default_favicon_path()
+        if icon is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Default model icon not available')
+        return FileResponse(icon)
     else:
-        return FileResponse(f'{STATIC_DIR}/favicon.png')
+        icon = get_default_favicon_path()
+        if icon is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Default model icon not available')
+        return FileResponse(icon)
 
 
 ############################

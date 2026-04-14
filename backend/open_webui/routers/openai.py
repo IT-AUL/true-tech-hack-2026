@@ -1,8 +1,10 @@
 import asyncio
+import copy
 import hashlib
 import json
 import logging
 import re
+import time
 from urllib.parse import urlparse
 
 import aiohttp
@@ -23,6 +25,9 @@ from open_webui.env import (
     AIOHTTP_CLIENT_SESSION_SSL,
     AIOHTTP_CLIENT_TIMEOUT,
     AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST,
+    AUTO_ROUTE_FAILOVER_BODY_SUBSTRINGS,
+    AUTO_ROUTE_FAILOVER_HTTP_STATUSES,
+    AUTO_ROUTE_FAILOVER_MAX,
     BYPASS_MODEL_ACCESS_CONTROL,
     ENABLE_FORWARD_USER_INFO_HEADERS,
     FORWARD_SESSION_INFO_HEADER_CHAT_ID,
@@ -206,6 +211,103 @@ def get_microsoft_entra_id_access_token():
     except Exception as e:
         log.error(f'Error getting Microsoft Entra ID access token: {e}')
         return None
+
+
+def _extract_last_user_text(messages: list[dict]) -> str:
+    for message in reversed(messages):
+        if message.get('role') != 'user':
+            continue
+        content = message.get('content', '')
+        if isinstance(content, str):
+            return content.strip()
+        if isinstance(content, list):
+            parts: list[str] = []
+            for part in content:
+                if isinstance(part, dict) and part.get('type') in ('text', 'input_text'):
+                    parts.append(part.get('text', ''))
+            return ' '.join(part.strip() for part in parts if isinstance(part, str)).strip()
+    return ''
+
+
+def _build_auto_routed_image_generation_response(model_id: str, images: list[dict]) -> JSONResponse:
+    content = 'Изображение сгенерировано и прикреплено к сообщению.'
+    return JSONResponse(
+        content={
+            'id': f'chatcmpl-image-{int(time.time() * 1000)}',
+            'object': 'chat.completion',
+            'created': int(time.time()),
+            'model': model_id,
+            'choices': [
+                {
+                    'index': 0,
+                    'message': {'role': 'assistant', 'content': content},
+                    'finish_reason': 'stop',
+                }
+            ],
+            'images': images,
+        },
+        headers={'x-selected-model': model_id},
+    )
+
+
+async def _auto_routed_image_generation_attempt(
+    request: Request,
+    payload: dict,
+    model_id: str,
+    metadata: dict | None,
+    user: UserModel,
+    *,
+    allow_failover: bool,
+):
+    from open_webui.routers.images import CreateImageForm, image_generations
+    from open_webui.socket.main import get_event_emitter
+
+    prompt = _extract_last_user_text(payload.get('messages', []))
+    if not prompt:
+        raise HTTPException(status_code=400, detail='Open WebUI: Missing image generation prompt')
+
+    try:
+        images = await image_generations(
+            request=request,
+            form_data=CreateImageForm(model=model_id, prompt=prompt),
+            metadata={
+                'chat_id': metadata.get('chat_id') if isinstance(metadata, dict) else None,
+                'message_id': metadata.get('message_id') if isinstance(metadata, dict) else None,
+            },
+            user=user,
+        )
+    except HTTPException as exc:
+        if allow_failover and exc.status_code in AUTO_ROUTE_FAILOVER_HTTP_STATUSES:
+            log.warning('auto-route image failover: upstream %s on model %s, retrying', exc.status_code, model_id)
+            return None, 'failover'
+        raise
+    except Exception as exc:
+        if allow_failover:
+            log.warning('auto-route image failover: connection error on model %s: %s', model_id, exc)
+            return None, 'failover'
+        raise
+
+    if metadata and metadata.get('session_id') and metadata.get('chat_id') and metadata.get('message_id'):
+        try:
+            event_emitter = get_event_emitter(
+                {
+                    'user_id': user.id,
+                    'chat_id': metadata['chat_id'],
+                    'message_id': metadata['message_id'],
+                    'session_id': metadata['session_id'],
+                }
+            )
+            await event_emitter({'type': 'status', 'data': {'description': 'Image created', 'done': True}})
+            await event_emitter(
+                {
+                    'type': 'files',
+                    'data': {'files': [{'type': 'image', 'url': image['url']} for image in images]},
+                }
+            )
+        except Exception as exc:
+            log.warning('Failed to emit auto-routed image generation files: %s', exc)
+
+    return _build_auto_routed_image_generation_response(model_id, images), 'terminal'
 
 
 ##########################################
@@ -997,6 +1099,405 @@ def convert_responses_result(response: dict) -> dict:
     }
 
 
+def _upstream_error_should_trigger_auto_failover(status: int, response_body) -> bool:
+    if status in AUTO_ROUTE_FAILOVER_HTTP_STATUSES:
+        return True
+    text = ''
+    if isinstance(response_body, str):
+        text = response_body.lower()
+    elif isinstance(response_body, dict):
+        text = json.dumps(response_body).lower()
+    elif response_body is None:
+        text = ''
+    else:
+        text = str(response_body).lower()
+    if not any(sub in text for sub in AUTO_ROUTE_FAILOVER_BODY_SUBSTRINGS):
+        return False
+    if status == 400:
+        return True
+    # Some gateways return HTTP 200 with an OpenAI-style error object (no streaming yet).
+    if status == 200 and isinstance(response_body, dict) and response_body.get('error') is not None:
+        return True
+    return False
+
+
+def _sse_text_indicates_auto_route_failover(text: str) -> bool:
+    """Detect provider errors inside the first SSE bytes (often still HTTP 200)."""
+    for line in text.splitlines():
+        line = line.strip()
+        if not line.startswith('data:'):
+            continue
+        payload = line[5:].strip()
+        if not payload or payload == '[DONE]':
+            continue
+        try:
+            obj = json.loads(payload)
+        except Exception:
+            continue
+        if isinstance(obj, dict) and obj.get('error') is not None:
+            if _upstream_error_should_trigger_auto_failover(200, obj):
+                return True
+    return False
+
+
+class _PrefixedStreamChunks:
+    """Prefix bytes before aiohttp's StreamReader (peeked SSE) for stream_chunks_handler."""
+
+    def __init__(self, prefix: bytes, underlying: aiohttp.StreamReader):
+        self._prefix = prefix
+        self._underlying = underlying
+
+    def __aiter__(self):
+        return self._byte_chunks()
+
+    async def _byte_chunks(self):
+        """Used when stream_chunks_handler returns the stream unchanged (no line buffering)."""
+        if self._prefix:
+            chunk = self._prefix
+            self._prefix = b''
+            yield chunk
+        async for chunk in self._underlying:
+            yield chunk
+
+    def iter_chunks(self):
+        async def gen():
+            if self._prefix:
+                p = self._prefix
+                self._prefix = b''
+                yield p, False
+            async for data, end in self._underlying.iter_chunks():
+                yield data, end
+
+        return gen()
+
+
+async def _peek_sse_for_auto_route_failover(
+    content: aiohttp.StreamReader,
+    max_bytes: int = 65536,
+) -> tuple[bytes, bool]:
+    """
+    Read the start of an SSE body. Returns (bytes to replay to the client, True if failover).
+    On failover the connection is left unread; caller returns before StreamingResponse and
+    `finally` runs cleanup_response.
+    """
+    buf = bytearray()
+    try:
+        async for chunk in content.iter_chunked(4096):
+            buf.extend(chunk)
+            if len(buf) > max_bytes:
+                break
+            text = buf.decode('utf-8', errors='replace')
+            if _sse_text_indicates_auto_route_failover(text):
+                return bytes(buf), True
+            # Typical successful OpenAI-style stream
+            if '"choices"' in text and ('"delta"' in text or '"message"' in text):
+                return bytes(buf), False
+    except Exception:
+        pass
+    return bytes(buf), False
+
+
+async def _openai_upstream_chat_completion_attempt(
+    request: Request,
+    payload: dict,
+    model_id: str,
+    metadata: dict | None,
+    user: UserModel,
+    bypass_filter: bool,
+    bypass_system_prompt: bool,
+    allow_failover: bool,
+):
+    """
+    Run one upstream chat/completions request. Returns (response, outcome):
+    outcome 'success' — return response to client;
+    'failover' — try next model (auto-route only);
+    'terminal' — return error response to client.
+    """
+    model_info = Models.get_model_by_id(model_id)
+
+    if model_info:
+        if model_info.base_model_id:
+            base_model_id = request.base_model_id if hasattr(request, 'base_model_id') else model_info.base_model_id
+            payload['model'] = base_model_id
+            model_id = base_model_id
+
+        params = model_info.params.model_dump()
+
+        if params:
+            system = params.pop('system', None)
+
+            payload = apply_model_params_to_body_openai(params, payload)
+            if not bypass_system_prompt:
+                payload = apply_system_prompt_to_body(system, payload, metadata, user)
+
+        if not bypass_filter and user.role == 'user':
+            user_group_ids = {group.id for group in Groups.get_groups_by_member_id(user.id)}
+            if not (
+                user.id == model_info.user_id
+                or AccessGrants.has_access(
+                    user_id=user.id,
+                    resource_type='model',
+                    resource_id=model_info.id,
+                    permission='read',
+                    user_group_ids=user_group_ids,
+                )
+            ):
+                raise HTTPException(
+                    status_code=403,
+                    detail='Model not found',
+                )
+    elif not bypass_filter:
+        if user.role != 'admin':
+            raise HTTPException(
+                status_code=403,
+                detail='Model not found',
+            )
+
+    models = request.app.state.OPENAI_MODELS
+    if not models or model_id not in models:
+        log.info(f'Model ID {model_id} not in cache, fetching all models...')
+        await get_all_models(request, user=user)
+        models = request.app.state.OPENAI_MODELS
+
+    log.info(f'Current model_id: {model_id}')
+    log.info(f'Available models in cache: {list(models.keys())[:10]}... (total {len(models)})')
+    model = models.get(model_id)
+
+    if not model:
+        if allow_failover:
+            log.warning('auto-route failover: model %s not in catalog, skipping', model_id)
+            return None, 'failover'
+        raise HTTPException(
+            status_code=404,
+            detail='Model not found',
+        )
+
+    idx = model['urlIdx']
+
+    api_config = request.app.state.config.OPENAI_API_CONFIGS.get(
+        str(idx),
+        request.app.state.config.OPENAI_API_CONFIGS.get(request.app.state.config.OPENAI_API_BASE_URLS[idx], {}),
+    )
+
+    prefix_id = api_config.get('prefix_id', None)
+    if prefix_id:
+        payload['model'] = payload['model'].replace(f'{prefix_id}.', '')
+
+    if 'pipeline' in model and model.get('pipeline'):
+        payload['user'] = {
+            'name': user.name,
+            'id': user.id,
+            'email': user.email,
+            'role': user.role,
+        }
+
+    url = request.app.state.config.OPENAI_API_BASE_URLS[idx]
+    key = request.app.state.config.OPENAI_API_KEYS[idx]
+
+    if is_openai_new_model(payload['model']):
+        payload = openai_reasoning_model_handler(payload)
+    elif 'api.openai.com' not in url:
+        if 'max_completion_tokens' in payload:
+            payload['max_tokens'] = payload['max_completion_tokens']
+            del payload['max_completion_tokens']
+
+    if 'max_tokens' in payload and 'max_completion_tokens' in payload:
+        del payload['max_tokens']
+
+    stream_explicitly_disabled = False
+    media_generation_keywords = (
+        'flux',
+        'lyria',
+        'gpt-image',
+        'gpt-5-image',
+        'dall-e',
+        'imagen',
+        '-image',
+        'image-preview',
+        'qwen-image',
+        'sd3',
+        'sdxl',
+    )
+    if 'model' in payload and any(keyword in payload['model'].lower() for keyword in media_generation_keywords):
+        payload['stream'] = False
+        stream_explicitly_disabled = True
+
+    if 'logit_bias' in payload and payload['logit_bias']:
+        logit_bias = convert_logit_bias_input_to_json(payload['logit_bias'])
+
+        if logit_bias:
+            payload['logit_bias'] = json.loads(logit_bias)
+
+    headers, cookies = await get_headers_and_cookies(request, url, key, api_config, metadata, user=user)
+
+    is_responses = api_config.get('api_type') == 'responses'
+
+    if api_config.get('azure', False):
+        api_version = api_config.get('api_version', '2023-03-15-preview')
+        request_url, payload = convert_to_azure_payload(url, payload, api_version)
+
+        auth_type = api_config.get('auth_type', 'bearer')
+        if auth_type not in ('azure_ad', 'microsoft_entra_id'):
+            headers['api-key'] = key
+
+        headers['api-version'] = api_version
+
+        if is_responses:
+            payload = convert_to_responses_payload(payload)
+            request_url = f'{request_url}/responses?api-version={api_version}'
+        else:
+            request_url = f'{request_url}/chat/completions?api-version={api_version}'
+    else:
+        if is_responses:
+            payload = convert_to_responses_payload(payload)
+            request_url = f'{url}/responses'
+        else:
+            request_url = f'{url}/chat/completions'
+
+    if not is_responses and 'messages' in payload:
+        for message in payload['messages']:
+            if message.get('role') == 'tool' and isinstance(message.get('content'), list):
+                message['content'] = ''.join(
+                    part.get('text', '') for part in message['content'] if part.get('type') in ('input_text', 'text')
+                )
+
+    payload_json = json.dumps(payload)
+
+    r = None
+    session = None
+    streaming = False
+    response = None
+
+    try:
+        session = aiohttp.ClientSession(trust_env=True, timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT))
+
+        r = await session.request(
+            method='POST',
+            url=request_url,
+            data=payload_json,
+            headers=headers,
+            cookies=cookies,
+            ssl=AIOHTTP_CLIENT_SESSION_SSL,
+        )
+
+        if r.status >= 400 and 'text/event-stream' in r.headers.get('Content-Type', ''):
+            err_body = await r.text()
+            if allow_failover and _upstream_error_should_trigger_auto_failover(r.status, err_body):
+                log.warning(
+                    'auto-route failover: upstream %s on model %s (SSE), retrying',
+                    r.status,
+                    model_id,
+                )
+                return None, 'failover'
+            return PlainTextResponse(status_code=r.status, content=err_body), 'terminal'
+
+        if 'text/event-stream' in r.headers.get('Content-Type', ''):
+            if stream_explicitly_disabled:
+                sse_data = None
+                try:
+                    async for raw_line in r.content:
+                        line = raw_line.decode('utf-8', errors='replace').strip()
+                        if not line:
+                            continue
+                        if line == 'data: [DONE]':
+                            break
+                        if line.startswith('data: '):
+                            try:
+                                sse_data = json.loads(line[6:])
+                            except Exception:
+                                pass
+                except Exception as e:
+                    log.error(f'Error reading SSE response for image/audio model: {e}')
+                if (
+                    r.status >= 400
+                    and allow_failover
+                    and _upstream_error_should_trigger_auto_failover(
+                        r.status, sse_data if isinstance(sse_data, (dict, str)) else {}
+                    )
+                ):
+                    return None, 'failover'
+                return JSONResponse(
+                    status_code=r.status,
+                    content=sse_data or {},
+                    headers={'x-selected-model': model_id},
+                ), 'terminal' if r.status >= 400 else 'success'
+            sse_prefix = b''
+            if allow_failover:
+                sse_prefix, sse_failover = await _peek_sse_for_auto_route_failover(r.content)
+                if sse_failover:
+                    log.warning(
+                        'auto-route failover: upstream SSE error in initial chunk on model %s',
+                        model_id,
+                    )
+                    return None, 'failover'
+            streaming = True
+            res_headers = dict(r.headers)
+            res_headers['x-selected-model'] = model_id
+            if sse_prefix:
+                prefixed = _PrefixedStreamChunks(sse_prefix, r.content)
+                return StreamingResponse(
+                    stream_wrapper(r, session, lambda _c: stream_chunks_handler(prefixed)),
+                    status_code=r.status,
+                    headers=res_headers,
+                ), 'success'
+            return StreamingResponse(
+                stream_wrapper(r, session, stream_chunks_handler),
+                status_code=r.status,
+                headers=res_headers,
+            ), 'success'
+        else:
+            try:
+                response = await r.json()
+            except Exception as e:
+                log.error(e)
+                response = await r.text()
+
+            if r.status >= 400:
+                if allow_failover and _upstream_error_should_trigger_auto_failover(r.status, response):
+                    log.warning(
+                        'auto-route failover: upstream %s on model %s: %s',
+                        r.status,
+                        model_id,
+                        str(response)[:500],
+                    )
+                    return None, 'failover'
+                if isinstance(response, (dict, list)):
+                    return JSONResponse(status_code=r.status, content=response), 'terminal'
+                else:
+                    return PlainTextResponse(status_code=r.status, content=response), 'terminal'
+
+            if is_responses and isinstance(response, dict):
+                response = convert_responses_result(response)
+
+            if allow_failover and isinstance(response, dict) and response.get('error') is not None:
+                if _upstream_error_should_trigger_auto_failover(r.status, response):
+                    log.warning(
+                        'auto-route failover: upstream %s JSON error on model %s: %s',
+                        r.status,
+                        model_id,
+                        str(response)[:500],
+                    )
+                    return None, 'failover'
+
+            return JSONResponse(
+                status_code=r.status, content=response, headers={'x-selected-model': model_id}
+            ), 'success'
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.exception(e)
+        if allow_failover:
+            log.warning('auto-route failover: connection error on model %s: %s', model_id, e)
+            return None, 'failover'
+        raise HTTPException(
+            status_code=r.status if r else 500,
+            detail='Open WebUI: Server Connection Error',
+        )
+    finally:
+        if not streaming:
+            await cleanup_response(r, session)
+
+
 @router.post('/chat/completions')
 async def generate_chat_completion(
     request: Request,
@@ -1016,13 +1517,14 @@ async def generate_chat_completion(
     if BYPASS_MODEL_ACCESS_CONTROL:
         bypass_filter = True
 
-    idx = 0
-
     payload = {**form_data}
     metadata = payload.pop('metadata', None)
     auto_route = payload.pop('auto_route', False)
 
     model_id = form_data.get('model')
+
+    auto_routed = False
+    payload_snapshot_pre_model_info = None
 
     if model_id == 'auto' or auto_route:
         from open_webui.socket.main import get_event_emitter
@@ -1034,7 +1536,7 @@ async def generate_chat_completion(
             models = request.app.state.OPENAI_MODELS
 
         model_id, payload, routing_decision = await process_auto_routing(
-            request, payload, user, available_models=models
+            request, payload, user, available_models=models, metadata=metadata
         )
         log.info(f'Auto-routing selected model: {model_id}')
         payload['model'] = model_id
@@ -1080,6 +1582,8 @@ async def generate_chat_completion(
                                 'model_name': model_display_name,
                                 'method': routing_decision.method,
                                 'confidence': routing_decision.confidence,
+                                'used_model_fallback': routing_decision.used_model_fallback,
+                                'failover_candidate_count': len(routing_decision.failover_candidates),
                             },
                         },
                     }
@@ -1087,252 +1591,102 @@ async def generate_chat_completion(
             except Exception as e:
                 log.warning(f'Failed to emit auto-routing status: {e}')
 
-    model_info = Models.get_model_by_id(model_id)
+        auto_routed = True
+        payload_snapshot_pre_model_info = copy.deepcopy(payload)
 
-    # Check model info and override the payload
-    if model_info:
-        if model_info.base_model_id:
-            base_model_id = (
-                request.base_model_id if hasattr(request, 'base_model_id') else model_info.base_model_id
-            )  # Use request's base_model_id if available
-            payload['model'] = base_model_id
-            model_id = base_model_id
-
-        params = model_info.params.model_dump()
-
-        if params:
-            system = params.pop('system', None)
-
-            payload = apply_model_params_to_body_openai(params, payload)
-            if not bypass_system_prompt:
-                payload = apply_system_prompt_to_body(system, payload, metadata, user)
-
-        # Check if user has access to the model
-        if not bypass_filter and user.role == 'user':
-            user_group_ids = {group.id for group in Groups.get_groups_by_member_id(user.id)}
-            if not (
-                user.id == model_info.user_id
-                or AccessGrants.has_access(
-                    user_id=user.id,
-                    resource_type='model',
-                    resource_id=model_info.id,
-                    permission='read',
-                    user_group_ids=user_group_ids,
-                )
-            ):
-                raise HTTPException(
-                    status_code=403,
-                    detail='Model not found',
-                )
-    elif not bypass_filter:
-        if user.role != 'admin':
-            raise HTTPException(
-                status_code=403,
-                detail='Model not found',
-            )
-
-    # Check if model is already in app state cache to avoid expensive get_all_models() call
-    models = request.app.state.OPENAI_MODELS
-    if not models or model_id not in models:
-        log.info(f'Model ID {model_id} not in cache, fetching all models...')
-        await get_all_models(request, user=user)
-        models = request.app.state.OPENAI_MODELS
-
-    log.info(f'Current model_id: {model_id}')
-    log.info(f'Available models in cache: {list(models.keys())[:10]}... (total {len(models)})')
-    model = models.get(model_id)
-
-    if model:
-        idx = model['urlIdx']
+    if auto_routed:
+        candidates = list(routing_decision.failover_candidates)[:AUTO_ROUTE_FAILOVER_MAX]
+        if not candidates:
+            candidates = [model_id]
     else:
-        raise HTTPException(
-            status_code=404,
-            detail='Model not found',
-        )
+        candidates = [model_id]
 
-    # Get the API config for the model
-    api_config = request.app.state.config.OPENAI_API_CONFIGS.get(
-        str(idx),
-        request.app.state.config.OPENAI_API_CONFIGS.get(
-            request.app.state.config.OPENAI_API_BASE_URLS[idx], {}
-        ),  # Legacy support
-    )
-
-    prefix_id = api_config.get('prefix_id', None)
-    if prefix_id:
-        payload['model'] = payload['model'].replace(f'{prefix_id}.', '')
-
-    # Add user info to the payload if the model is a pipeline
-    if 'pipeline' in model and model.get('pipeline'):
-        payload['user'] = {
-            'name': user.name,
-            'id': user.id,
-            'email': user.email,
-            'role': user.role,
-        }
-
-    url = request.app.state.config.OPENAI_API_BASE_URLS[idx]
-    key = request.app.state.config.OPENAI_API_KEYS[idx]
-
-    # Check if model is a reasoning model that needs special handling
-    if is_openai_new_model(payload['model']):
-        payload = openai_reasoning_model_handler(payload)
-    elif 'api.openai.com' not in url:
-        # Remove "max_completion_tokens" from the payload for backward compatibility
-        if 'max_completion_tokens' in payload:
-            payload['max_tokens'] = payload['max_completion_tokens']
-            del payload['max_completion_tokens']
-
-    if 'max_tokens' in payload and 'max_completion_tokens' in payload:
-        del payload['max_tokens']
-
-    # Disable streaming for media generation models that return massive chunks
-    # (image/audio) to avoid chunk too big errors and hangs on endless SSE.
-    # We save this flag BEFORE json.dumps so we can check it later when the
-    # provider still responds with text/event-stream despite stream=False.
-    stream_explicitly_disabled = False
-    media_generation_keywords = (
-        'flux',
-        'lyria',
-        'gpt-image',
-        'gpt-5-image',
-        'dall-e',
-        'imagen',
-        '-image',
-        'image-preview',
-        'qwen-image',
-        'sd3',
-        'sdxl',
-    )
-    if 'model' in payload and any(keyword in payload['model'].lower() for keyword in media_generation_keywords):
-        payload['stream'] = False
-        stream_explicitly_disabled = True
-
-    # Convert the modified body back to JSON
-    if 'logit_bias' in payload and payload['logit_bias']:
-        logit_bias = convert_logit_bias_input_to_json(payload['logit_bias'])
-
-        if logit_bias:
-            payload['logit_bias'] = json.loads(logit_bias)
-
-    headers, cookies = await get_headers_and_cookies(request, url, key, api_config, metadata, user=user)
-
-    is_responses = api_config.get('api_type') == 'responses'
-
-    if api_config.get('azure', False):
-        api_version = api_config.get('api_version', '2023-03-15-preview')
-        request_url, payload = convert_to_azure_payload(url, payload, api_version)
-
-        # Only set api-key header if not using Azure Entra ID authentication
-        auth_type = api_config.get('auth_type', 'bearer')
-        if auth_type not in ('azure_ad', 'microsoft_entra_id'):
-            headers['api-key'] = key
-
-        headers['api-version'] = api_version
-
-        if is_responses:
-            payload = convert_to_responses_payload(payload)
-            request_url = f'{request_url}/responses?api-version={api_version}'
+    n = len(candidates)
+    for attempt_index, try_model_id in enumerate(candidates):
+        if auto_routed:
+            attempt_payload = copy.deepcopy(payload_snapshot_pre_model_info)
+            attempt_payload['model'] = try_model_id
         else:
-            request_url = f'{request_url}/chat/completions?api-version={api_version}'
-    else:
-        if is_responses:
-            payload = convert_to_responses_payload(payload)
-            request_url = f'{url}/responses'
-        else:
-            request_url = f'{url}/chat/completions'
-    # For Chat Completions, strip image parts from multimodal tool messages
-    # (Chat Completions doesn't support images in tool content).
-    if not is_responses and 'messages' in payload:
-        for message in payload['messages']:
-            if message.get('role') == 'tool' and isinstance(message.get('content'), list):
-                message['content'] = ''.join(
-                    part.get('text', '') for part in message['content'] if part.get('type') in ('input_text', 'text')
-                )
+            attempt_payload = payload
 
-    payload = json.dumps(payload)
+        form_data['model'] = try_model_id
 
-    r = None
-    session = None
-    streaming = False
-    response = None
-
-    try:
-        session = aiohttp.ClientSession(trust_env=True, timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT))
-
-        r = await session.request(
-            method='POST',
-            url=request_url,
-            data=payload,
-            headers=headers,
-            cookies=cookies,
-            ssl=AIOHTTP_CLIENT_SESSION_SSL,
-        )
-
-        # Check if response is SSE
-        if 'text/event-stream' in r.headers.get('Content-Type', ''):
-            # Media generation models send a massive base64 SSE event even
-            # when stream=False was requested.  We MUST NOT use r.text() / r.json()
-            # here because those wait for EOF — SSE servers often keep the connection
-            # open indefinitely, causing multi-minute hangs.
-            # Instead we iterate line-by-line and stop as soon as we see [DONE].
-            if stream_explicitly_disabled:
-                sse_data = None
-                try:
-                    async for raw_line in r.content:
-                        line = raw_line.decode('utf-8', errors='replace').strip()
-                        if not line:
-                            continue
-                        if line == 'data: [DONE]':
-                            break
-                        if line.startswith('data: '):
-                            try:
-                                sse_data = json.loads(line[6:])
-                            except Exception:
-                                pass  # keep last successfully parsed event
-                except Exception as e:
-                    log.error(f'Error reading SSE response for image/audio model: {e}')
-                return JSONResponse(
-                    status_code=r.status,
-                    content=sse_data or {},
-                    headers={'x-selected-model': model_id},
-                )
-            streaming = True
-            res_headers = dict(r.headers)
-            res_headers['x-selected-model'] = model_id
-            return StreamingResponse(
-                stream_wrapper(r, session, stream_chunks_handler),
-                status_code=r.status,
-                headers=res_headers,
-            )
-        else:
+        if (
+            auto_routed
+            and attempt_index > 0
+            and metadata
+            and metadata.get('session_id')
+            and metadata.get('chat_id')
+            and metadata.get('message_id')
+        ):
             try:
-                response = await r.json()
+                from open_webui.socket.main import get_event_emitter
+
+                event_emitter = get_event_emitter(
+                    {
+                        'user_id': user.id,
+                        'chat_id': metadata['chat_id'],
+                        'message_id': metadata['message_id'],
+                        'session_id': metadata['session_id'],
+                    }
+                )
+                models_state = request.app.state.OPENAI_MODELS
+                resolved = models_state.get(try_model_id, {}) if models_state else {}
+                display_name = resolved.get('name', try_model_id)
+                await event_emitter(
+                    {
+                        'type': 'status',
+                        'data': {
+                            'action': 'auto_routing_failover',
+                            'description': f'Повтор: {display_name}',
+                            'done': True,
+                            'routing': {
+                                'category': routing_decision.category,
+                                'method': routing_decision.method,
+                                'model_id': try_model_id,
+                                'model_name': display_name,
+                                'attempt': attempt_index + 1,
+                                'attempts_total': n,
+                                'selected_via_fallback': routing_decision.used_model_fallback,
+                            },
+                        },
+                    }
+                )
             except Exception as e:
-                log.error(e)
-                response = await r.text()
+                log.warning('Failed to emit auto-route failover status: %s', e)
 
-            if r.status >= 400:
-                if isinstance(response, (dict, list)):
-                    return JSONResponse(status_code=r.status, content=response)
-                else:
-                    return PlainTextResponse(status_code=r.status, content=response)
+        allow_failover = bool(auto_routed and attempt_index < n - 1)
+        try:
+            if auto_routed and routing_decision.category == 'image_gen':
+                response, outcome = await _auto_routed_image_generation_attempt(
+                    request,
+                    attempt_payload,
+                    try_model_id,
+                    metadata,
+                    user,
+                    allow_failover=allow_failover,
+                )
+            else:
+                response, outcome = await _openai_upstream_chat_completion_attempt(
+                    request,
+                    attempt_payload,
+                    try_model_id,
+                    metadata,
+                    user,
+                    bypass_filter,
+                    bypass_system_prompt,
+                    allow_failover=allow_failover,
+                )
+        except HTTPException:
+            raise
+        if outcome == 'failover':
+            continue
+        return response
 
-            # Convert Responses API result to simple format
-            if is_responses and isinstance(response, dict):
-                response = convert_responses_result(response)
-
-            return JSONResponse(status_code=r.status, content=response, headers={'x-selected-model': model_id})
-    except Exception as e:
-        log.exception(e)
-
-        raise HTTPException(
-            status_code=r.status if r else 500,
-            detail='Open WebUI: Server Connection Error',
-        )
-    finally:
-        if not streaming:
-            await cleanup_response(r, session)
+    raise HTTPException(
+        status_code=502,
+        detail='Open WebUI: Auto-route could not reach any model',
+    )
 
 
 async def embeddings(request: Request, form_data: dict, user):
