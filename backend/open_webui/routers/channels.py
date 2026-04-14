@@ -5,8 +5,8 @@ from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.responses import FileResponse, Response, StreamingResponse
+from open_webui.config import get_default_favicon_path
 from open_webui.constants import ERROR_MESSAGES
-from open_webui.env import STATIC_DIR
 from open_webui.internal.db import get_session
 from open_webui.models.access_grants import AccessGrants, has_public_read_access_grant, has_public_write_access_grant
 from open_webui.models.channels import (
@@ -1599,8 +1599,10 @@ def get_webhook_profile_image(webhook_id: str, user=Depends(get_verified_user)):
     """Get webhook profile image by webhook ID."""
     webhook = Channels.get_webhook_by_id(webhook_id)
     if not webhook:
-        # Return default favicon if webhook not found
-        return FileResponse(f'{STATIC_DIR}/favicon.png')
+        icon = get_default_favicon_path()
+        if icon is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Default icon not available')
+        return FileResponse(icon)
 
     if webhook.profile_image_url:
         # Check if it's url or base64
@@ -1624,8 +1626,10 @@ def get_webhook_profile_image(webhook_id: str, user=Depends(get_verified_user)):
             except Exception:
                 pass
 
-    # Return default favicon if no profile image
-    return FileResponse(f'{STATIC_DIR}/favicon.png')
+    icon = get_default_favicon_path()
+    if icon is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Default icon not available')
+    return FileResponse(icon)
 
 
 @router.get('/{id}/webhooks', response_model=list[ChannelWebhookModel])

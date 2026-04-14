@@ -771,6 +771,48 @@ else:
         AIOHTTP_CLIENT_TIMEOUT_TOOL_SERVER = AIOHTTP_CLIENT_TIMEOUT
 
 
+try:
+    AUTO_ROUTE_FAILOVER_MAX = max(1, int(os.environ.get('AUTO_ROUTE_FAILOVER_MAX', '15')))
+except ValueError:
+    AUTO_ROUTE_FAILOVER_MAX = 15
+
+_auto_route_failover_statuses = os.environ.get('AUTO_ROUTE_FAILOVER_HTTP_STATUSES', '400,404,408,429,502,503,504')
+try:
+    AUTO_ROUTE_FAILOVER_HTTP_STATUSES = frozenset(
+        int(x.strip()) for x in _auto_route_failover_statuses.split(',') if x.strip()
+    )
+except ValueError:
+    AUTO_ROUTE_FAILOVER_HTTP_STATUSES = frozenset({400, 404, 408, 429, 502, 503, 504})
+
+AUTO_ROUTE_FAILOVER_BODY_SUBSTRINGS = tuple(
+    x.strip().lower()
+    for x in os.environ.get(
+        'AUTO_ROUTE_FAILOVER_BODY_SUBSTRINGS',
+        'no available providers,model_not_found,unavailable,overload,overloaded,rate limit',
+    ).split(',')
+    if x.strip()
+)
+
+# Auto-router: conversation context for LLM/rules (see docs/API_CHANGES.md)
+try:
+    ROUTER_CONTEXT_MAX_MESSAGES = max(0, int(os.environ.get('ROUTER_CONTEXT_MAX_MESSAGES', '8')))
+except ValueError:
+    ROUTER_CONTEXT_MAX_MESSAGES = 8
+try:
+    ROUTER_CONTEXT_MAX_CHARS = max(200, int(os.environ.get('ROUTER_CONTEXT_MAX_CHARS', '3000')))
+except ValueError:
+    ROUTER_CONTEXT_MAX_CHARS = 3000
+try:
+    ROUTER_SHORT_MESSAGE_LEN = max(0, int(os.environ.get('ROUTER_SHORT_MESSAGE_LEN', '24')))
+except ValueError:
+    ROUTER_SHORT_MESSAGE_LEN = 24
+ROUTER_DISABLE_ROUTING_CACHE = os.environ.get('ROUTER_DISABLE_ROUTING_CACHE', '').lower() in (
+    '1',
+    'true',
+    'yes',
+)
+
+
 RAG_EMBEDDING_TIMEOUT = os.environ.get('RAG_EMBEDDING_TIMEOUT', '')
 
 if RAG_EMBEDDING_TIMEOUT == '':

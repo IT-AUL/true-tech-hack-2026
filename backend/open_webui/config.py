@@ -826,6 +826,16 @@ load_oauth_providers()
 
 STATIC_DIR = Path(os.getenv('STATIC_DIR', OPEN_WEBUI_DIR / 'static')).resolve()
 
+
+def get_default_favicon_path() -> Path | None:
+    """Path to a bundled favicon (root copy from frontend build, or Swagger UI fallback in dev)."""
+    for rel in ('favicon.png', 'swagger-ui/favicon.png'):
+        p = STATIC_DIR / rel
+        if p.is_file():
+            return p
+    return None
+
+
 try:
     if STATIC_DIR.exists():
         for item in STATIC_DIR.iterdir():

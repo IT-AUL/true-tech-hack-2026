@@ -2,7 +2,7 @@
 Hybrid auto-router for GPTHub.
 
 4-stage classification pipeline:
-  Stage 1  Deterministic rules  (modality, code blocks, document length)
+  Stage 1  Guardrails           (explicit modality, attachments, code blocks, documents)
   Stage 2  Semantic embeddings  (bge-m3 cosine similarity vs seed utterances)
   Stage 3  Cheap LLM classifier (internal model, confidence + complexity)
   Stage 4  Regex safety net     (keyword patterns)
@@ -55,7 +55,14 @@ VALID_COMPLEXITIES = frozenset({'low', 'medium', 'high'})
 
 PATTERNS = {
     'image_gen': re.compile(
-        r'(?i)\b(нарисуй|сгенерируй\s+картинку|нарисовать|сгенерировать\s+изображение|изобрази|сделай\s+картинку|создай\s+картинку|создай\s+изображение|draw|generate\s+image|picture)\b'
+        r'(?i)\b('
+        r'нарисуй|изобрази|'
+        r'сгенерируй\s+картинку|сгенерируй\s+изображение|нарисовать|сгенерировать\s+изображение|'
+        r'сделай\s+картинку|создай\s+картинку|создай\s+изображение|'
+        r'хочу\s+картинку|хочу\s+изображение|нужна\s+картинка|дай\s+картинку|'
+        r'draw|generate\s+(?:an\s+)?image|'
+        r'i\s+want\s+(?:a\s+)?picture|picture\s+of|picture'
+        r')\b'
     ),
     'audio_gen': re.compile(r'(?i)\b(звук|аудио|песн|music|song|audio|sound|сгенерируй\s+звук|мелоди)\b'),
     'code': re.compile(
@@ -261,6 +268,73 @@ def get_router_model(registry: list[ModelMeta]) -> ModelMeta | None:
 # =========================================================================
 
 _TRIVIAL_MAX_LEN = 50
+_SMALLTALK_SHORT_RE = re.compile(
+    r'(?is)^\s*(?:'
+    r'hi|hello|hey|thanks|thank\s+you|ok(?:ay)?|sure|yes|no|yep|got\s+it|cool|'
+    r'привет|здравствуй(?:те)?|добрый\s+(?:день|вечер)|доброе\s+утро|'
+    r'ок(?:ей)?|спасибо|благодарю|да|нет|ага|понятно|ясно|хорошо'
+    r')[.!?,\s]*$'
+)
+_PRECISE_REGEX_OVERRIDE_CATEGORIES = frozenset({'image_gen', 'audio_gen', 'vision', 'document'})
+
+
+def _message_content_to_text_for_routing(content: Any) -> tuple[str, bool]:
+    """Extract plain text from OpenAI-style message content; flag image parts."""
+    has_image = False
+    if isinstance(content, str):
+        return content, False
+    if isinstance(content, list):
+        parts: list[str] = []
+        for part in content:
+            if not isinstance(part, dict):
+                continue
+            if part.get('type') in ('text', 'input_text'):
+                parts.append(part.get('text', ''))
+            elif part.get('type') in ('image_url', 'input_image'):
+                has_image = True
+        return ' '.join(parts), has_image
+    return '', False
+
+
+def _extract_prior_conversation_for_routing(
+    messages: list[dict[str, Any]],
+    *,
+    max_messages: int,
+    max_chars: int,
+) -> str:
+    """
+    Build a compact transcript of user/assistant turns *before* the last user message.
+    Used for follow-up intent (e.g. image request after discussion).
+    """
+    if not messages or max_messages <= 0 or max_chars <= 0:
+        return ''
+
+    last_user_idx: int | None = None
+    for i in range(len(messages) - 1, -1, -1):
+        if messages[i].get('role') == 'user':
+            last_user_idx = i
+            break
+    if last_user_idx is None or last_user_idx == 0:
+        return ''
+
+    prior = messages[:last_user_idx]
+    filtered = [m for m in prior if m.get('role') in ('user', 'assistant')]
+    if not filtered:
+        return ''
+    tail = filtered[-max_messages:]
+    lines: list[str] = []
+    for m in tail:
+        role = m.get('role', '')
+        text, _ = _message_content_to_text_for_routing(m.get('content'))
+        text = text.strip()
+        if not text:
+            continue
+        label = 'user' if role == 'user' else 'assistant'
+        lines.append(f'{label}: {text}')
+    blob = '\n'.join(lines)
+    if len(blob) <= max_chars:
+        return blob
+    return blob[-max_chars:]
 
 
 @dataclass(slots=True)
@@ -274,6 +348,7 @@ class RequestFeatures:
     has_url: bool
     lang: str
     is_trivial: bool
+    recent_context: str = ''
 
 
 def _detect_lang(text: str) -> str:
@@ -294,7 +369,29 @@ def _estimate_complexity(text_len: int) -> str:
     return 'high'
 
 
+def _should_trivial_short_circuit(features: RequestFeatures) -> bool:
+    """
+    Skip expensive routing only for genuine small-talk / acknowledgements.
+
+    Ordinary short requests like "сделай логотип" or "хочу картинку котика" should still go
+    through semantic / LLM routing even when they are under _TRIVIAL_MAX_LEN.
+    """
+    if features.recent_context.strip():
+        return False
+    if features.has_image or features.has_audio or features.has_files or features.has_code_block or features.has_url:
+        return False
+
+    text = re.sub(r'\s+', ' ', features.text.strip().lower())
+    if not text:
+        return True
+    if len(text) > _TRIVIAL_MAX_LEN:
+        return False
+    return bool(_SMALLTALK_SHORT_RE.fullmatch(text))
+
+
 def extract_features(payload: dict[str, Any]) -> RequestFeatures:
+    from open_webui.env import ROUTER_CONTEXT_MAX_CHARS, ROUTER_CONTEXT_MAX_MESSAGES
+
     messages = payload.get('messages', [])
     last_user = next((m for m in reversed(messages) if m.get('role') == 'user'), None)
     if not last_user:
@@ -308,7 +405,14 @@ def extract_features(payload: dict[str, Any]) -> RequestFeatures:
             has_url=False,
             lang='other',
             is_trivial=True,
+            recent_context='',
         )
+
+    recent_context = _extract_prior_conversation_for_routing(
+        messages,
+        max_messages=ROUTER_CONTEXT_MAX_MESSAGES,
+        max_chars=ROUTER_CONTEXT_MAX_CHARS,
+    )
 
     content = last_user.get('content', '')
     text_content = ''
@@ -371,6 +475,7 @@ def extract_features(payload: dict[str, Any]) -> RequestFeatures:
         has_url=has_url,
         lang=lang,
         is_trivial=is_trivial,
+        recent_context=recent_context,
     )
 
 
@@ -389,6 +494,8 @@ class RoutingDecision:
     latency_ms: int = 0
     cache_hit: bool = False
     used_model_fallback: bool = False
+    # Ordered model IDs for auto-route upstream failover (same scoring as select_model)
+    failover_candidates: tuple[str, ...] = ()
 
 
 def _copy_routing_decision(decision: RoutingDecision) -> RoutingDecision:
@@ -450,9 +557,48 @@ class _TTLCache:
 _routing_cache = _TTLCache()
 
 
-def _cache_key(text: str, has_image: bool, has_url: bool = False) -> str:
-    normalized = text.strip().lower()[:500] + ('|img' if has_image else '') + ('|url' if has_url else '')
-    return hashlib.md5(normalized.encode()).hexdigest()
+def _rules_pattern_text(features: RequestFeatures) -> str:
+    """For short follow-ups, match regex patterns against prior dialog + last line."""
+    from open_webui.env import ROUTER_SHORT_MESSAGE_LEN
+
+    t = features.text.strip()
+    if features.recent_context and ROUTER_SHORT_MESSAGE_LEN > 0 and len(t) <= ROUTER_SHORT_MESSAGE_LEN:
+        return (features.recent_context + '\n' + t).strip()
+    return features.text
+
+
+def _semantic_query_text(features: RequestFeatures) -> str:
+    """Embedding query: include recent context when the last turn is short."""
+    from open_webui.env import ROUTER_CONTEXT_MAX_CHARS, ROUTER_SHORT_MESSAGE_LEN
+
+    t = features.text.strip()
+    if not features.recent_context or not ROUTER_SHORT_MESSAGE_LEN or len(t) > ROUTER_SHORT_MESSAGE_LEN:
+        return features.text
+    combined = (features.recent_context + '\n' + t).strip()
+    if len(combined) <= ROUTER_CONTEXT_MAX_CHARS:
+        return combined
+    return combined[-ROUTER_CONTEXT_MAX_CHARS:]
+
+
+def build_routing_cache_key(features: RequestFeatures, metadata: dict[str, Any] | None = None) -> str | None:
+    """
+    Cache key for routing decisions. Returns None to disable read/write for this request.
+    Incorporates prior-turn hash and optional chat/message id to avoid cross-chat collisions.
+    """
+    from open_webui.env import ROUTER_DISABLE_ROUTING_CACHE
+
+    if ROUTER_DISABLE_ROUTING_CACHE:
+        return None
+    norm = features.text.strip().lower()[:500]
+    ctx_hash = hashlib.md5(features.recent_context.encode()).hexdigest()[:16] if features.recent_context else ''
+    base = f'{norm}|{"img" if features.has_image else ""}|{"url" if features.has_url else ""}|{ctx_hash}'
+    digest = hashlib.md5(base.encode()).hexdigest()
+    if metadata and isinstance(metadata, dict):
+        cid = metadata.get('chat_id')
+        mid = metadata.get('message_id')
+        if cid is not None and mid is not None and str(cid) and str(mid):
+            return f'{digest}|{cid}|{mid}'
+    return digest
 
 
 # =========================================================================
@@ -461,25 +607,28 @@ def _cache_key(text: str, has_image: bool, has_url: bool = False) -> str:
 
 
 def _classify_with_rules(features: RequestFeatures) -> RoutingDecision | None:
-    if features.has_image and not PATTERNS['image_gen'].search(features.text):
+    pattern_text = _rules_pattern_text(features)
+
+    if features.has_image and not PATTERNS['image_gen'].search(pattern_text):
         return RoutingDecision('vision', 'low', method='rules')
 
-    if features.has_audio:
-        return RoutingDecision('audio_gen', 'low', method='rules')
+    # Do not map voice/video *attachments* to audio_gen (music APIs like Lyria). Attachments are
+    # transcribed in process_auto_routing; routing should follow text intent. audio_gen only via
+    # explicit keywords below (e.g. «создай музыку», generate a song).
 
-    if PATTERNS['image_gen'].search(features.text):
+    if PATTERNS['image_gen'].search(pattern_text):
         return RoutingDecision('image_gen', 'low', method='rules')
 
-    if PATTERNS['audio_gen'].search(features.text):
+    if PATTERNS['audio_gen'].search(pattern_text):
         return RoutingDecision('audio_gen', 'low', method='rules')
 
     if features.has_url:
         return RoutingDecision('research', 'medium', method='rules')
 
-    if features.has_code_block or PATTERNS['code'].search(features.text):
+    if features.has_code_block:
         return RoutingDecision('code', _estimate_complexity(features.text_len), method='rules')
 
-    if features.text_len > 10000 or PATTERNS['document'].search(features.text):
+    if features.text_len > 10000 or PATTERNS['document'].search(pattern_text):
         return RoutingDecision('document', 'high' if features.text_len > 10000 else 'medium', method='rules')
 
     return None
@@ -638,7 +787,10 @@ async def _classify_with_embeddings(
 # =========================================================================
 
 _ROUTER_SYSTEM_PROMPT = """\
-Вы — ассистент маршрутизации. Получив сообщение, выберите одну категорию и оцените сложность.
+Вы — ассистент маршрутизации. Учитывайте блок «Недавний диалог» (если есть): follow-up вопросы
+часто ссылаются на предыдущие реплики. Например, если ранее обсуждали иллюстрацию, а сейчас
+короткая просьба вроде «нарисуй», «сделай вариант», «ещё раз» — выберите image_gen.
+Аналогично для музыки/звука — audio_gen. Если прикреплено изображение и нужен разбор — vision.
 
 Категории:
 - image_gen  : генерация изображения/иллюстрации
@@ -729,13 +881,15 @@ async def _classify_with_llm(
     model, base_url, api_key = config
 
     context_parts: list[str] = []
+    if features.recent_context:
+        context_parts.append('Недавний диалог:\n' + features.recent_context[:2500])
     if features.has_image:
         context_parts.append('[User attached an image]')
     if features.has_audio:
         context_parts.append('[User attached audio]')
     if features.text:
-        context_parts.append(features.text[:2000])
-    user_message = '\n'.join(context_parts) or '(empty message)'
+        context_parts.append('Текущее сообщение пользователя:\n' + features.text[:2000])
+    user_message = '\n\n'.join(context_parts) or '(empty message)'
 
     body = {
         'model': model,
@@ -830,6 +984,27 @@ def _classify_with_regex(text: str, has_image: bool) -> RoutingDecision:
     )
 
 
+def _classify_with_regex_from_features(features: RequestFeatures) -> RoutingDecision:
+    t = _rules_pattern_text(features)
+    return _classify_with_regex(t, features.has_image)
+
+
+def _should_regex_override_llm(
+    features: RequestFeatures,
+    llm_decision: RoutingDecision,
+    regex_decision: RoutingDecision,
+) -> bool:
+    if regex_decision.category == 'fallback' or regex_decision.category == llm_decision.category:
+        return False
+    if regex_decision.category in _PRECISE_REGEX_OVERRIDE_CATEGORIES:
+        return True
+    if regex_decision.category == 'code' and features.has_code_block:
+        return True
+    if regex_decision.category == 'research' and features.has_url:
+        return True
+    return False
+
+
 # =========================================================================
 # Scored Model Selection
 # =========================================================================
@@ -848,9 +1023,56 @@ _COMPLEXITY_TO_TIER: dict[str, str] = {
 }
 
 _NON_ROUTABLE_KINDS = frozenset({'embedding', 'stt'})
+_MEDIA_GENERATION_KINDS = frozenset({'image_gen', 'audio_gen'})
 
 
-def select_model(category: str, complexity: str, registry: list[ModelMeta]) -> tuple[str | None, bool]:
+def _is_generative_media_model(meta: ModelMeta) -> bool:
+    """
+    True for image/audio *generation* endpoints (Flux, Lyria, etc.).
+
+    Catalog entries sometimes use kind=text while id/name still contains lyria/flux;
+    rely on _infer_kind(search_text) so these never enter fallback/vision/code routes.
+    """
+    if meta.kind in _MEDIA_GENERATION_KINDS:
+        return True
+    return _infer_kind(meta.search_text) in _MEDIA_GENERATION_KINDS
+
+
+def _exclude_generative_media_for_category(category: str, meta: ModelMeta) -> bool:
+    """Whether to skip this model when building candidates for the given route."""
+    if category in _MEDIA_GENERATION_KINDS:
+        return False
+    return _is_generative_media_model(meta)
+
+
+def _filter_failover_candidates_for_category(
+    category: str, ordered_ids: list[str], registry: list[ModelMeta]
+) -> list[str]:
+    """
+    Avoid failing over from a text task into image/audio generation models (and vice versa).
+    """
+    if not registry:
+        return ordered_ids
+    by_id = {m.id: m for m in registry}
+    out: list[str] = []
+    for mid in ordered_ids:
+        meta = by_id.get(mid)
+        if meta is None:
+            out.append(mid)
+            continue
+        if category in _MEDIA_GENERATION_KINDS:
+            inferred_kind = _infer_kind(meta.search_text)
+            if meta.kind != category and inferred_kind != category:
+                continue
+            out.append(mid)
+            continue
+        if _exclude_generative_media_for_category(category, meta):
+            continue
+        out.append(mid)
+    return out
+
+
+def _collect_scored_model_pairs(category: str, complexity: str, registry: list[ModelMeta]) -> list[tuple[int, str]]:
     preferred_kind = _CATEGORY_TO_KIND.get(category, 'text')
     preferred_tier = _COMPLEXITY_TO_TIER.get(complexity, 'mid')
     keywords = ROUTE_MODEL_PREFERENCES.get(category, ())
@@ -859,10 +1081,14 @@ def select_model(category: str, complexity: str, registry: list[ModelMeta]) -> t
     for model in registry:
         if model.kind in _NON_ROUTABLE_KINDS or model.id == 'auto':
             continue
+        if _exclude_generative_media_for_category(category, model):
+            continue
         score = 0
         if model.kind == preferred_kind:
             score += 10
-        elif preferred_kind == 'text' and model.kind in ('vlm', 'code'):
+        elif preferred_kind == 'text' and model.kind == 'vlm':
+            score += 4
+        elif preferred_kind == 'text' and model.kind == 'code':
             score += 2
         if model.tier == preferred_tier:
             score += 5
@@ -872,15 +1098,79 @@ def select_model(category: str, complexity: str, registry: list[ModelMeta]) -> t
         if score > 0:
             candidates.append((score, model.id))
 
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    return candidates
+
+
+def select_model_candidates(category: str, complexity: str, registry: list[ModelMeta], *, limit: int = 8) -> list[str]:
+    """
+    Ranked unique model IDs for auto-route failover (same scoring as select_model, plus legacy fallbacks).
+
+    For vision / image_gen / audio_gen we append **every** catalog model of that kind after the scored
+    slice so auto-route can failover across providers until AUTO_ROUTE_FAILOVER_MAX attempts.
+    """
+    if limit < 1:
+        return []
+
+    scored = _collect_scored_model_pairs(category, complexity, registry)
+    seen: set[str] = set()
+    out: list[str] = []
+    for _, mid in scored:
+        if mid not in seen:
+            seen.add(mid)
+            out.append(mid)
+            if len(out) >= limit:
+                return out
+
+    modality_kind: str | None = _CATEGORY_TO_KIND.get(category)
+    if modality_kind in ('vlm', 'image_gen', 'audio_gen'):
+        for model in registry:
+            if model.kind != modality_kind or model.id == 'auto':
+                continue
+            if model.id not in seen:
+                seen.add(model.id)
+                out.append(model.id)
+                if len(out) >= limit:
+                    return out
+        if modality_kind in ('image_gen', 'audio_gen'):
+            return out[:limit]
+
+    for model in registry:
+        if _exclude_generative_media_for_category(category, model):
+            continue
+        if model.kind == 'text' and model.tier in ('mid', 'cheap') and model.id != 'auto':
+            if model.id not in seen:
+                seen.add(model.id)
+                out.append(model.id)
+                if len(out) >= limit:
+                    return out
+    for model in registry:
+        if _exclude_generative_media_for_category(category, model):
+            continue
+        if model.kind in ('text', 'vlm', 'code') and model.id != 'auto':
+            if model.id not in seen:
+                seen.add(model.id)
+                out.append(model.id)
+                if len(out) >= limit:
+                    return out
+    return out[:limit]
+
+
+def select_model(category: str, complexity: str, registry: list[ModelMeta]) -> tuple[str | None, bool]:
+    candidates = _collect_scored_model_pairs(category, complexity, registry)
+
     if candidates:
-        candidates.sort(key=lambda x: x[0], reverse=True)
         return candidates[0][1], False
 
     # Fallback: prefer a capable text/vlm model, avoid media-generation models
     for model in registry:
+        if _exclude_generative_media_for_category(category, model):
+            continue
         if model.kind == 'text' and model.tier in ('mid', 'cheap') and model.id != 'auto':
             return model.id, True
     for model in registry:
+        if _exclude_generative_media_for_category(category, model):
+            continue
         if model.kind in ('text', 'vlm', 'code') and model.id != 'auto':
             return model.id, True
     return None, True
@@ -901,22 +1191,35 @@ async def get_auto_routed_route(
     payload: dict[str, Any],
     request=None,
     registry: list[ModelMeta] | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> RoutingDecision:
     t0 = time.monotonic()
     features = extract_features(payload)
 
-    key = _cache_key(features.text, features.has_image, features.has_url)
-    cached = _routing_cache.get(key)
-    if cached is not None:
-        cached.cache_hit = True
-        cached.latency_ms = int((time.monotonic() - t0) * 1000)
-        return cached
+    key = build_routing_cache_key(features, metadata)
+    if key is not None:
+        cached = _routing_cache.get(key)
+        if cached is not None:
+            cached.cache_hit = True
+            cached.latency_ms = int((time.monotonic() - t0) * 1000)
+            return cached
+
+    def _maybe_cache(decision: RoutingDecision) -> None:
+        if key is not None:
+            _routing_cache.put(key, decision)
+
+    # Only skip semantic/LLM for genuine greetings / acknowledgements with no context.
+    if _should_trivial_short_circuit(features):
+        decision = RoutingDecision('fallback', 'low', method='trivial_short_circuit')
+        decision.latency_ms = int((time.monotonic() - t0) * 1000)
+        _maybe_cache(decision)
+        return decision
 
     # Stage 1: Rules
     decision = _classify_with_rules(features)
     if decision:
         decision.latency_ms = int((time.monotonic() - t0) * 1000)
-        _routing_cache.put(key, decision)
+        _maybe_cache(decision)
         return decision
 
     # Stage 2: Semantic (if embedding function available)
@@ -926,23 +1229,24 @@ async def get_auto_routed_route(
         embedding_fn = getattr(embedding_fn, 'EMBEDDING_FUNCTION', None)
 
     if embedding_fn is not None:
-        decision = await _classify_with_embeddings(features.text, embedding_fn)
+        sem_text = _semantic_query_text(features)
+        decision = await _classify_with_embeddings(sem_text, embedding_fn)
         if decision:
             decision.latency_ms = int((time.monotonic() - t0) * 1000)
-            _routing_cache.put(key, decision)
+            _maybe_cache(decision)
             return decision
 
     # Stage 3: LLM classifier
     llm_decision = await _classify_with_llm(features, request=request, registry=registry)
     if llm_decision and llm_decision.confidence >= _LLM_CONFIDENCE_THRESHOLD:
         llm_decision.latency_ms = int((time.monotonic() - t0) * 1000)
-        _routing_cache.put(key, llm_decision)
+        _maybe_cache(llm_decision)
         return llm_decision
 
-    # If LLM returned low confidence, cross-validate with regex
+    # Keep regex only as a safety net for very precise hard signals.
     if llm_decision and llm_decision.confidence > 0:
-        regex_decision = _classify_with_regex(features.text, features.has_image)
-        if regex_decision.category != 'fallback' and regex_decision.category != llm_decision.category:
+        regex_decision = _classify_with_regex_from_features(features)
+        if _should_regex_override_llm(features, llm_decision, regex_decision):
             log.info(
                 'Low LLM confidence (%.2f), regex override: %s -> %s',
                 llm_decision.confidence,
@@ -952,17 +1256,17 @@ async def get_auto_routed_route(
             regex_decision.method = 'llm+regex_override'
             regex_decision.confidence = llm_decision.confidence
             regex_decision.latency_ms = int((time.monotonic() - t0) * 1000)
-            _routing_cache.put(key, regex_decision)
+            _maybe_cache(regex_decision)
             return regex_decision
         llm_decision.method = 'llm_low_conf'
         llm_decision.latency_ms = int((time.monotonic() - t0) * 1000)
-        _routing_cache.put(key, llm_decision)
+        _maybe_cache(llm_decision)
         return llm_decision
 
     # Stage 4: Regex safety net
-    decision = _classify_with_regex(features.text, features.has_image)
+    decision = _classify_with_regex_from_features(features)
     decision.latency_ms = int((time.monotonic() - t0) * 1000)
-    _routing_cache.put(key, decision)
+    _maybe_cache(decision)
     return decision
 
 
@@ -971,11 +1275,26 @@ async def get_auto_routed_route(
 # =========================================================================
 
 
+def evaluate_route_deterministic(payload: dict[str, Any]) -> RoutingDecision:
+    """
+    Run Stage 1 (rules) and Stage 4 (regex) only — no LLM or embedding calls.
+    Use for offline evaluation datasets and fast regression checks.
+    """
+    features = extract_features(payload)
+    if _should_trivial_short_circuit(features):
+        return RoutingDecision('fallback', 'low', method='trivial_short_circuit')
+    decision = _classify_with_rules(features)
+    if decision:
+        return decision
+    return _classify_with_regex_from_features(features)
+
+
 async def process_auto_routing(
     request,
     payload: dict[str, Any],
     user,
     available_models: Any | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> tuple[str, dict[str, Any]]:
     """
     Main entry point for auto-routing. Resolves intent into a specific model ID
@@ -994,15 +1313,34 @@ async def process_auto_routing(
 
     messages = payload.get('messages', [])
     if not messages:
-        model_id, _ = select_model('fallback', 'low', registry) if registry else (None, True)
-        return model_id or 'fallback', payload, RoutingDecision('fallback', 'low', method='empty')
+        from open_webui.env import AUTO_ROUTE_FAILOVER_MAX
+
+        cands = select_model_candidates('fallback', 'low', registry, limit=AUTO_ROUTE_FAILOVER_MAX) if registry else []
+        if not cands:
+            mid = 'fallback'
+            cands = ['fallback']
+        else:
+            mid = cands[0]
+            cands = _filter_failover_candidates_for_category('fallback', list(cands), registry)
+            if not cands:
+                cands = [mid]
+        return mid, payload, RoutingDecision('fallback', 'low', method='empty', failover_candidates=tuple(cands))
+
+    # Index of the latest user turn — request-level metadata.files must apply only here.
+    # Otherwise every historical user message inherits the same attachments and we inject
+    # image_url into the last text-only message (e.g. "Привет"), forcing vision routing.
+    last_user_msg_index: int | None = None
+    for idx in range(len(messages) - 1, -1, -1):
+        if messages[idx].get('role') == 'user':
+            last_user_msg_index = idx
+            break
 
     has_vision = False
-    for msg in messages:
+    for i, msg in enumerate(messages):
         if msg.get('role') != 'user':
             continue
         files = list(msg.get('files', []))
-        if 'metadata' in payload and isinstance(payload['metadata'], dict):
+        if last_user_msg_index is not None and i == last_user_msg_index and isinstance(payload.get('metadata'), dict):
             files.extend(payload['metadata'].get('files', []))
 
         file_ids = [f.get('id') or f.get('file_id') for f in files if isinstance(f, dict)]
@@ -1028,7 +1366,8 @@ async def process_auto_routing(
             if content_type.startswith('image/'):
                 b64 = get_image_base64_from_file_id(file_id)
                 if b64:
-                    has_vision = True
+                    if i == last_user_msg_index:
+                        has_vision = True
                     content.append({'type': 'image_url', 'image_url': {'url': f'data:{content_type};base64,{b64}'}})
             elif content_type.startswith('audio/') or content_type.startswith('video/'):
                 cached_text = file_item.data.get('content', '') if file_item.data else ''
@@ -1053,14 +1392,30 @@ async def process_auto_routing(
                         {'type': 'text', 'text': f'\n[File Content ({file_item.filename}):\n{text_content}]\n'}
                     )
 
-    decision = await get_auto_routed_route(payload, request=request, registry=registry)
+    decision = await get_auto_routed_route(payload, request=request, registry=registry, metadata=metadata)
 
     if has_vision and decision.category != 'image_gen':
         decision.category = 'vision'
 
+    from open_webui.env import AUTO_ROUTE_FAILOVER_MAX
+
     model_id, used_fallback = select_model(decision.category, decision.complexity, registry)
     if not model_id:
         raise ValueError(f'Could not resolve model for route {decision.category}')
+
+    cands = select_model_candidates(decision.category, decision.complexity, registry, limit=AUTO_ROUTE_FAILOVER_MAX)
+    if model_id not in cands:
+        cands = [model_id, *cands]
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for x in cands:
+        if x not in seen:
+            seen.add(x)
+            ordered.append(x)
+    ordered = _filter_failover_candidates_for_category(decision.category, ordered, registry)
+    if not ordered:
+        ordered = [model_id]
+    decision.failover_candidates = tuple(ordered[:AUTO_ROUTE_FAILOVER_MAX])
 
     decision.model_id = model_id
     decision.used_model_fallback = used_fallback

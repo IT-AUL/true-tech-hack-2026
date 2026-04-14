@@ -1,0 +1,8 @@
+{"id": "single_greeting", "expected_category": "fallback", "messages": [{"role": "user", "content": "Привет"}]}
+{"id": "explicit_image", "expected_category": "image_gen", "messages": [{"role": "user", "content": "нарисуй кота в шляпе"}]}
+{"id": "followup_short_after_image_request", "expected_category": "image_gen", "messages": [{"role": "user", "content": "Сгенерируй изображение заката для превью"}, {"role": "assistant", "content": "Опишите стиль."}, {"role": "user", "content": "да"}]}
+{"id": "code_block", "expected_category": "code", "messages": [{"role": "user", "content": "```python\nprint(1)\n```"}]}
+{"id": "math", "expected_category": "math_logic", "messages": [{"role": "user", "content": "реши уравнение x^2 = 4"}]}
+{"id": "long_doc_keyword", "expected_category": "document", "messages": [{"role": "user", "content": "проанализируй этот pdf договор"}]}
+{"id": "english_image", "expected_category": "image_gen", "messages": [{"role": "user", "content": "generate an image of a mountain"}]}
+{"id": "creative", "expected_category": "creative", "messages": [{"role": "user", "content": "напиши стих про зиму"}]}
