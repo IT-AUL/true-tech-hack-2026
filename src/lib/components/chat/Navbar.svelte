@@ -8,6 +8,8 @@
 		chatId,
 		config,
 		mobile,
+		projects,
+		selectedProjectId,
 		settings,
 		showArchivedChats,
 		showControls,
@@ -38,6 +40,7 @@
 	import ChatPlus from '../icons/ChatPlus.svelte';
 	import ChatCheck from '../icons/ChatCheck.svelte';
 	import Knobs from '../icons/Knobs.svelte';
+	import Folder from '../icons/Folder.svelte';
 	import { WEBUI_API_BASE_URL } from '$lib/constants';
 
 	const i18n = getContext('i18n');
@@ -59,6 +62,8 @@
 
 	let showShareChatModal = false;
 	let showDownloadChatModal = false;
+
+	$: activeProject = $projects.find((p) => p.id === $selectedProjectId);
 </script>
 
 <ShareChatModal bind:show={showShareChatModal} chatId={$chatId} />
@@ -111,9 +116,18 @@
 			{$showSidebar ? 'ml-1' : ''}
 			"
 				>
-					{#if showModelSelector}
-						<ModelSelector bind:selectedModels showSetDefault={!shareEnabled} />
-					{/if}
+					<div class="flex items-center gap-2">
+						{#if activeProject}
+							<div class="flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full text-[10px] font-bold uppercase tracking-wider border border-blue-100 dark:border-blue-800/50 whitespace-nowrap">
+								<Folder className="size-2.5" />
+								{activeProject.title}
+							</div>
+						{/if}
+
+						{#if showModelSelector}
+							<ModelSelector bind:selectedModels showSetDefault={!shareEnabled} />
+						{/if}
+					</div>
 				</div>
 
 				<div class="self-start flex flex-none items-center text-gray-600 dark:text-gray-400">

@@ -472,12 +472,14 @@
 										<button
 											class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
 											type="button"
+											aria-label={$i18n.t('Delete')}
 											on:click={() => {
 												deleteHandler(func);
 											}}
 										>
 											<GarbageBin />
 										</button>
+
 									</Tooltip>
 								{:else}
 									{#if func?.meta?.manifest?.funding_url ?? false}
@@ -485,6 +487,7 @@
 											<button
 												class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
 												type="button"
+												aria-label={$i18n.t('Support')}
 												on:click={() => {
 													selectedFunction = func;
 													showManifestModal = true;
@@ -492,6 +495,7 @@
 											>
 												<Heart />
 											</button>
+
 										</Tooltip>
 									{/if}
 
@@ -499,6 +503,7 @@
 										<button
 											class="self-center w-fit text-sm px-2 py-2 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
 											type="button"
+											aria-label={$i18n.t('Valves')}
 											on:click={() => {
 												selectedFunction = func;
 												showValvesModal = true;
@@ -524,6 +529,7 @@
 												/>
 											</svg>
 										</button>
+n>
 									</Tooltip>
 
 									<FunctionMenu
@@ -554,9 +560,11 @@
 										<button
 											class="self-center w-fit text-sm p-1.5 dark:text-gray-300 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 rounded-xl"
 											type="button"
+											aria-label={$i18n.t('More options')}
 										>
 											<EllipsisHorizontal className="size-5" />
 										</button>
+
 									</FunctionMenu>
 								{/if}
 
