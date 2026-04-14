@@ -32,12 +32,16 @@ For the demo VPS, the recommended path is a manual GitHub Actions rollout:
 4. The deploy runner on the VPS will:
    - sync `docker-compose.prod.yml` into `/opt/gpthub/`
    - reuse `/opt/gpthub/.env`
+   - inject `WEBUI_SECRET_KEY` from GitHub Actions secret on each deploy
    - set `GPTHUB_IMAGE`
    - run `docker compose pull && docker compose up -d`
    - wait for `/health`
    - prune dangling images
 
 This keeps release and rollout separate: you can redeploy the same image without creating a new tag.
+
+Before first rollout, add repository secret `WEBUI_SECRET_KEY` in GitHub:
+`Settings -> Secrets and variables -> Actions`.
 
 ## Configuration
 

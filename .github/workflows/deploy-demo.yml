@@ -64,6 +64,23 @@ jobs:
             exit 1
           fi
 
+      - name: Ensure WEBUI_SECRET_KEY is configured
+        shell: bash
+        env:
+          WEBUI_SECRET_KEY: ${{ secrets.WEBUI_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WEBUI_SECRET_KEY}" ]; then
+            echo "Missing required GitHub secret WEBUI_SECRET_KEY for deploy-demo workflow." >&2
+            exit 1
+          fi
+          if grep -q '^WEBUI_SECRET_KEY=' /opt/gpthub/.env; then
+            sed -i.bak "s|^WEBUI_SECRET_KEY=.*|WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}|" /opt/gpthub/.env
+            rm -f /opt/gpthub/.env.bak
+          else
+            printf "\nWEBUI_SECRET_KEY=%s\n" "${WEBUI_SECRET_KEY}" >> /opt/gpthub/.env
+          fi
+
       - name: Roll out demo stand
         shell: bash
         env:
