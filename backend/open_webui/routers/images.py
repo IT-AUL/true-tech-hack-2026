@@ -524,7 +524,7 @@ async def image_generations(
 
     metadata = metadata or {}
 
-    model = get_image_model(request)
+    model = form_data.model or get_image_model(request)
 
     r = None
     try:
@@ -546,14 +546,7 @@ async def image_generations(
                 'prompt': form_data.prompt,
                 'n': form_data.n,
                 'size': (form_data.size if form_data.size else request.app.state.config.IMAGE_SIZE),
-                **(
-                    {}
-                    if re.match(
-                        IMAGE_URL_RESPONSE_MODELS_REGEX_PATTERN,
-                        request.app.state.config.IMAGE_GENERATION_MODEL,
-                    )
-                    else {'response_format': 'b64_json'}
-                ),
+                **({} if re.match(IMAGE_URL_RESPONSE_MODELS_REGEX_PATTERN, model) else {'response_format': 'b64_json'}),
                 **(
                     {}
                     if not request.app.state.config.IMAGES_OPENAI_API_PARAMS

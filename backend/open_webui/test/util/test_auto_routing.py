@@ -1,10 +1,13 @@
 """Tests for the hybrid auto-routing pipeline."""
 
+import json
+from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from open_webui.utils.auto_routing import (
+    ModelMeta,
     RequestFeatures,
     RoutingDecision,
     _classify_with_regex,
@@ -12,16 +15,19 @@ from open_webui.utils.auto_routing import (
     _cosine_similarity,
     _detect_lang,
     _estimate_complexity,
+    _filter_failover_candidates_for_category,
     _infer_kind,
     _infer_tier,
     _routing_cache,
     build_model_registry,
+    evaluate_route_deterministic,
     extract_features,
     get_auto_routed_route,
     get_router_model,
     process_auto_routing,
     resolve_model_for_route,
     select_model,
+    select_model_candidates,
 )
 
 # ---------------------------------------------------------------------------
@@ -102,6 +108,21 @@ class TestModelRegistry:
 
     def test_infer_tier_cheap(self):
         assert _infer_tier('mts-anya something') == 'cheap'
+
+
+class TestSelectModelCandidates:
+    def test_first_matches_select_model(self):
+        registry = build_model_registry(SAMPLE_MODELS)
+        primary, _ = select_model('vision', 'low', registry)
+        cands = select_model_candidates('vision', 'low', registry, limit=8)
+        assert cands
+        assert cands[0] == primary
+
+    def test_unique_and_respects_limit(self):
+        registry = build_model_registry(SAMPLE_MODELS)
+        cands = select_model_candidates('fallback', 'medium', registry, limit=3)
+        assert len(cands) <= 3
+        assert len(cands) == len(set(cands))
         assert _infer_tier('gpt-3.5-turbo') == 'cheap'
         assert _infer_tier('qwen-turbo fast') == 'cheap'
 
@@ -237,12 +258,27 @@ class TestRuleEngine:
         assert result is not None
         assert result.category == 'image_gen'
 
-    def test_audio_routes_to_audio_gen(self):
+    def test_voice_attachment_does_not_route_to_music_generation(self):
         features = RequestFeatures(
             text='Check this',
             text_len=10,
             has_image=False,
             has_audio=True,
+            has_files=False,
+            has_code_block=False,
+            has_url=False,
+            lang='en',
+            is_trivial=False,
+        )
+        result = _classify_with_rules(features)
+        assert result is None
+
+    def test_explicit_music_request_routes_to_audio_gen(self):
+        features = RequestFeatures(
+            text='generate a song about cats',
+            text_len=24,
+            has_image=False,
+            has_audio=False,
             has_files=False,
             has_code_block=False,
             has_url=False,
@@ -297,6 +333,10 @@ class TestRegexClassifier:
 
     def test_image_gen_ru_create_picture(self):
         result = _classify_with_regex('создай картинку кота', False)
+        assert result.category == 'image_gen'
+
+    def test_image_gen_ru_want_picture_colloquial(self):
+        result = _classify_with_regex('хочу картинку котика', False)
         assert result.category == 'image_gen'
 
     def test_code_en(self):
@@ -423,11 +463,36 @@ class TestOrchestrator:
         _routing_cache.clear()
 
     @pytest.mark.asyncio
-    async def test_trivial_message_uses_regex_fallback_without_short_circuit(self):
+    async def test_trivial_message_short_circuits_to_fallback(self):
         payload = {'messages': [{'role': 'user', 'content': 'Да'}]}
         decision = await get_auto_routed_route(payload)
         assert decision.category == 'fallback'
-        assert decision.method == 'regex_fallback'
+        assert decision.method == 'trivial_short_circuit'
+
+    @pytest.mark.asyncio
+    async def test_trivial_greeting_no_vision_short_circuit(self):
+        payload = {'messages': [{'role': 'user', 'content': 'Привет'}]}
+        decision = await get_auto_routed_route(payload)
+        assert decision.category == 'fallback'
+        assert decision.method == 'trivial_short_circuit'
+
+    @pytest.mark.asyncio
+    async def test_short_intentful_message_uses_llm_before_regex_fallback(self):
+        payload = {'messages': [{'role': 'user', 'content': 'сделай логотип для кофейни'}]}
+        llm_result = RoutingDecision('image_gen', 'low', method='llm', confidence=0.91)
+        with patch('open_webui.utils.auto_routing._classify_with_llm', new=AsyncMock(return_value=llm_result)):
+            decision = await get_auto_routed_route(payload)
+        assert decision.category == 'image_gen'
+        assert decision.method == 'llm'
+
+    @pytest.mark.asyncio
+    async def test_low_conf_llm_is_not_overridden_by_broad_regex(self):
+        payload = {'messages': [{'role': 'user', 'content': 'write python helper for this api'}]}
+        llm_result = RoutingDecision('creative', 'low', method='llm', confidence=0.42)
+        with patch('open_webui.utils.auto_routing._classify_with_llm', new=AsyncMock(return_value=llm_result)):
+            decision = await get_auto_routed_route(payload)
+        assert decision.category == 'creative'
+        assert decision.method == 'llm_low_conf'
 
     @pytest.mark.asyncio
     async def test_short_image_request_routes_to_image_generation(self):
@@ -476,6 +541,57 @@ class TestOrchestrator:
         payload = {'messages': [{'role': 'user', 'content': 'реши уравнение x^2 + 2x - 3 = 0'}]}
         decision = await get_auto_routed_route(payload)
         assert decision.category == 'math_logic'
+
+    @pytest.mark.asyncio
+    async def test_cache_key_differs_when_prior_context_differs(self):
+        a = {
+            'messages': [
+                {'role': 'user', 'content': 'Сгенерируй изображение заката'},
+                {'role': 'assistant', 'content': 'Ок.'},
+                {'role': 'user', 'content': 'да'},
+            ]
+        }
+        b = {
+            'messages': [
+                {'role': 'user', 'content': 'Напиши стих про осень'},
+                {'role': 'assistant', 'content': 'Ок.'},
+                {'role': 'user', 'content': 'да'},
+            ]
+        }
+        from open_webui.utils.auto_routing import build_routing_cache_key, extract_features
+
+        ka = build_routing_cache_key(extract_features(a))
+        kb = build_routing_cache_key(extract_features(b))
+        assert ka != kb
+
+    def test_follow_up_short_message_uses_prior_for_image_intent_deterministic(self):
+        payload = {
+            'messages': [
+                {'role': 'user', 'content': 'Сгенерируй изображение заката для превью'},
+                {'role': 'assistant', 'content': 'Уточните формат.'},
+                {'role': 'user', 'content': 'да'},
+            ]
+        }
+        d = evaluate_route_deterministic(payload)
+        assert d.category == 'image_gen'
+        assert d.method == 'rules'
+
+
+def test_auto_route_eval_jsonl():
+    """Offline JSONL scenarios (rules + regex only)."""
+    fixture = Path(__file__).resolve().parents[1] / 'fixtures' / 'auto_route_eval.jsonl'
+    assert fixture.is_file(), fixture
+    with fixture.open(encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            row = json.loads(line)
+            eid = row.get('id', '?')
+            expected = row['expected_category']
+            payload = {'messages': row['messages']}
+            d = evaluate_route_deterministic(payload)
+            assert d.category == expected, f'{eid}: expected {expected}, got {d.category} ({d.method})'
 
 
 # =========================================================================
@@ -574,3 +690,113 @@ class TestProcessAutoRouting:
             available_models=available_models,
         )
         assert model_id == 'some-model'
+
+
+class TestAutoRouteUpstreamFailoverDetection:
+    """openai.py helpers: HTTP 200 + error JSON / first SSE chunk."""
+
+    def test_http_status_in_set_triggers(self):
+        from open_webui.routers.openai import _upstream_error_should_trigger_auto_failover
+
+        assert _upstream_error_should_trigger_auto_failover(503, {}) is True
+
+    def test_http_200_openai_error_with_substring_triggers(self):
+        from open_webui.routers.openai import _upstream_error_should_trigger_auto_failover
+
+        body = {'error': {'message': "No available providers for model 'x-ai/grok-2-vision-1212'"}}
+        assert _upstream_error_should_trigger_auto_failover(200, body) is True
+
+    def test_http_200_error_without_configured_substring_no_trigger(self):
+        from open_webui.routers.openai import _upstream_error_should_trigger_auto_failover
+
+        body = {'error': {'message': 'Some other provider error'}}
+        assert _upstream_error_should_trigger_auto_failover(200, body) is False
+
+    def test_sse_first_data_line_error_triggers(self):
+        from open_webui.routers.openai import _sse_text_indicates_auto_route_failover
+
+        text = 'data: {"error":{"message":"No available providers for model \'x-ai/grok-2-vision-1212\'"}}\n\n'
+        assert _sse_text_indicates_auto_route_failover(text) is True
+
+    @pytest.mark.asyncio
+    async def test_auto_routed_image_generation_uses_selected_model(self):
+        from open_webui.routers.openai import _auto_routed_image_generation_attempt
+
+        request = SimpleNamespace(
+            app=SimpleNamespace(state=SimpleNamespace(config=SimpleNamespace())), state=SimpleNamespace()
+        )
+        user = SimpleNamespace(id='u1')
+        payload = {'messages': [{'role': 'user', 'content': 'сделай картинку котика'}]}
+        metadata = {'chat_id': 'c1', 'message_id': 'm1', 'session_id': 's1'}
+
+        mock_image_generations = AsyncMock(return_value=[{'url': '/api/v1/files/fake'}])
+        mock_event_emitter = AsyncMock()
+
+        with (
+            patch('open_webui.routers.images.image_generations', mock_image_generations),
+            patch('open_webui.socket.main.get_event_emitter', return_value=mock_event_emitter),
+        ):
+            response, outcome = await _auto_routed_image_generation_attempt(
+                request,
+                payload,
+                'flux',
+                metadata,
+                user,
+                allow_failover=False,
+            )
+
+        assert outcome == 'terminal'
+        assert response.headers['x-selected-model'] == 'flux'
+        called_form = mock_image_generations.await_args.kwargs['form_data']
+        assert called_form.model == 'flux'
+        assert called_form.prompt == 'сделай картинку котика'
+
+
+def test_failover_filters_media_models_for_text_routes():
+    registry = [
+        ModelMeta('a', 'text', 'mid', 0, 'deepseek r1'),
+        ModelMeta('b', 'audio_gen', 'premium', 0, 'google lyria music'),
+        ModelMeta('c', 'image_gen', 'mid', 0, 'flux image'),
+    ]
+    out = _filter_failover_candidates_for_category('fallback', ['b', 'a', 'c'], registry)
+    assert out == ['a']
+    assert _filter_failover_candidates_for_category('audio_gen', ['b', 'a'], registry) == ['b']
+
+
+def test_failover_filters_lyria_when_kind_is_text_mislabeled():
+    """Provider catalog may mark Lyria as text; infer from search_text."""
+    registry = [
+        ModelMeta('x', 'text', 'mid', 0, 'mws.google/google lyria 3 pro preview'),
+        ModelMeta('y', 'text', 'mid', 0, 'deepseek r1 distill'),
+    ]
+    out = _filter_failover_candidates_for_category('fallback', ['x', 'y'], registry)
+    assert out == ['y']
+
+
+def test_select_model_candidates_skips_inferred_generative_media():
+    registry = [
+        ModelMeta('lyria', 'text', 'mid', 0, 'google lyria music'),
+        ModelMeta('ds', 'text', 'mid', 0, 'deepseek chat'),
+    ]
+    c = select_model_candidates('fallback', 'low', registry, limit=8)
+    assert 'lyria' not in c
+    assert 'ds' in c
+
+
+def test_select_model_candidates_keeps_image_gen_within_modality():
+    registry = [
+        ModelMeta('flux', 'image_gen', 'mid', 0, 'flux image'),
+        ModelMeta('gpt-image', 'image_gen', 'mid', 1, 'gpt-image generation'),
+        ModelMeta('deepseek', 'text', 'mid', 0, 'deepseek chat'),
+    ]
+    c = select_model_candidates('image_gen', 'low', registry, limit=8)
+    assert c == ['flux', 'gpt-image']
+
+
+def test_failover_filters_image_gen_to_same_modality_only():
+    registry = [
+        ModelMeta('flux', 'image_gen', 'mid', 0, 'flux image'),
+        ModelMeta('deepseek', 'text', 'mid', 0, 'deepseek chat'),
+    ]
+    out = _filter_failover_candidates_for_category('image_gen', ['flux', 'deepseek'], registry)
+    assert out == ['flux']

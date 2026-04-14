@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Секции ниже без суффикса (`[0.8.12]`) — upstream Open WebUI changelog.
 
 ---
+## [0.8.12-gpthub.18] - 2026-04-14
+
+### Changed
+
+- 🔀 **Auto-routing priority reworked.** Пайплайн переведён на модель `guardrails -> semantic/LLM -> regex fallback`, чтобы короткие, но осмысленные запросы не уходили преждевременно в `fallback`.
+- 🗣️ **Small-talk short-circuit narrowed.** Ранний `trivial_short_circuit` теперь срабатывает только для настоящих no-context приветствий/acknowledgements, а не для любых коротких фраз.
+- 📡 **Routing observability expanded.** В status-пейлоад добавлены признаки fallback/candidate metadata, чтобы было видно, почему и как выбрана модель.
+
+### Fixed
+
+- 🖼️ **`image_gen` no longer degrades into text chat.** При auto-route в `image_gen` запросы больше не отправляются в `/chat/completions`; используется реальный image-generation flow с эмитом файлов в чат.
+- 🔁 **Failover modality lock for media generation.** `image_gen`/`audio_gen` failover больше не уходит в текстовые модели, что исключает сценарий «распознали генерацию изображения, но ответили текстом».
+- 🧭 **Follow-up intent handling stabilized.** Снижен риск «залипания» на предыдущей модальности, когда пользователь в том же диалоге переключает задачу (например, с картинки на код).
+
+---
+
 ## [0.8.12-gpthub.17] - 2026-04-13
 
 ### Added
