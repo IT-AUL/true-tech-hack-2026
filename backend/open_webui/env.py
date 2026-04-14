@@ -984,3 +984,42 @@ EXTERNAL_PWA_MANIFEST_URL = os.environ.get('EXTERNAL_PWA_MANIFEST_URL')
 # Env var values: "true" (anyone), "false" (no one), "members" (only group members).
 _default_group_share = os.environ.get('DEFAULT_GROUP_SHARE_PERMISSION', 'members').strip().lower()
 DEFAULT_GROUP_SHARE_PERMISSION = 'members' if _default_group_share == 'members' else _default_group_share == 'true'
+
+
+####################################
+# NEO4J / MEM0 (Long-Term Memory)
+####################################
+
+# Bolt URI for Neo4j. E.g. bolt://neo4j:7687 (docker service name)
+# See .env or docker-compose.yaml: NEO4J_URI
+NEO4J_URI = os.environ.get('NEO4J_URI', 'bolt://localhost:7687')
+
+# Neo4j credentials – set these in your .env file
+# NEO4J_USERNAME=neo4j
+# NEO4J_PASSWORD=<your-secure-password>
+NEO4J_USERNAME = os.environ.get('NEO4J_USERNAME', 'neo4j')
+NEO4J_PASSWORD = os.environ.get('NEO4J_PASSWORD', '')
+
+# LLM used by Mem0 to extract entities/relations from conversations.
+# Should point to the same OpenAI-compatible API the app uses.
+# MEM0_LLM_MODEL – e.g. gpt-4o-mini, or any model available on your base URL.
+MEM0_LLM_PROVIDER = os.environ.get('MEM0_LLM_PROVIDER', 'openai')
+MEM0_LLM_MODEL = os.environ.get('MEM0_LLM_MODEL', 'qwen/qwen3-next-80b-a3b-instruct')
+MEM0_LLM_BASE_URL = os.environ.get('MEM0_LLM_BASE_URL', os.environ.get('OPENAI_API_BASE_URL', ''))
+MEM0_LLM_API_KEY = os.environ.get('MEM0_LLM_API_KEY', os.environ.get('OPENAI_API_KEY', ''))
+
+# Embedder used by Mem0 for vector similarity search inside memories.
+# MEM0_EMBEDDER_MODEL – e.g. text-embedding-3-small
+MEM0_EMBEDDER_PROVIDER = os.environ.get('MEM0_EMBEDDER_PROVIDER', 'openai')
+MEM0_EMBEDDER_MODEL = os.environ.get('MEM0_EMBEDDER_MODEL', 'baai/bge-m3')
+MEM0_EMBEDDER_BASE_URL = os.environ.get('MEM0_EMBEDDER_BASE_URL', MEM0_LLM_BASE_URL)
+MEM0_EMBEDDER_API_KEY = os.environ.get('MEM0_EMBEDDER_API_KEY', MEM0_LLM_API_KEY)
+
+# Vector store used by Mem0 (qdrant | chroma | …).
+# Defaults to qdrant running at localhost. Adjust if you run your own Qdrant.
+MEM0_VECTOR_STORE_PROVIDER = os.environ.get('MEM0_VECTOR_STORE_PROVIDER', 'qdrant')
+MEM0_VECTOR_STORE_URL = os.environ.get('MEM0_VECTOR_STORE_URL', 'http://localhost:6333')
+MEM0_VECTOR_STORE_COLLECTION = os.environ.get('MEM0_VECTOR_STORE_COLLECTION', 'project_memories_v1')
+
+# How many memory facts to inject into each LLM request (top-k search).
+MEM0_SEARCH_TOP_K = int(os.environ.get('MEM0_SEARCH_TOP_K', '10'))

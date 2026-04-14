@@ -52,6 +52,7 @@ class Chat(Base):
 
     meta = Column(JSON, server_default='{}')
     folder_id = Column(Text, nullable=True)
+    project_id = Column(String, nullable=True)
 
     __table_args__ = (
         # Performance indexes for common queries
@@ -85,6 +86,7 @@ class ChatModel(BaseModel):
 
     meta: dict = {}
     folder_id: str | None = None
+    project_id: str | None = None
 
 
 class ChatFile(Base):
@@ -125,6 +127,7 @@ class ChatFileModel(BaseModel):
 class ChatForm(BaseModel):
     chat: dict
     folder_id: str | None = None
+    project_id: str | None = None
 
 
 class ChatImportForm(ChatForm):
@@ -159,6 +162,7 @@ class ChatResponse(BaseModel):
     pinned: bool | None = False
     meta: dict = {}
     folder_id: str | None = None
+    project_id: str | None = None
 
 
 class ChatTitleIdResponse(BaseModel):
@@ -293,6 +297,7 @@ class ChatTable:
                     ),
                     'chat': self._clean_null_bytes(form_data.chat),
                     'folder_id': form_data.folder_id,
+                    'project_id': form_data.project_id,
                     'created_at': int(time.time()),
                     'updated_at': int(time.time()),
                 }

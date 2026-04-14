@@ -451,6 +451,7 @@ from open_webui.routers import (
     ollama,
     openai,
     pipelines,
+    projects,
     prompts,
     retrieval,
     scim,
@@ -1477,6 +1478,7 @@ app.include_router(tools.router, prefix='/api/v1/tools', tags=['tools'])
 app.include_router(skills.router, prefix='/api/v1/skills', tags=['skills'])
 
 app.include_router(memories.router, prefix='/api/v1/memories', tags=['memories'])
+app.include_router(projects.router, prefix='/api/v1/projects', tags=['projects'])
 app.include_router(folders.router, prefix='/api/v1/folders', tags=['folders'])
 app.include_router(groups.router, prefix='/api/v1/groups', tags=['groups'])
 app.include_router(files.router, prefix='/api/v1/files', tags=['files'])

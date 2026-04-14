@@ -18,7 +18,9 @@
 		updateChatById,
 		updateChatFolderIdById
 	} from '$lib/apis/chats';
+	import { assignChatToProject } from '$lib/apis/projects';
 	import {
+
 		chatId,
 		chatTitle as _chatTitle,
 		chats,
@@ -191,6 +193,23 @@
 			toast.error($i18n.t('Failed to move chat'));
 		}
 	};
+
+	const assignProjectHandler = async (chatId, projectId) => {
+		if (chatId && projectId) {
+			const res = await assignChatToProject(localStorage.token, projectId, chatId).catch((error) => {
+				toast.error(`${error}`);
+				return null;
+			});
+
+			if (res) {
+				toast.success($i18n.t('Chat assigned to project successfully'));
+				dispatch('change');
+			}
+		} else {
+			toast.error($i18n.t('Failed to assign chat to project'));
+		}
+	};
+
 
 	let itemElement;
 
@@ -549,6 +568,8 @@
 						showShareChatModal = true;
 					}}
 					{moveChatHandler}
+					{assignProjectHandler}
+
 					archiveChatHandler={() => {
 						archiveChatHandler(id);
 					}}
