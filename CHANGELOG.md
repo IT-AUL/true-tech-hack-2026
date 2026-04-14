@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Секции ниже без суффикса (`[0.8.12]`) — upstream Open WebUI changelog.
 
 ---
+## [0.8.12-gpthub.20] - 2026-04-14
+
+### Fixed
+
+- 🚚 **Deploy image input sanitization.** `Deploy Demo` workflow now trims image input values before rollout, preventing `invalid reference format` when a trailing space is passed from `workflow_dispatch`.
+- 🧼 **Deploy script image normalization.** `deploy.sh` now trims `CURRENT_IMAGE` / `GPTHUB_IMAGE` and fails fast with a clear error when image value resolves to empty.
+
+---
+
 ## [0.8.12-gpthub.19] - 2026-04-14
 
 ### Changed

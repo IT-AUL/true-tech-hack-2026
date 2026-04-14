@@ -21,6 +21,7 @@ if [ ! -f "$ENV_DST" ]; then
 fi
 
 CURRENT_IMAGE="$(grep '^GPTHUB_IMAGE=' "$ENV_DST" | tail -1 | cut -d= -f2- || true)"
+CURRENT_IMAGE="$(echo "${CURRENT_IMAGE:-}" | xargs)"
 
 if [ -z "${GPTHUB_IMAGE:-}" ]; then
   if [ "$VERSION" != "latest" ]; then
@@ -34,6 +35,13 @@ if [ -z "${GPTHUB_IMAGE:-}" ]; then
   else
     GPTHUB_IMAGE="gpthub-app:latest"
   fi
+fi
+
+# Protect against accidental spaces from env/workflow inputs.
+GPTHUB_IMAGE="$(echo "${GPTHUB_IMAGE:-}" | xargs)"
+if [ -z "$GPTHUB_IMAGE" ]; then
+  echo "GPTHUB_IMAGE resolved to empty value."
+  exit 1
 fi
 
 if grep -q '^GPTHUB_IMAGE=' "$ENV_DST"; then
