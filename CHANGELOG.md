@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Секции ниже без суффикса (`[0.8.12]`) — upstream Open WebUI changelog.
 
 ---
+## [0.8.12-gpthub.19] - 2026-04-14
+
+### Changed
+
+- 🧰 **Pre-commit workflow hardened for local macOS/dev setups.** Базовые проверки переведены на локальные staged-скрипты, а ESLint hook запускается стабильно без ложных предупреждений по ignored-файлам.
+
+### Fixed
+
+- 🌊 **SSE fallback for mislabelled upstream responses.** Если провайдер возвращает `data: {...}` stream при JSON-ожидании, backend теперь корректно собирает stream в валидный `chat.completion` JSON вместо `Unexpected token 'd'`.
+- 🧪 **Regression coverage for SSE collapse path.** Добавлен тест, который фиксирует корректную сборку chunked SSE ответа в финальный assistant message.
+
+---
+
 ## [0.8.12-gpthub.18] - 2026-04-14
 
 ### Changed

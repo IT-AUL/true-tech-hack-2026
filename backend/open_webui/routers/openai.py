@@ -1140,6 +1140,86 @@ def _sse_text_indicates_auto_route_failover(text: str) -> bool:
     return False
 
 
+def _looks_like_sse_text(text: str) -> bool:
+    stripped = text.lstrip()
+    return stripped.startswith('data:') and '\n' in stripped
+
+
+def _collapse_sse_text_to_chat_completion(text: str) -> dict | None:
+    """
+    Convert full SSE transcript into one OpenAI-compatible JSON completion.
+    Useful when upstream sends SSE but mislabels Content-Type.
+    """
+    chunks: list[dict] = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line.startswith('data:'):
+            continue
+        payload = line[5:].strip()
+        if not payload or payload == '[DONE]':
+            continue
+        try:
+            obj = json.loads(payload)
+        except Exception:
+            continue
+        if isinstance(obj, dict):
+            chunks.append(obj)
+
+    if not chunks:
+        return None
+
+    first = chunks[0]
+    usage = None
+    states: dict[int, dict[str, str | None]] = {}
+    for chunk in chunks:
+        if isinstance(chunk.get('usage'), dict):
+            usage = chunk['usage']
+        for choice in chunk.get('choices', []) or []:
+            if not isinstance(choice, dict):
+                continue
+            idx = int(choice.get('index', 0))
+            state = states.setdefault(
+                idx,
+                {
+                    'role': 'assistant',
+                    'content': '',
+                    'finish_reason': None,
+                },
+            )
+            delta = choice.get('delta', {}) if isinstance(choice.get('delta'), dict) else {}
+            role = delta.get('role')
+            if isinstance(role, str) and role:
+                state['role'] = role
+            content = delta.get('content')
+            if isinstance(content, str) and content:
+                state['content'] = (state['content'] or '') + content
+            finish_reason = choice.get('finish_reason')
+            if isinstance(finish_reason, str) and finish_reason:
+                state['finish_reason'] = finish_reason
+
+    choices = []
+    for idx in sorted(states):
+        state = states[idx]
+        choices.append(
+            {
+                'index': idx,
+                'message': {'role': state['role'] or 'assistant', 'content': state['content'] or ''},
+                'finish_reason': state['finish_reason'] or 'stop',
+            }
+        )
+
+    out: dict = {
+        'id': first.get('id') or f'chatcmpl-{int(time.time())}',
+        'object': 'chat.completion',
+        'created': int(first.get('created') or time.time()),
+        'model': first.get('model'),
+        'choices': choices or [{'index': 0, 'message': {'role': 'assistant', 'content': ''}, 'finish_reason': 'stop'}],
+    }
+    if usage is not None:
+        out['usage'] = usage
+    return out
+
+
 class _PrefixedStreamChunks:
     """Prefix bytes before aiohttp's StreamReader (peeked SSE) for stream_chunks_handler."""
 
@@ -1451,6 +1531,10 @@ async def _openai_upstream_chat_completion_attempt(
             except Exception as e:
                 log.error(e)
                 response = await r.text()
+                if isinstance(response, str) and _looks_like_sse_text(response):
+                    collapsed = _collapse_sse_text_to_chat_completion(response)
+                    if collapsed is not None:
+                        response = collapsed
 
             if r.status >= 400:
                 if allow_failover and _upstream_error_should_trigger_auto_failover(r.status, response):

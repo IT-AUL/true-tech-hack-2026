@@ -718,6 +718,22 @@ class TestAutoRouteUpstreamFailoverDetection:
         text = 'data: {"error":{"message":"No available providers for model \'x-ai/grok-2-vision-1212\'"}}\n\n'
         assert _sse_text_indicates_auto_route_failover(text) is True
 
+    def test_collapse_sse_text_to_chat_completion(self):
+        from open_webui.routers.openai import _collapse_sse_text_to_chat_completion
+
+        sse = '\n'.join(
+            [
+                'data: {"id":"gen-1","object":"chat.completion.chunk","created":1,"model":"deepseek","choices":[{"index":0,"delta":{"role":"assistant","content":"При"},"finish_reason":null}]}',
+                'data: {"id":"gen-1","object":"chat.completion.chunk","created":1,"model":"deepseek","choices":[{"index":0,"delta":{"content":"вет"},"finish_reason":"stop"}],"usage":{"total_tokens":3}}',
+                'data: [DONE]',
+            ]
+        )
+        out = _collapse_sse_text_to_chat_completion(sse)
+        assert out is not None
+        assert out['model'] == 'deepseek'
+        assert out['choices'][0]['message']['content'] == 'Привет'
+        assert out['usage']['total_tokens'] == 3
+
     @pytest.mark.asyncio
     async def test_auto_routed_image_generation_uses_selected_model(self):
         from open_webui.routers.openai import _auto_routed_image_generation_attempt
