@@ -550,6 +550,8 @@ def _resolve_openai_stt_url_and_key(request: Request) -> tuple[str, str]:
     Base URL and API key for OpenAI-compatible POST .../audio/transcriptions.
     Falls back to the primary chat OpenAI connection when STT-specific fields are empty
     (common when SQLite admin config cleared STT key but chat keys are set).
+    Finally reads os.environ so a stale empty value in PersistentConfig / .env does not
+    block OPENAI_API_KEY (empty AUDIO_STT_OPENAI_API_KEY='' in .env is a common footgun).
     """
     base = (request.app.state.config.STT_OPENAI_API_BASE_URL or '').strip().rstrip('/')
     key = (request.app.state.config.STT_OPENAI_API_KEY or '').strip()
@@ -569,6 +571,19 @@ def _resolve_openai_stt_url_and_key(request: Request) -> tuple[str, str]:
                 log.debug('STT: using OPENAI_API_BASE_URLS[0] fallback for transcriptions URL')
         except Exception:
             pass
+    # Last resort: process env (same values as shell `start.sh` / docker inject)
+    if not key:
+        key = (os.environ.get('AUDIO_STT_OPENAI_API_KEY') or os.environ.get('OPENAI_API_KEY') or '').strip()
+        if key:
+            log.debug('STT: using OPENAI_API_KEY (or AUDIO_STT_*) from os.environ for Authorization')
+    if not base:
+        base = (
+            (os.environ.get('AUDIO_STT_OPENAI_API_BASE_URL') or os.environ.get('OPENAI_API_BASE_URL') or '')
+            .strip()
+            .rstrip('/')
+        )
+        if base:
+            log.debug('STT: using OPENAI_API_BASE_URL (or AUDIO_STT_*) from os.environ for transcriptions URL')
     return base, key
 
 
