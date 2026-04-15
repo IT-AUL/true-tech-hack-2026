@@ -3806,16 +3806,26 @@ DEEPGRAM_API_KEY = PersistentConfig(
 # ElevenLabs configuration
 ELEVENLABS_API_BASE_URL = os.getenv('ELEVENLABS_API_BASE_URL', 'https://api.elevenlabs.io')
 
+# STT (OpenAI-compatible): never default from the module-level OPENAI_API_KEY variable — it is
+# often cleared later for non-OpenAI defaults; read os.environ so MWS chat key applies when
+# AUDIO_STT_OPENAI_API_KEY is unset or empty.
+_stt_openai_base_default = (
+    os.getenv('AUDIO_STT_OPENAI_API_BASE_URL') or os.getenv('OPENAI_API_BASE_URL') or 'https://api.openai.com/v1'
+)
+if _stt_openai_base_default.endswith('/'):
+    _stt_openai_base_default = _stt_openai_base_default[:-1]
+_stt_openai_key_default = (os.getenv('AUDIO_STT_OPENAI_API_KEY') or os.getenv('OPENAI_API_KEY') or '').strip()
+
 AUDIO_STT_OPENAI_API_BASE_URL = PersistentConfig(
     'AUDIO_STT_OPENAI_API_BASE_URL',
     'audio.stt.openai.api_base_url',
-    os.getenv('AUDIO_STT_OPENAI_API_BASE_URL', OPENAI_API_BASE_URL),
+    _stt_openai_base_default,
 )
 
 AUDIO_STT_OPENAI_API_KEY = PersistentConfig(
     'AUDIO_STT_OPENAI_API_KEY',
     'audio.stt.openai.api_key',
-    os.getenv('AUDIO_STT_OPENAI_API_KEY', OPENAI_API_KEY),
+    _stt_openai_key_default,
 )
 
 AUDIO_STT_ENGINE = PersistentConfig(

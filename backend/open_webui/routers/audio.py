@@ -545,6 +545,33 @@ async def speech(request: Request, user=Depends(get_verified_user)):
         return FileResponse(file_path)
 
 
+def _resolve_openai_stt_url_and_key(request: Request) -> tuple[str, str]:
+    """
+    Base URL and API key for OpenAI-compatible POST .../audio/transcriptions.
+    Falls back to the primary chat OpenAI connection when STT-specific fields are empty
+    (common when SQLite admin config cleared STT key but chat keys are set).
+    """
+    base = (request.app.state.config.STT_OPENAI_API_BASE_URL or '').strip().rstrip('/')
+    key = (request.app.state.config.STT_OPENAI_API_KEY or '').strip()
+    if not key:
+        try:
+            keys = request.app.state.config.OPENAI_API_KEYS
+            if keys:
+                key = (keys[0] or '').strip()
+                log.debug('STT: using OPENAI_API_KEYS[0] fallback for Authorization')
+        except Exception:
+            pass
+    if not base:
+        try:
+            urls = request.app.state.config.OPENAI_API_BASE_URLS
+            if urls:
+                base = (urls[0] or '').strip().rstrip('/')
+                log.debug('STT: using OPENAI_API_BASE_URLS[0] fallback for transcriptions URL')
+        except Exception:
+            pass
+    return base, key
+
+
 def transcription_handler(request, file_path, metadata, user=None, engine=None, model=None):
     filename = os.path.basename(file_path)
     file_dir = os.path.dirname(file_path)
@@ -589,6 +616,16 @@ def transcription_handler(request, file_path, metadata, user=None, engine=None, 
     elif stt_engine == 'openai':
         r = None
         try:
+            stt_base, stt_key = _resolve_openai_stt_url_and_key(request)
+            if not stt_key:
+                raise Exception(
+                    'STT API key is not configured. Set AUDIO_STT_OPENAI_API_KEY or OPENAI_API_KEY '
+                    '(or configure STT in Admin → Audio).'
+                )
+            if not stt_base:
+                raise Exception(
+                    'STT API base URL is not configured. Set AUDIO_STT_OPENAI_API_BASE_URL or OPENAI_API_BASE_URL.'
+                )
             for language in languages:
                 payload = {
                     'model': stt_model,
@@ -597,13 +634,13 @@ def transcription_handler(request, file_path, metadata, user=None, engine=None, 
                 if language:
                     payload['language'] = language
 
-                headers = {'Authorization': f'Bearer {request.app.state.config.STT_OPENAI_API_KEY}'}
+                headers = {'Authorization': f'Bearer {stt_key}'}
                 if user and ENABLE_FORWARD_USER_INFO_HEADERS:
                     headers = include_user_info_headers(headers, user)
 
                 with open(file_path, 'rb') as audio_file:
                     r = requests.post(
-                        url=f'{request.app.state.config.STT_OPENAI_API_BASE_URL}/audio/transcriptions',
+                        url=f'{stt_base}/audio/transcriptions',
                         headers=headers,
                         files={'file': (filename, audio_file)},
                         data=payload,
