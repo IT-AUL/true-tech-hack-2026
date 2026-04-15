@@ -17,10 +17,7 @@
 	export let status = null;
 
 	$: cat = status?.routing?.category ?? '';
-	$: primary =
-		status?.routing?.subtitle ||
-		status?.description ||
-		'';
+	$: primary = status?.routing?.subtitle || status?.description || '';
 </script>
 
 <div
@@ -77,7 +74,9 @@
 							{$i18n.t('Technical details')}
 						</span>
 					</summary>
-					<div class="mt-1.5 pl-0 space-y-0.5 font-mono text-[10px] text-gray-500 dark:text-gray-600">
+					<div
+						class="mt-1.5 pl-0 space-y-0.5 font-mono text-[10px] text-gray-500 dark:text-gray-600"
+					>
 						{#if status.routing.method}
 							<div>method: {status.routing.method}</div>
 						{/if}

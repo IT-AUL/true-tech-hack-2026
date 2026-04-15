@@ -4,11 +4,7 @@
 	const i18n = getContext('i18n');
 
 	import { WEBUI_NAME, projects, user } from '$lib/stores';
-	import {
-		getProjects,
-		createNewProject,
-		deleteProjectById
-	} from '$lib/apis/projects';
+	import { getProjects, createNewProject, deleteProjectById } from '$lib/apis/projects';
 
 	import { capitalizeFirstLetter } from '$lib/utils';
 
@@ -189,12 +185,13 @@
 								<div class="text-xs text-gray-500 mt-1 line-clamp-2">{item.description}</div>
 							{/if}
 							<div class="mt-3 flex items-center gap-2">
-								<div class="text-[10px] bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full text-gray-500 uppercase tracking-tighter font-bold">
+								<div
+									class="text-[10px] bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full text-gray-500 uppercase tracking-tighter font-bold"
+								>
 									Project ID: {item.id.substring(0, 8)}...
 								</div>
 							</div>
 						</div>
-
 					{/each}
 				</div>
 			{:else}
@@ -203,7 +200,9 @@
 						<div class=" text-3xl mb-3">📁</div>
 						<div class=" text-lg font-medium mb-1">{$i18n.t('No projects found')}</div>
 						<div class=" text-gray-500 text-center text-xs">
-							{$i18n.t('Create a project to start using long-term memory scoped to specific tasks.')}
+							{$i18n.t(
+								'Create a project to start using long-term memory scoped to specific tasks.'
+							)}
 						</div>
 					</div>
 				</div>
@@ -212,7 +211,7 @@
 	{/if}
 
 	<div class=" text-gray-500 text-xs m-2">
-		ⓘ {$i18n.t("Assign chats to a project to share long-term memory context between them.")}
+		ⓘ {$i18n.t('Assign chats to a project to share long-term memory context between them.')}
 	</div>
 {:else}
 	<div class="w-full h-full flex justify-center items-center">

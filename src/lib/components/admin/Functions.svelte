@@ -479,7 +479,6 @@
 										>
 											<GarbageBin />
 										</button>
-
 									</Tooltip>
 								{:else}
 									{#if func?.meta?.manifest?.funding_url ?? false}
@@ -495,7 +494,6 @@
 											>
 												<Heart />
 											</button>
-
 										</Tooltip>
 									{/if}
 
@@ -529,7 +527,7 @@
 												/>
 											</svg>
 										</button>
-n>
+										n>
 									</Tooltip>
 
 									<FunctionMenu
@@ -564,7 +562,6 @@ n>
 										>
 											<EllipsisHorizontal className="size-5" />
 										</button>
-
 									</FunctionMenu>
 								{/if}
 

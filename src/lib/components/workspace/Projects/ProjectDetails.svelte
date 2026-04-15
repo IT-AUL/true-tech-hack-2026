@@ -35,7 +35,7 @@
 
 	const init = async () => {
 		loaded = false;
-		
+
 		// Load Memory
 		const memRes = await getProjectMemory(localStorage.token, project.id).catch((e) => {
 			toast.error(`${e}`);
@@ -54,10 +54,12 @@
 	};
 
 	const saveProject = async () => {
-		const res = await updateProjectById(localStorage.token, project.id, title, description).catch((e) => {
-			toast.error(`${e}`);
-			return null;
-		});
+		const res = await updateProjectById(localStorage.token, project.id, title, description).catch(
+			(e) => {
+				toast.error(`${e}`);
+				return null;
+			}
+		);
 
 		if (res) {
 			project = res;
@@ -67,7 +69,11 @@
 	};
 
 	const wipeMemoryHandler = async () => {
-		if (confirm($i18n.t('Are you sure you want to wipe all memory for this project? This cannot be undone.'))) {
+		if (
+			confirm(
+				$i18n.t('Are you sure you want to wipe all memory for this project? This cannot be undone.')
+			)
+		) {
 			const res = await wipeProjectMemory(localStorage.token, project.id).catch((e) => {
 				toast.error(`${e}`);
 			});
@@ -80,9 +86,11 @@
 	};
 
 	const deleteMemoryItem = async (memoryId) => {
-		const res = await deleteProjectMemoryById(localStorage.token, project.id, memoryId).catch((e) => {
-			toast.error(`${e}`);
-		});
+		const res = await deleteProjectMemoryById(localStorage.token, project.id, memoryId).catch(
+			(e) => {
+				toast.error(`${e}`);
+			}
+		);
 
 		if (res) {
 			toast.success($i18n.t('Memory point deleted.'));
@@ -163,15 +171,19 @@
 
 	<!-- Tabs Navigation -->
 	<div class="flex gap-4 border-b border-gray-100 dark:border-gray-850 px-2 mt-2">
-		<button 
-			class="pb-2 text-sm font-medium transition-colors {activeTab === 'memory' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}"
-			on:click={() => activeTab = 'memory'}
+		<button
+			class="pb-2 text-sm font-medium transition-colors {activeTab === 'memory'
+				? 'border-b-2 border-blue-500 text-blue-500'
+				: 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}"
+			on:click={() => (activeTab = 'memory')}
 		>
 			{$i18n.t('Long-Term Memory')}
 		</button>
-		<button 
-			class="pb-2 text-sm font-medium transition-colors {activeTab === 'chats' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}"
-			on:click={() => activeTab = 'chats'}
+		<button
+			class="pb-2 text-sm font-medium transition-colors {activeTab === 'chats'
+				? 'border-b-2 border-blue-500 text-blue-500'
+				: 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}"
+			on:click={() => (activeTab = 'chats')}
 		>
 			{$i18n.t('Project Chats')} ({projectChats.length})
 		</button>
@@ -179,14 +191,20 @@
 
 	<div class="grid grid-cols-1">
 		{#if activeTab === 'memory'}
-			<div class="p-4 bg-white dark:bg-gray-900 rounded-b-3xl border-x border-b border-gray-100/30 dark:border-gray-850/30">
+			<div
+				class="p-4 bg-white dark:bg-gray-900 rounded-b-3xl border-x border-b border-gray-100/30 dark:border-gray-850/30"
+			>
 				<div class="flex justify-between items-center mb-4 px-2">
 					<h3 class="font-medium text-sm flex items-center gap-2">
 						{$i18n.t('Extracted Knowledge')}
-						<span class="text-[10px] bg-blue-100 dark:bg-blue-900/40 text-blue-600 px-1.5 py-0.5 rounded-full uppercase">Mem0</span>
+						<span
+							class="text-[10px] bg-blue-100 dark:bg-blue-900/40 text-blue-600 px-1.5 py-0.5 rounded-full uppercase"
+							>Mem0</span
+						>
 					</h3>
 					<div class="text-xs text-gray-500">
-						{memories.length} {$i18n.t('facts')}
+						{memories.length}
+						{$i18n.t('facts')}
 					</div>
 				</div>
 
@@ -197,12 +215,17 @@
 				{:else if memories.length > 0}
 					<div class="flex flex-col gap-2">
 						{#each memories as memory}
-							<div class="group flex justify-between items-center bg-gray-50 dark:bg-gray-850/30 p-3 rounded-2xl border border-gray-100/10 dark:border-gray-800/10">
+							<div
+								class="group flex justify-between items-center bg-gray-50 dark:bg-gray-850/30 p-3 rounded-2xl border border-gray-100/10 dark:border-gray-800/10"
+							>
 								<div class="text-sm flex-1 pr-4">
 									{memory.text || memory.memory || 'No fact description'}
 								</div>
 								<div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition">
-									<button class="p-1.5 hover:text-red-500 rounded-lg transition" on:click={() => deleteMemoryItem(memory.id)}>
+									<button
+										class="p-1.5 hover:text-red-500 rounded-lg transition"
+										on:click={() => deleteMemoryItem(memory.id)}
+									>
 										<GarbageBin className="size-3.5" />
 									</button>
 								</div>
@@ -214,13 +237,17 @@
 						<div class="text-2xl mb-2">🧠</div>
 						<div class="text-xs font-medium">{$i18n.t('No facts extracted yet.')}</div>
 						<div class="text-[10px] text-center mt-1 px-10">
-							{$i18n.t('Start chatting in this project and the AI will automatically store facts about your work.')}
+							{$i18n.t(
+								'Start chatting in this project and the AI will automatically store facts about your work.'
+							)}
 						</div>
 					</div>
 				{/if}
 			</div>
 		{:else}
-			<div class="p-4 bg-white dark:bg-gray-900 rounded-b-3xl border-x border-b border-gray-100/30 dark:border-gray-850/30">
+			<div
+				class="p-4 bg-white dark:bg-gray-900 rounded-b-3xl border-x border-b border-gray-100/30 dark:border-gray-850/30"
+			>
 				{#if !loaded}
 					<div class="flex justify-center py-10">
 						<Spinner className="size-5" />
@@ -228,14 +255,16 @@
 				{:else if projectChats.length > 0}
 					<div class="flex flex-col gap-2">
 						{#each projectChats as chat}
-							<button 
+							<button
 								class="flex items-center gap-3 bg-gray-50 dark:bg-gray-850/30 p-3 rounded-2xl border border-gray-100/10 dark:border-gray-800/10 hover:bg-gray-100 dark:hover:bg-gray-800 transition text-left"
 								on:click={() => goto(`/c/${chat.id}`)}
 							>
 								<ChatBubble className="size-4 text-gray-400" />
 								<div class="flex-1 min-w-0">
 									<div class="text-sm font-medium truncate">{chat.title}</div>
-									<div class="text-[10px] text-gray-500">{new Date(chat.updated_at * 1000).toLocaleString()}</div>
+									<div class="text-[10px] text-gray-500">
+										{new Date(chat.updated_at * 1000).toLocaleString()}
+									</div>
 								</div>
 							</button>
 						{/each}
@@ -244,7 +273,7 @@
 					<div class="flex flex-col items-center justify-center py-12 text-gray-500">
 						<div class="text-2xl mb-2">💬</div>
 						<div class="text-xs font-medium">{$i18n.t('No chats in this project yet.')}</div>
-						<button 
+						<button
 							class="mt-4 px-4 py-2 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition"
 							on:click={() => {
 								selectedProjectId.set(project.id);

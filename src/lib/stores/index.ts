@@ -73,7 +73,6 @@ export const functions = writable(null);
 export const projects = writable([]);
 export const selectedProjectId = writable(null);
 
-
 export const toolServers = writable([]);
 export const terminalServers = writable([]);
 

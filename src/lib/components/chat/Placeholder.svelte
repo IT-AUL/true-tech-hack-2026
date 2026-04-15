@@ -105,7 +105,9 @@
 						clip-rule="evenodd"
 					/>
 				</svg>
-				<span>{$i18n.t('Project')}: {$projects.find((p) => p.id === $selectedProjectId)?.title}</span>
+				<span
+					>{$i18n.t('Project')}: {$projects.find((p) => p.id === $selectedProjectId)?.title}</span
+				>
 
 				<button
 					class="ml-1 hover:text-blue-800 dark:hover:text-blue-200 transition"

@@ -155,7 +155,6 @@
 						>
 							{$i18n.t('Projects')}
 						</a>
-
 					</div>
 				</div>
 

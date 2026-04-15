@@ -840,42 +840,42 @@
 						</Tooltip>
 					</div>
 				{/if}
- 
- 				<div class="">
- 					<Tooltip content={$i18n.t('Projects')} placement="right">
- 						<a
- 							class=" cursor-pointer flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
- 							href="/workspace/projects"
- 							on:click={async (e) => {
- 								e.stopImmediatePropagation();
- 								e.preventDefault();
- 
- 								goto('/workspace/projects');
- 								itemClickHandler();
- 							}}
- 							aria-label={$i18n.t('Projects')}
- 							draggable="false"
- 						>
- 							<div class=" self-center flex items-center justify-center size-9">
- 								<svg
- 									xmlns="http://www.w3.org/2000/svg"
- 									fill="none"
- 									viewBox="0 0 24 24"
- 									stroke-width="1.5"
- 									stroke="currentColor"
- 									class="size-4.5"
- 								>
- 									<path
- 										stroke-linecap="round"
- 										stroke-linejoin="round"
- 										d="M2.25 21h19.5m-18-18v14.25A2.25 2.25 0 0 0 5.25 19.5h13.5A2.25 2.25 0 0 0 21 17.25V6.75A2.25 2.25 0 0 0 18.75 4.5H12l-2.25-2.25H5.25A2.25 2.25 0 0 0 3 4.5v12m14.25-10.5h1.5M16.5 15h1.5m-1.5-3h1.5m-1.5-3h1.5m-1.5 6h1.5"
- 									/>
- 								</svg>
- 							</div>
- 						</a>
- 					</Tooltip>
- 				</div>
- 			</div>
+
+				<div class="">
+					<Tooltip content={$i18n.t('Projects')} placement="right">
+						<a
+							class=" cursor-pointer flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
+							href="/workspace/projects"
+							on:click={async (e) => {
+								e.stopImmediatePropagation();
+								e.preventDefault();
+
+								goto('/workspace/projects');
+								itemClickHandler();
+							}}
+							aria-label={$i18n.t('Projects')}
+							draggable="false"
+						>
+							<div class=" self-center flex items-center justify-center size-9">
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke-width="1.5"
+									stroke="currentColor"
+									class="size-4.5"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M2.25 21h19.5m-18-18v14.25A2.25 2.25 0 0 0 5.25 19.5h13.5A2.25 2.25 0 0 0 21 17.25V6.75A2.25 2.25 0 0 0 18.75 4.5H12l-2.25-2.25H5.25A2.25 2.25 0 0 0 3 4.5v12m14.25-10.5h1.5M16.5 15h1.5m-1.5-3h1.5m-1.5-3h1.5m-1.5 6h1.5"
+									/>
+								</svg>
+							</div>
+						</a>
+					</Tooltip>
+				</div>
+			</div>
 		</button>
 
 		<div>

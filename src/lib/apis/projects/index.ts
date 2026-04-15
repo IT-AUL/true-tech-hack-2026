@@ -88,7 +88,12 @@ export const getProjectById = async (token: string, id: string) => {
 	return res;
 };
 
-export const updateProjectById = async (token: string, id: string, title: string, description: string) => {
+export const updateProjectById = async (
+	token: string,
+	id: string,
+	title: string,
+	description: string
+) => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/projects/${id}`, {

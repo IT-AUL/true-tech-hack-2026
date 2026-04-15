@@ -490,7 +490,6 @@
 					archiveChatHandler();
 				}}
 			>
-
 				<ArchiveBox strokeWidth="1.5" />
 				<div class="flex items-center">{$i18n.t('Archive')}</div>
 			</button>

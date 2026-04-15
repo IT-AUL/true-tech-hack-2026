@@ -118,7 +118,9 @@
 				>
 					<div class="flex items-center gap-2">
 						{#if activeProject}
-							<div class="flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full text-[10px] font-bold uppercase tracking-wider border border-blue-100 dark:border-blue-800/50 whitespace-nowrap">
+							<div
+								class="flex items-center gap-1.5 px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full text-[10px] font-bold uppercase tracking-wider border border-blue-100 dark:border-blue-800/50 whitespace-nowrap"
+							>
 								<Folder className="size-2.5" />
 								{activeProject.title}
 							</div>
