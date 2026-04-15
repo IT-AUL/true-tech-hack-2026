@@ -21,6 +21,9 @@
 	import ArrowLeft from '../icons/ArrowLeft.svelte';
 	import Download from '../icons/Download.svelte';
 
+	import Markdown from './Messages/Markdown.svelte';
+	import CodeBlock from './Messages/CodeBlock.svelte';
+
 	export let overlay = false;
 
 	let contents: Array<{ type: string; content: string }> = [];
@@ -78,11 +81,26 @@
 	};
 
 	const downloadArtifact = () => {
-		const blob = new Blob([contents[selectedContentIdx].content], { type: 'text/html' });
+		const contentObj = contents[selectedContentIdx];
+		let mimeType = 'text/html';
+		let extension = 'html';
+
+		if (contentObj.type === 'markdown') {
+			mimeType = 'text/markdown';
+			extension = 'md';
+		} else if (contentObj.type === 'svg') {
+			mimeType = 'image/svg+xml';
+			extension = 'svg';
+		} else if (contentObj.type === 'code') {
+			mimeType = 'text/plain';
+			extension = contentObj.lang || 'txt';
+		}
+
+		const blob = new Blob([contentObj.content], { type: mimeType });
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
 		a.href = url;
-		a.download = `artifact-${$chatId}-${selectedContentIdx}.html`;
+		a.download = `artifact-${$chatId}-${selectedContentIdx}.${extension}`;
 		document.body.appendChild(a);
 		a.click();
 		document.body.removeChild(a);
@@ -256,11 +274,19 @@
 								className=" w-full h-full max-h-full overflow-hidden"
 								svg={contents[selectedContentIdx].content}
 							/>
+						{:else if contents[selectedContentIdx].type === 'markdown'}
+							<div class="w-full h-full p-6 overflow-y-auto prose dark:prose-invert max-w-none bg-white dark:bg-gray-900 rounded-lg shadow-sm">
+								<Markdown id="{`artifact-${$chatId}-${selectedContentIdx}`}" content={contents[selectedContentIdx].content} />
+							</div>
+						{:else if contents[selectedContentIdx].type === 'code'}
+							<div class="w-full h-full p-4 overflow-y-auto bg-gray-50 dark:bg-gray-900 rounded-lg">
+								<CodeBlock id="{`artifact-${$chatId}-${selectedContentIdx}`}" lang={contents[selectedContentIdx].lang} code={contents[selectedContentIdx].content} />
+							</div>
 						{/if}
 					</div>
 				{:else}
 					<div class="m-auto font-medium text-xs text-gray-900 dark:text-white">
-						{$i18n.t('No HTML, CSS, or JavaScript content found.')}
+						{$i18n.t('No displayable artifact content found.')}
 					</div>
 				{/if}
 			</div>

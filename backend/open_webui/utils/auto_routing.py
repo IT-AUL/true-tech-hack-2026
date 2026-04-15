@@ -2493,7 +2493,27 @@ async def process_auto_routing(
                         {'type': 'text', 'text': f'\n[File Content ({file_item.filename}):\n{text_content}]\n'}
                     )
 
-    decision = await get_auto_routed_route(payload, request=request, registry=registry, metadata=metadata)
+    # --- Frontend task_mode override (user explicitly selected a mode from the UI pill bar) ---
+    _TASK_MODE_TO_CATEGORY = {
+        'code': 'code',
+        'research': 'research',
+        'vision': 'vision',
+        'chat': 'fallback',
+    }
+    task_mode = payload.get('task_mode') or (metadata.get('task_mode') if isinstance(metadata, dict) else None)
+    if task_mode and task_mode in _TASK_MODE_TO_CATEGORY:
+        forced_category = _TASK_MODE_TO_CATEGORY[task_mode]
+        features = extract_features(payload)
+        decision = RoutingDecision(
+            category=forced_category,
+            complexity=_estimate_complexity(features.text_len),
+            method='user_mode_override',
+            confidence=1.0,
+            reasoning=f'Пользователь выбрал режим «{task_mode}» — маршрутизация зафиксирована',
+            trace={'stage': 'user_mode_override', 'engine': 'enterprise', 'task_mode': task_mode},
+        )
+    else:
+        decision = await get_auto_routed_route(payload, request=request, registry=registry, metadata=metadata)
 
     if has_vision and decision.category != 'image_gen':
         if not _soft_image_attachment():

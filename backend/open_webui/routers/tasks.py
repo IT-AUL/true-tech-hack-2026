@@ -498,11 +498,7 @@ async def generate_queries(request: Request, form_data: dict, user=Depends(get_v
 
 @router.post('/auto/completions')
 async def generate_autocompletion(request: Request, form_data: dict, user=Depends(get_verified_user)):
-    if not request.app.state.config.ENABLE_AUTOCOMPLETE_GENERATION:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail='Autocompletion generation is disabled',
-        )
+    # Autocomplete is forcefully enabled for VibeHub — no config check
 
     type = form_data.get('type')
     prompt = form_data.get('prompt')
@@ -531,12 +527,7 @@ async def generate_autocompletion(request: Request, form_data: dict, user=Depend
 
     # Check if the user has a custom task model
     # If the user has a custom task model, use that model
-    task_model_id = get_task_model_id(
-        model_id,
-        request.app.state.config.TASK_MODEL,
-        request.app.state.config.TASK_MODEL_EXTERNAL,
-        models,
-    )
+    task_model_id = model_id
 
     log.debug(f'generating autocompletion using model {task_model_id} for user {user.email}')
 
@@ -551,6 +542,8 @@ async def generate_autocompletion(request: Request, form_data: dict, user=Depend
         'model': task_model_id,
         'messages': [{'role': 'user', 'content': content}],
         'stream': False,
+        'max_tokens': 50,
+        'temperature': 0.1,
         'metadata': {
             **(request.state.metadata if hasattr(request.state, 'metadata') else {}),
             'task': str(TASKS.AUTOCOMPLETE_GENERATION),

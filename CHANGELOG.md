@@ -11,6 +11,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Секции ниже без суффикса (`[0.8.12]`) — upstream Open WebUI changelog.
 
 ---
+## [0.8.12-gpthub.22] - 2026-04-15
+
+### Added
+
+- **Inline prompt hints** (`InlinePromptHints`): локальный fuzzy-поиск по заготовкам, debounced LLM-продолжение строки, кэш и без глобального троттлинга в `generateAutoCompletion`.
+- **Task router selector** в workspace: режимы Авто / Чат / Код / Поиск / Фото (`type="button"` у кнопок).
+
+### Changed
+
+- Автодополнение: убран глобальный интервал между запросами; остаются кэш по ключу и dedupe inflight.
+- Чат UI: подсказки, статусы ответа, цитаты, сайдбар и связанные экраны — правки под новый UX.
+
+### Fixed
+
+- LLM-подсказки больше не «глушатся» постоянным возвратом пустой строки при наборе текста.
+
+---
+
 ## [0.8.12-gpthub.20] - 2026-04-14
 
 ### Fixed

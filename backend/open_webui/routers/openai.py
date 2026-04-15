@@ -1674,6 +1674,7 @@ async def generate_chat_completion(
     payload = {**form_data}
     metadata = payload.pop('metadata', None)
     auto_route = payload.pop('auto_route', False)
+    task_mode = payload.pop('task_mode', None)
 
     model_id = form_data.get('model')
 
@@ -1690,7 +1691,11 @@ async def generate_chat_completion(
             models = request.app.state.OPENAI_MODELS
 
         model_id, payload, routing_decision = await process_auto_routing(
-            request, payload, user, available_models=models, metadata=metadata
+            request,
+            {**payload, **({'task_mode': task_mode} if task_mode else {})},
+            user,
+            available_models=models,
+            metadata=metadata,
         )
         log.info(f'Auto-routing selected model: {model_id}')
         payload['model'] = model_id
@@ -1717,6 +1722,7 @@ async def generate_chat_completion(
             'llm_adjudicator',
             'llm_adjudicator_low_conf',
             'llm+regex_override',
+            'user_mode_override',
         )
         if llm_like and routing_reasoning:
             first_line = routing_reasoning.split('\n', 1)[0].strip()
@@ -1750,39 +1756,20 @@ async def generate_chat_completion(
                     },
                 },
             }
-            # Main UI chat path defers emit to middleware so status is sent in the same await chain as
-            # the first model chunks (avoids WebSocket vs. stream reordering on the client).
-            # image_gen: must not defer — _auto_routed_image_generation_attempt emits files before return;
-            # deferred routing would arrive after the image on the client.
-            if getattr(request.state, 'defer_auto_routing_socket_emit', False):
-                if routing_decision.category == 'image_gen':
-                    try:
-                        event_emitter = get_event_emitter(
-                            {
-                                'user_id': user.id,
-                                'chat_id': metadata['chat_id'],
-                                'message_id': metadata['message_id'],
-                                'session_id': metadata.get('session_id'),
-                            }
-                        )
-                        await event_emitter(routing_status_event)
-                    except Exception as e:
-                        log.warning(f'Failed to emit auto-routing status (image_gen): {e}')
-                else:
-                    metadata['auto_routing_status_emit'] = routing_status_event
-            else:
-                try:
-                    event_emitter = get_event_emitter(
-                        {
-                            'user_id': user.id,
-                            'chat_id': metadata['chat_id'],
-                            'message_id': metadata['message_id'],
-                            'session_id': metadata.get('session_id'),
-                        }
-                    )
-                    await event_emitter(routing_status_event)
-                except Exception as e:
-                    log.warning(f'Failed to emit auto-routing status: {e}')
+            # Always emit routing status immediately so the UI shows the routing
+            # step BEFORE the model response starts streaming.
+            try:
+                event_emitter = get_event_emitter(
+                    {
+                        'user_id': user.id,
+                        'chat_id': metadata['chat_id'],
+                        'message_id': metadata['message_id'],
+                        'session_id': metadata.get('session_id'),
+                    }
+                )
+                await event_emitter(routing_status_event)
+            except Exception as e:
+                log.warning(f'Failed to emit auto-routing status: {e}')
 
         auto_routed = True
         payload_snapshot_pre_model_info = copy.deepcopy(payload)

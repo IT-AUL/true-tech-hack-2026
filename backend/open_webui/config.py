@@ -1882,7 +1882,7 @@ Strictly return in JSON format:
 ENABLE_AUTOCOMPLETE_GENERATION = PersistentConfig(
     'ENABLE_AUTOCOMPLETE_GENERATION',
     'task.autocomplete.enable',
-    os.environ.get('ENABLE_AUTOCOMPLETE_GENERATION', 'False').lower() == 'true',
+    os.environ.get('ENABLE_AUTOCOMPLETE_GENERATION', 'True').lower() == 'true',
 )
 
 AUTOCOMPLETE_GENERATION_INPUT_MAX_LENGTH = PersistentConfig(
@@ -1899,45 +1899,18 @@ AUTOCOMPLETE_GENERATION_PROMPT_TEMPLATE = PersistentConfig(
 
 
 DEFAULT_AUTOCOMPLETE_GENERATION_PROMPT_TEMPLATE = """### Task:
-You are an autocompletion system. Continue the text in `<text>` based on the **completion type** in `<type>` and the given language.
+You are an autocompletion system. Continue the current text naturally and concisely.
 
-### **Instructions**:
-1. Analyze `<text>` for context and meaning.
-2. Use `<type>` to guide your output:
-   - **General**: Provide a natural, concise continuation.
-   - **Search Query**: Complete as if generating a realistic search query.
-3. Start as if you are directly continuing `<text>`. Do **not** repeat, paraphrase, or respond as a model. Simply complete the text.
-4. Ensure the continuation:
-   - Flows naturally from `<text>`.
-   - Avoids repetition, overexplaining, or unrelated ideas.
-5. If unsure, return: `{ "text": "" }`.
+### Examples:
+- "The sun was setting" -> "over the horizon."
+- "What is the capital" -> "of France?"
 
-### **Output Rules**:
-- Respond only in JSON format: `{ "text": "<your_completion>" }`.
-
-### **Examples**:
-#### Example 1:
-Input:
-<type>General</type>
-<text>The sun was setting over the horizon, painting the sky</text>
-Output:
-{ "text": "with vibrant shades of orange and pink." }
-
-#### Example 2:
-Input:
-<type>Search Query</type>
-<text>Top-rated restaurants in</text>
-Output:
-{ "text": "New York City for Italian cuisine." }
-
----
 ### Context:
 <chat_history>
-{{MESSAGES:END:6}}
+{{MESSAGES:END:3}}
 </chat_history>
-<type>{{TYPE}}</type>
 <text>{{PROMPT}}</text>
-#### Output:
+#### Completion:
 """
 
 
@@ -3806,16 +3779,26 @@ DEEPGRAM_API_KEY = PersistentConfig(
 # ElevenLabs configuration
 ELEVENLABS_API_BASE_URL = os.getenv('ELEVENLABS_API_BASE_URL', 'https://api.elevenlabs.io')
 
+# STT (OpenAI-compatible): never default from the module-level OPENAI_API_KEY variable — it is
+# often cleared later for non-OpenAI defaults; read os.environ so MWS chat key applies when
+# AUDIO_STT_OPENAI_API_KEY is unset or empty.
+_stt_openai_base_default = (
+    os.getenv('AUDIO_STT_OPENAI_API_BASE_URL') or os.getenv('OPENAI_API_BASE_URL') or 'https://api.openai.com/v1'
+)
+if _stt_openai_base_default.endswith('/'):
+    _stt_openai_base_default = _stt_openai_base_default[:-1]
+_stt_openai_key_default = (os.getenv('AUDIO_STT_OPENAI_API_KEY') or os.getenv('OPENAI_API_KEY') or '').strip()
+
 AUDIO_STT_OPENAI_API_BASE_URL = PersistentConfig(
     'AUDIO_STT_OPENAI_API_BASE_URL',
     'audio.stt.openai.api_base_url',
-    os.getenv('AUDIO_STT_OPENAI_API_BASE_URL', OPENAI_API_BASE_URL),
+    _stt_openai_base_default,
 )
 
 AUDIO_STT_OPENAI_API_KEY = PersistentConfig(
     'AUDIO_STT_OPENAI_API_KEY',
     'audio.stt.openai.api_key',
-    os.getenv('AUDIO_STT_OPENAI_API_KEY', OPENAI_API_KEY),
+    _stt_openai_key_default,
 )
 
 AUDIO_STT_ENGINE = PersistentConfig(

@@ -979,66 +979,139 @@ export const generateAutoCompletion = async (
 	const controller = new AbortController();
 	let error = null;
 
-	const res = await fetch(`${WEBUI_BASE_URL}/api/v1/tasks/auto/completions`, {
-		signal: controller.signal,
-		method: 'POST',
-		headers: {
-			Accept: 'application/json',
-			'Content-Type': 'application/json',
-			Authorization: `Bearer ${token}`
-		},
-		body: JSON.stringify({
-			model: model,
-			prompt: prompt,
-			...(messages && { messages: messages }),
-			type: type,
-			stream: false,
-			...(chat_id && { chat_id: chat_id })
-		})
-	})
-		.then(async (res) => {
-			if (!res.ok) throw await res.json();
-			return res.json();
-		})
-		.catch((err) => {
-			console.error(err);
-			if ('detail' in err) {
-				error = err.detail;
-			}
-			return null;
-		});
+	const normalizePrompt = (value: string) => value.toLowerCase().replace(/\s+/g, ' ').trim();
+	const cacheKey = `${model}::${normalizePrompt(prompt)}`;
 
-	if (error) {
-		throw error;
+	if (!prompt || prompt.trim().length < 4) {
+		return '';
 	}
 
-	const response = res?.choices[0]?.message?.content ?? '';
+	// Global anti-spam controls shared by all callers (RichTextInput + inline hints).
+	const now = Date.now();
+	const CACHE_TTL_MS = 5 * 60 * 1000;
+	const MAX_COMPLETION_CHARS = 90;
 
-	try {
-		const jsonStartIndex = response.indexOf('{');
-		const jsonEndIndex = response.lastIndexOf('}');
+	// module-scoped state (attached to function object to avoid wider refactors)
+	const state = ((generateAutoCompletion as any).__state ??= {
+		cache: new Map<string, { value: string; ts: number }>(),
+		inflight: new Map<string, Promise<string>>()
+	});
 
-		if (jsonStartIndex !== -1 && jsonEndIndex !== -1) {
-			const jsonResponse = response.substring(jsonStartIndex, jsonEndIndex + 1);
+	const cached = state.cache.get(cacheKey);
+	if (cached && now - cached.ts < CACHE_TTL_MS) {
+		return cached.value;
+	}
 
-			// Step 5: Parse the JSON block
-			const parsed = JSON.parse(jsonResponse);
+	const inflight = state.inflight.get(cacheKey);
+	if (inflight) {
+		return inflight;
+	}
 
-			// Step 6: If there's a "queries" key, return the queries array; otherwise, return an empty array
-			if (parsed && parsed.text) {
-				return parsed.text;
-			} else {
-				return '';
+	const normalizeResponseToCompletion = (inputPrompt: string, rawResponse: string) => {
+		if (!rawResponse) return '';
+
+		let cleaned = rawResponse.trim();
+
+		// Strip code fences.
+		const codeFenceMatch = cleaned.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
+		if (codeFenceMatch) {
+			cleaned = codeFenceMatch[1].trim();
+		}
+
+		// Try JSON payload first: {"text":"..."}.
+		const jsonStartIndex = cleaned.indexOf('{');
+		const jsonEndIndex = cleaned.lastIndexOf('}');
+		if (jsonStartIndex !== -1 && jsonEndIndex !== -1 && jsonEndIndex > jsonStartIndex) {
+			try {
+				const parsed = JSON.parse(cleaned.substring(jsonStartIndex, jsonEndIndex + 1));
+				if (parsed && typeof parsed.text === 'string') {
+					cleaned = parsed.text.trim();
+				}
+			} catch {
+				// keep raw cleaned
 			}
 		}
 
-		// If no valid JSON block found, return response as is
-		return response;
-	} catch (e) {
-		// Catch and safely return empty array on any parsing errors
-		console.error('Failed to parse response: ', e);
-		return response;
-	}
+		// Strip wrapping quotes.
+		cleaned = cleaned.replace(/^["']+|["']+$/g, '').trim();
+
+		const normalizedPrompt = inputPrompt.trim();
+		if (!cleaned) return '';
+
+		// If model echoed the original prompt, keep only tail.
+		if (normalizedPrompt && cleaned.toLowerCase().startsWith(normalizedPrompt.toLowerCase())) {
+			cleaned = cleaned.slice(normalizedPrompt.length).trim();
+		}
+
+		// Autocomplete should be continuation, not full answer paragraph.
+		// Cut at first hard sentence boundary after a short fragment.
+		const sentenceCut = cleaned.search(/[.!?]\s/);
+		if (sentenceCut > 24) {
+			cleaned = cleaned.slice(0, sentenceCut).trim();
+		}
+
+		// Keep it short and inline-friendly.
+		cleaned = cleaned.replace(/\s+/g, ' ').slice(0, MAX_COMPLETION_CHARS).trim();
+
+		// Avoid returning obvious full-response boilerplate.
+		if (cleaned.length > 0 && /^[А-ЯA-Z]/.test(cleaned) && cleaned.split(' ').length > 12) {
+			cleaned = cleaned.split(' ').slice(0, 10).join(' ');
+		}
+
+		return cleaned;
+	};
+
+	const requestPromise = (async () => {
+		const res = await fetch(`${WEBUI_BASE_URL}/api/v1/tasks/auto/completions`, {
+			signal: controller.signal,
+			method: 'POST',
+			headers: {
+				Accept: 'application/json',
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${token}`
+			},
+			body: JSON.stringify({
+				model: model,
+				prompt: prompt,
+				...(messages && { messages: messages }),
+				type: type,
+				stream: false,
+				...(chat_id && { chat_id: chat_id })
+			})
+		})
+			.then(async (res) => {
+				if (!res.ok) throw await res.json();
+				return res.json();
+			})
+			.catch((err) => {
+				console.error(err);
+				if ('detail' in err) {
+					error = err.detail;
+				}
+				return null;
+			});
+
+		if (error) {
+			throw error;
+		}
+
+		if (!res) {
+			return '';
+		}
+
+		const response = res?.choices?.[0]?.message?.content ?? '';
+		const completion = normalizeResponseToCompletion(prompt, response);
+		if (completion) {
+			state.cache.set(cacheKey, { value: completion, ts: Date.now() });
+		}
+		return completion;
+	})().finally(() => {
+		state.inflight.delete(cacheKey);
+	});
+
+	state.inflight.set(cacheKey, requestPromise);
+
+	return await requestPromise;
 };
 
 export const generateMoACompletion = async (

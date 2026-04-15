@@ -1,144 +1,76 @@
 <script lang="ts">
-	import Fuse from 'fuse.js';
-	import Bolt from '$lib/components/icons/Bolt.svelte';
-	import { onMount, getContext } from 'svelte';
-	import { settings, WEBUI_NAME } from '$lib/stores';
-	import { WEBUI_VERSION } from '$lib/constants';
+	import { getContext } from 'svelte';
+
+	import Document from '$lib/components/icons/Document.svelte';
+	import ChartBar from '$lib/components/icons/ChartBar.svelte';
+	import CommandLine from '$lib/components/icons/CommandLine.svelte';
+	import Sparkles from '$lib/components/icons/Sparkles.svelte';
 
 	const i18n = getContext('i18n');
 
-	export let suggestionPrompts = [];
+	export let suggestionPrompts = []; // Keep props to avoid breaking consumers
 	export let className = '';
 	export let inputValue = '';
 	export let onSelect = (e) => {};
 
-	let sortedPrompts = [];
-
-	const fuseOptions = {
-		keys: ['content', 'title'],
-		threshold: 0.5
-	};
-
-	let fuse;
-	let filteredPrompts = [];
-
-	// Initialize Fuse
-	$: fuse = new Fuse(sortedPrompts, fuseOptions);
-
-	// Update the filteredPrompts if inputValue changes
-	// Only increase version if something wirklich geändert hat
-	$: getFilteredPrompts(inputValue);
-
-	// Helper function to check if arrays are the same
-	// (based on unique IDs oder content)
-	function arraysEqual(a, b) {
-		if (a.length !== b.length) return false;
-		for (let i = 0; i < a.length; i++) {
-			if ((a[i].id ?? a[i].content) !== (b[i].id ?? b[i].content)) {
-				return false;
-			}
+	// Cool VibeHub Action cards to replace the boring pill suggestions
+	const coolActions = [
+		{
+			title: 'Сделать сводку',
+			subtitle: 'Обзор длинного текста',
+			prompt: 'Сделай краткую выжимку по тексту: ',
+			icon: Document,
+			color: 'text-emerald-500 dark:text-emerald-400',
+			bg: 'bg-emerald-50 dark:bg-emerald-500/10',
+			border: 'border-emerald-100 dark:border-emerald-500/20'
+		},
+		{
+			title: 'Анализ данных',
+			subtitle: 'Поиск инсайтов',
+			prompt: 'Проанализируй эти данные и выдели ключевое: ',
+			icon: ChartBar,
+			color: 'text-indigo-500 dark:text-indigo-400',
+			bg: 'bg-indigo-50 dark:bg-indigo-500/10',
+			border: 'border-indigo-100 dark:border-indigo-500/20'
+		},
+		{
+			title: 'Оптимизация кода',
+			subtitle: 'Рефакторинг и фиксы',
+			prompt: 'Проведи рефакторинг следующего кода: ',
+			icon: CommandLine,
+			color: 'text-amber-500 dark:text-amber-400',
+			bg: 'bg-amber-50 dark:bg-amber-500/10',
+			border: 'border-amber-100 dark:border-amber-500/20'
+		},
+		{
+			title: 'Генерация идей',
+			subtitle: 'Для проекта и бизнеса',
+			prompt: 'Предложи 5 прорывных идей на тему: ',
+			icon: Sparkles,
+			color: 'text-purple-500 dark:text-purple-400',
+			bg: 'bg-purple-50 dark:bg-purple-500/10',
+			border: 'border-purple-100 dark:border-purple-500/20'
 		}
-		return true;
-	}
-
-	const getFilteredPrompts = (inputValue) => {
-		if (inputValue.length > 500) {
-			filteredPrompts = [];
-		} else {
-			const newFilteredPrompts =
-				inputValue.trim() && fuse
-					? fuse.search(inputValue.trim()).map((result) => result.item)
-					: sortedPrompts;
-
-			// Compare with the oldFilteredPrompts
-			// If there's a difference, update array + version
-			if (!arraysEqual(filteredPrompts, newFilteredPrompts)) {
-				filteredPrompts = newFilteredPrompts;
-			}
-		}
-	};
-
-	$: if (suggestionPrompts) {
-		sortedPrompts = [...(suggestionPrompts ?? [])].sort(() => Math.random() - 0.5);
-		getFilteredPrompts(inputValue);
-	}
+	];
 </script>
 
-<div class="mb-1 flex gap-1 text-xs font-medium items-center text-gray-600 dark:text-gray-400">
-	{#if filteredPrompts.length > 0}
-		<Bolt />
-		{$i18n.t('Suggested')}
-	{:else}
-		<!-- Keine Vorschläge -->
-
-		<div
-			class="flex w-full {$settings?.landingPageMode === 'chat'
-				? ' -mt-1'
-				: 'text-center items-center justify-center'}  self-start text-gray-600 dark:text-gray-400"
-		>
-			{$WEBUI_NAME} ‧ v{WEBUI_VERSION}
-		</div>
-	{/if}
+<div class="flex flex-col gap-2 w-full mt-2 {className}">
+	<div class="grid grid-cols-2 md:grid-cols-4 gap-3 w-full">
+		{#each coolActions as action, idx (idx)}
+			<button
+				class="flex flex-col items-start gap-2 p-3.5 rounded-2xl border {action.border} bg-white dark:bg-gray-850 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all duration-200 text-left group shadow-sm hover:shadow"
+				on:click={() => {
+					onSelect(action.prompt);
+				}}
+			>
+				<div class="flex items-center justify-center size-8 rounded-xl {action.bg} {action.color} mb-0.5">
+					<svelte:component this={action.icon} className="size-4" />
+				</div>
+				<div>
+					<div class="text-sm font-semibold text-gray-800 dark:text-gray-200 group-hover:text-black dark:group-hover:text-white transition-colors">{action.title}</div>
+					<div class="text-xs text-gray-400 dark:text-gray-500 mt-0.5 line-clamp-1 truncate">{action.subtitle}</div>
+				</div>
+			</button>
+		{/each}
+	</div>
 </div>
-
-<div class="h-40 w-full">
-	{#if filteredPrompts.length > 0}
-		<div role="list" class="max-h-40 overflow-auto scrollbar-none items-start {className}">
-			{#each filteredPrompts as prompt, idx (prompt.id || `${prompt.content}-${idx}`)}
-				<!-- svelte-ignore a11y-no-interactive-element-to-noninteractive-role -->
-				<button
-					role="listitem"
-					class="waterfall flex flex-col flex-1 shrink-0 w-full justify-between
-				       px-3 py-2 rounded-xl bg-transparent hover:bg-black/5
-				       dark:hover:bg-white/5 transition group"
-					style="animation-delay: {idx * 60}ms"
-					on:click={() => onSelect({ type: 'prompt', data: prompt.content })}
-				>
-					<div class="flex flex-col text-left">
-						{#if prompt.title && prompt.title[0] !== ''}
-							<div
-								class="font-medium dark:text-gray-300 dark:group-hover:text-gray-200 transition line-clamp-1"
-							>
-								{prompt.title[0]}
-							</div>
-							<div class="text-xs text-gray-600 dark:text-gray-400 font-normal line-clamp-1">
-								{prompt.title[1]}
-							</div>
-						{:else}
-							<div
-								class="font-medium dark:text-gray-300 dark:group-hover:text-gray-200 transition line-clamp-1"
-							>
-								{prompt.content}
-							</div>
-							<div class="text-xs text-gray-600 dark:text-gray-400 font-normal line-clamp-1">
-								{$i18n.t('Prompt')}
-							</div>
-						{/if}
-					</div>
-				</button>
-			{/each}
-		</div>
-	{/if}
-</div>
-
-<style>
-	/* Waterfall animation for the suggestions */
-	@keyframes fadeInUp {
-		0% {
-			opacity: 0;
-			transform: translateY(20px);
-		}
-		100% {
-			opacity: 1;
-			transform: translateY(0);
-		}
-	}
-
-	.waterfall {
-		opacity: 0;
-		animation-name: fadeInUp;
-		animation-duration: 200ms;
-		animation-fill-mode: forwards;
-		animation-timing-function: ease;
-	}
-</style>
