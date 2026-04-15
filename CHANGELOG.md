@@ -11,6 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Секции ниже без суффикса (`[0.8.12]`) — upstream Open WebUI changelog.
 
 ---
+## [0.8.12-gpthub.24] - 2026-04-15
+
+### Changed
+
+- Синхронизация `package.json` с тегом релиза `v0.8.12-gpthub.24` (проверка CI `check-version-tag`).
+
+---
+
 ## [0.8.12-gpthub.23] - 2026-04-15
 
 ### Changed

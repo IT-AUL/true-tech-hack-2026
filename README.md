@@ -1,7 +1,7 @@
 # GPTHub / VibeHub — единое ИИ-пространство
 
 [![CI](https://github.com/IT-AUL/true-tech-hack-2026/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/IT-AUL/true-tech-hack-2026/actions/workflows/ci.yml)
-[![release](https://img.shields.io/static/v1?label=release&message=0.8.12-gpthub.23&color=blue)](https://github.com/IT-AUL/true-tech-hack-2026/releases/latest)
+[![release](https://img.shields.io/static/v1?label=release&message=0.8.12-gpthub.24&color=blue)](https://github.com/IT-AUL/true-tech-hack-2026/releases/latest)
 [![upstream](https://img.shields.io/static/v1?label=upstream&message=Open%20WebUI%200.8.12&color=8A2BE2&logo=github)](https://github.com/open-webui/open-webui)
 [![license](https://img.shields.io/badge/license-BSD--3--Clause-green.svg)](LICENSE)
 [![Docker Hub](https://img.shields.io/docker/pulls/itaul/gpthub?logo=docker&logoColor=white)](https://hub.docker.com/r/itaul/gpthub)
@@ -181,7 +181,7 @@ docker compose -f docker-compose.dev.yml --env-file .env up --build -d
 **2. Готовый образ с [Docker Hub](https://hub.docker.com/r/itaul/gpthub)** (без локальной сборки):
 
 ```bash
-export VERSION=latest   # или конкретный тег, например 0.8.12-gpthub.23
+export VERSION=latest   # или конкретный тег, например 0.8.12-gpthub.24
 docker pull itaul/gpthub:${VERSION}
 
 docker run -d --name gpthub --rm \
@@ -199,7 +199,7 @@ docker run -d --name gpthub --rm \
 **3. Образ с [GHCR](https://github.com/IT-AUL/true-tech-hack-2026/pkgs/container/true-tech-hack-2026)**:
 
 ```bash
-export VERSION=0.8.12-gpthub.23   # подставьте актуальный тег из Releases
+export VERSION=0.8.12-gpthub.24   # подставьте актуальный тег из Releases
 docker pull ghcr.io/it-aul/true-tech-hack-2026:${VERSION}
 
 docker run -d --name gpthub --rm \
@@ -218,8 +218,8 @@ docker run -d --name gpthub --rm \
 ```bash
 cp deploy/.env.example /tmp/gpthub.env
 # В файле задайте OPENAI_*, WEBUI_SECRET_KEY и строку:
-# GPTHUB_IMAGE=itaul/gpthub:0.8.12-gpthub.23
-# или GPTHUB_IMAGE=ghcr.io/it-aul/true-tech-hack-2026:0.8.12-gpthub.23
+# GPTHUB_IMAGE=itaul/gpthub:0.8.12-gpthub.24
+# или GPTHUB_IMAGE=ghcr.io/it-aul/true-tech-hack-2026:0.8.12-gpthub.24
 
 docker compose -f deploy/docker-compose.prod.yml --env-file /tmp/gpthub.env up -d
 ```
