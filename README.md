@@ -13,11 +13,13 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6.svg?logo=typescript&logoColor=white)](https://typescriptlang.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4.svg?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 
+> **GitHub и GitLab.** Код ведётся в репозитории на **GitHub** — [IT-AUL/true-tech-hack-2026](https://github.com/IT-AUL/true-tech-hack-2026): ветки разработки, задачи, запросы на слияние, релизы и непрерывная интеграция. Копия в **GitLab** обновляется при синхронизации ветки `main` из GitHub.
+
 > Форк [Open WebUI](https://github.com/open-webui/open-webui), доработанный до **единого рабочего пространства с ИИ**: один интерфейс для диалогов, файлов, мультимодальных моделей и фоновых задач (титулы, теги, follow-up). Все запросы к LLM идут через **OpenAI-совместимый API** (в проде — MWS GPT и выбранные эндпоинты из конфигурации).
 
 ## Позиционирование
 
-- **Один вход для команды** — чат, модели, память, загрузка документов и сценарии «задача → ответ» без переключения между разными тулзами.
+- **Один вход для команды** — чат, модели, память, загрузка документов и сценарии «задача → ответ» без смены отдельных инструментов.
 - **Умная маршрутизация** — бэкенд классифицирует намерение и подбирает модальность (текст, код, картинка, поиск и т.д.); пользователь может оставить режим **Авто** или выбрать профиль задачи в workspace.
 - **Контроль данных** — готовый **self-hosted** сценарий: образы в GHCR и Docker Hub, деплой на свою инфраструктуру, ключи и `OPENAI_API_BASE_URL` только у вас.
 
@@ -47,7 +49,7 @@ flowchart LR
 | **Маршрутизация** | `utils/auto_routing.py` + конфиг задач — выбор модели под тип запроса. |
 | **Данные** | SQLite по умолчанию; опционально PostgreSQL; векторное хранилище для RAG/памяти. |
 
-Репозиторий и CI ведутся в **GitHub**; зеркало `main` на GitLab — см. [docs/GITLAB_SETUP.md](docs/GITLAB_SETUP.md).
+Основной репозиторий: **[GitHub](https://github.com/IT-AUL/true-tech-hack-2026)**. Настройка копии в GitLab: [docs/GITLAB_SETUP.md](docs/GITLAB_SETUP.md).
 
 ---
 
