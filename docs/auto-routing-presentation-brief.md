@@ -1,6 +1,8 @@
-# GPTHub Auto-Routing Brief
+# GPTHub / VibeHub Auto-Routing Brief
 
 Материал для дизайнера и презентации. Концентрированная версия инженерной ценности форка: как работает единый чат, почему auto-routing можно считать production-ready оркестратором, что видит пользователь, какие сценарии поддержаны, какие модели и внешние сервисы участвуют, и какие улучшения уже внедрены.
+
+**Актуальный код:** `backend/open_webui/utils/auto_routing.py`. По умолчанию включён **enterprise**-движок; **legacy**-пайплайн остаётся для сравнения (shadow) или принудительного режима через конфиг роутера.
 
 ## 1. Что это за форк
 
@@ -112,27 +114,40 @@ flowchart TB
     OA --> ST
 ```
 
-## 5. Логика auto-routing
+## 5. Логика auto-routing (enterprise, упрощённо)
+
+Цепочка соответствует `get_auto_routed_route` → `_get_auto_routed_route_enterprise`:
+
+1. Извлечь признаки из последнего user-turn (текст, вложения, URL, контекст).
+2. **Guardrails** — детерминированные сигналы (пустой запрос, явная мультимодальность и т.п.).
+3. **LLM adjudicator** (если разрешён движком) — категория и reasoning от роутер-модели; при уверенном ответе возможны **override** явными правилами / regex, если они лучше ловят намерение (например «создай картинку»).
+4. При низкой уверенности LLM — те же правила/regex могут уточнить маршрут.
+5. **Кеш** маршрутизации (мягкий порог confidence).
+6. Короткий **small-talk follow-up** в диалоге, если LLM недоступен.
+7. **Semantic layer** (эмбеддинги / похожесть к примерам категорий).
+8. **Explicit rules**, затем **regex** как финальная страховка.
+
+После фиксации категории — ранжирование моделей из runtime-каталога, **failover** внутри той же модальности, эмит статуса в UI.
 
 ```mermaid
 flowchart TD
     A[Last user turn] --> B[Extract features]
     B --> C{Guardrails}
-    C -->|exact signal| G[Resolved route]
-    C -->|no exact signal| D[Explicit rules]
-    D -->|matched| G
-    D -->|no match| E[Semantic layer]
-    E -->|confident| G
-    E -->|abstain| F[LLM adjudicator]
-    F -->|confident| G
-    F -->|unavailable or low confidence| H[Safe fallback]
+    C -->|hit| G[Resolved route]
+    C -->|miss| L[LLM adjudicator]
+    L -->|confident + optional rules/regex override| G
+    L -->|low conf / partial| L2[Rules / regex refine]
+    L2 --> G
+    L -->|unavailable| K[Soft routing cache]
+    K -->|hit| G
+    K -->|miss| S[Semantic layer]
+    S -->|hit| G
+    S -->|miss| R[Explicit rules → Regex]
+    R --> G
 
-    G --> I[Rank candidate models]
-    I --> J[Lock modality]
-    J --> K[Try best model]
-    K -->|provider error| L[Failover to next candidate]
-    L --> K
-    K --> M[Emit status back to chat]
+    G --> I[Rank models + lock modality]
+    I --> J[Chat / image / audio flow + failover]
+    J --> M[Status payload → UI]
 ```
 
 ## 6. Поддерживаемые сценарии
@@ -242,8 +257,8 @@ flowchart TD
 
 ### Улучшения логики
 
-1. Пайплайн переведен на `guardrails -> semantic / LLM -> regex fallback`.
-2. Узкий `small-talk short-circuit`: короткие осмысленные запросы больше не теряются.
+1. Enterprise-пайплайн: `guardrails → LLM adjudicator → при необходимости override правилами/regex → кеш → semantic → explicit rules → regex`; legacy остаётся за флагом для shadow-режима.
+2. Узкий `small-talk short-circuit` / follow-up в диалоге: короткие осмысленные запросы не уходят преждевременно в «пустой» fallback.
 3. Контекст диалога добавлен в классификацию follow-up запросов.
 4. Кэш роутинга учитывает контекст, URL и chat/message identity.
 5. `metadata.files` применяются только к последнему user turn, чтобы старые вложения не ломали новый запрос.
