@@ -202,25 +202,6 @@ flowchart LR
 | 14 | Генерация презентаций | Реализовано | Практический сценарий через structured output и экспорт в markdown/слайд-формат. |
 | 15 | Дополнительный функционал | Реализовано | Pipelines, tools/functions, workspace-модули, self-hosted контур. |
 
-### Поиск в интернете через Brave (предметно)
-
-В форке поддержан production-сценарий web search через Brave Search API:
-
-- Конфигурация в backend:
-  - `ENABLE_WEB_SEARCH=true`
-  - `WEB_SEARCH_ENGINE=brave`
-  - `BRAVE_SEARCH_API_KEY=<your_key>`
-- Ключ и движок хранятся как `PersistentConfig` (см. `backend/open_webui/config.py`).
-- На уровне инструментов доступны `search_web` и `fetch_url` (см. `backend/open_webui/tools/builtin.py` и `backend/open_webui/utils/tools.py`).
-- Реализация Brave-запроса вынесена в `backend/open_webui/retrieval/web/brave.py`:
-  - вызов `https://api.search.brave.com/res/v1/web/search`,
-  - передача `X-Subscription-Token`,
-  - обработка `429` с повтором,
-  - фильтрация доменов через `WEB_SEARCH_DOMAIN_FILTER_LIST`.
-- В chat pipeline web search и URL-fetch встраиваются в общий поток обработки сообщения, а результаты попадают в citations/status слой.
-
-Это позволяет делать не «демо-поиск», а нормальный управляемый web retrieval в рамках единого чата.
-
 ---
 
 ## Демо для жюри
