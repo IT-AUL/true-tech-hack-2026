@@ -415,22 +415,26 @@
 	};
 
 	const chatEventHandler = async (event, cb) => {
-		console.log(event);
-
 		if (event.chat_id === $chatId) {
 			await tick();
 			let message = history.messages[event.message_id];
 
 			if (message) {
+				if (message.autoRoutePending) {
+					message.autoRoutePending = false;
+				}
+
 				const type = event?.data?.type ?? null;
 				const data = event?.data?.data ?? null;
 
 				if (type === 'status') {
-					if (message?.statusHistory) {
-						message.statusHistory.push(data);
-					} else {
-						message.statusHistory = [data];
-					}
+					// Immutable update: in-place .push() kept the same message reference, so Svelte often
+					// skipped re-rendering ResponseMessage until the next content/done change — routing
+					// looked like it arrived only after the answer finished.
+					message = {
+						...message,
+						statusHistory: message?.statusHistory ? [...message.statusHistory, data] : [data]
+					};
 				} else if (type === 'chat:completion') {
 					chatCompletionEventHandler(data, message, event.chat_id);
 				} else if (type === 'chat:tasks:cancel') {
@@ -558,6 +562,9 @@
 				}
 
 				history.messages[event.message_id] = message;
+				if (type === 'status') {
+					history = { ...history };
+				}
 			}
 		} else {
 			// Non-active chat completion: queue stays in the global store.
@@ -1972,7 +1979,8 @@
 					model: model.id,
 					modelName: model.name ?? model.id,
 					modelIdx: modelIdx ? modelIdx : _modelIdx,
-					timestamp: Math.floor(Date.now() / 1000) // Unix epoch
+					timestamp: Math.floor(Date.now() / 1000), // Unix epoch
+					...(model.id === 'auto' ? { autoRoutePending: true } : {})
 				};
 
 				// Add message to history and Set currentId to messageId
@@ -2006,7 +2014,6 @@
 
 		await Promise.all(
 			selectedModelIds.map(async (modelId, _modelIdx) => {
-				console.log('modelId', modelId);
 				const model = $models.filter((m) => m.id === modelId).at(0);
 
 				if (model) {
