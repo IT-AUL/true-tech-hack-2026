@@ -105,13 +105,41 @@ flowchart LR
 
 **Ссылки:** репозиторий на **[GitHub](https://github.com/IT-AUL/true-tech-hack-2026)** · образ **[Docker Hub — itaul/gpthub](https://hub.docker.com/r/itaul/gpthub)** · **[пакет GHCR](https://github.com/IT-AUL/true-tech-hack-2026/pkgs/container/true-tech-hack-2026)** · настройка копии в GitLab: [docs/GITLAB_SETUP.md](docs/GITLAB_SETUP.md).
 
+## Инженерная зрелость
+
+В проекте заложены практики, которые помогают поддерживать предсказуемую разработку, стабильные релизы и масштабируемую эксплуатацию.
+
+### 1) Пайплайны в продукте и бэкенде
+
+- **Chat processing pipeline** в бэкенде: нормализация входа, web search/image/tools/files, память, роутинг и выполнение модели в одном предсказуемом потоке.
+- **Pipelines API** (`backend/open_webui/routers/pipelines.py`) позволяет подключать filter/inlet/outlet-этапы без жёсткого форка логики.
+- **Auto-routing pipeline** (`backend/open_webui/utils/auto_routing.py`) с guardrails, LLM-adjudicator, semantic/cache/rules fallback и failover внутри модальности.
+
+Для команды это означает, что новые сценарии добавляются как этапы/расширения, а не через хаотичные правки по всему коду.
+
+### 2) Система тегов и метаданных
+
+- На уровне задач используются **фоновые генерации** (`title_generation`, `tags_generation`, `follow_up_generation`) для структуры диалога и навигации.
+- Версионирование идёт в формате **`MAJOR.MINOR.PATCH-gpthub.N`** — это прозрачная связь с upstream и форк-релизами.
+- Релизные теги Git (`v0.8.12-gpthub.N`) валидируются в CI against `package.json` (`scripts/check-version-tag.mjs`) — исключаются «битые» релизы.
+
+Практический эффект: история чатов и релизов остаётся читаемой, а процесс поставки предсказуемым.
+
+### 3) Выкатки и надёжность поставки
+
+- **CI** (`.github/workflows/ci.yml`): фронтенд-линт, backend-линт, backend tests, отмена устаревших прогонов (`concurrency`).
+- **Release pipeline** (`.github/workflows/release.yml`): verify tag -> multi-arch build -> push в GHCR + Docker Hub -> GitHub Release из CHANGELOG.
+- **Deploy Demo** (`.github/workflows/deploy-demo.yml`): ручная выкладка версии/image на стенд, проверка runtime `.env`, автоматическое обновление `WEBUI_SECRET_KEY`.
+
+Выкатка остаётся простой и управляемой, при этом закрывает базовые контуры качества и воспроизводимости для промышленной разработки.
+
 ---
 
 ## Демо для жюри
 
 **Сайт:** [https://mtshack.it-aul.ru](https://mtshack.it-aul.ru)
 
-Тестовый доступ (только для проверки на хакатоне; после мероприятия пароль рекомендуется сменить):
+Тестовый доступ для проверки стенда (пароль рекомендуется периодически менять):
 
 | Поле | Значение |
 |------|----------|
