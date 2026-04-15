@@ -144,6 +144,7 @@ from open_webui.config import (
     # Model list
     ENABLE_BASE_MODELS_CACHE,
     ENABLE_CHANNELS,
+    ENABLE_CHAT_LAST_TURN_PRIORITY_HINT,
     # Code Execution
     ENABLE_CODE_EXECUTION,
     ENABLE_CODE_INTERPRETER,
@@ -1257,6 +1258,7 @@ app.state.speech_speaker_embeddings_dataset = None
 
 app.state.config.TASK_MODEL = TASK_MODEL
 app.state.config.TASK_MODEL_EXTERNAL = TASK_MODEL_EXTERNAL
+app.state.config.ENABLE_CHAT_LAST_TURN_PRIORITY_HINT = ENABLE_CHAT_LAST_TURN_PRIORITY_HINT
 
 
 app.state.config.ENABLE_SEARCH_QUERY_GENERATION = ENABLE_SEARCH_QUERY_GENERATION
@@ -1747,7 +1749,15 @@ async def chat_completion(
         try:
             form_data, metadata, events = await process_chat_payload(request, form_data, user, metadata, model)
 
-            response = await chat_completion_handler(request, form_data, user)
+            # Defer auto-routing status socket emit to middleware so it is flushed in the same
+            # await chain as streaming/non-streaming handlers — before the first chat:completion
+            # chunk. Otherwise WebSocket delivery can reorder vs. model tokens (separate scheduling).
+            request.state.defer_auto_routing_socket_emit = True
+            try:
+                response = await chat_completion_handler(request, form_data, user)
+            finally:
+                if getattr(request.state, 'defer_auto_routing_socket_emit', None) is not None:
+                    delattr(request.state, 'defer_auto_routing_socket_emit')
             if metadata.get('chat_id') and metadata.get('message_id'):
                 try:
                     if not metadata['chat_id'].startswith('local:'):

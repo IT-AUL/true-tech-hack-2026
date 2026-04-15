@@ -1,8 +1,209 @@
-{"id": "single_greeting", "expected_category": "fallback", "messages": [{"role": "user", "content": "Привет"}]}
-{"id": "explicit_image", "expected_category": "image_gen", "messages": [{"role": "user", "content": "нарисуй кота в шляпе"}]}
-{"id": "followup_short_after_image_request", "expected_category": "image_gen", "messages": [{"role": "user", "content": "Сгенерируй изображение заката для превью"}, {"role": "assistant", "content": "Опишите стиль."}, {"role": "user", "content": "да"}]}
-{"id": "code_block", "expected_category": "code", "messages": [{"role": "user", "content": "```python\nprint(1)\n```"}]}
-{"id": "math", "expected_category": "math_logic", "messages": [{"role": "user", "content": "реши уравнение x^2 = 4"}]}
-{"id": "long_doc_keyword", "expected_category": "document", "messages": [{"role": "user", "content": "проанализируй этот pdf договор"}]}
-{"id": "english_image", "expected_category": "image_gen", "messages": [{"role": "user", "content": "generate an image of a mountain"}]}
-{"id": "creative", "expected_category": "creative", "messages": [{"role": "user", "content": "напиши стих про зиму"}]}
+{"id": "greeting_ru_privet", "expected_category": "fallback", "messages": [{"role": "user", "content": "Привет"}]}
+{"id": "greeting_ru_dobry_den", "expected_category": "fallback", "messages": [{"role": "user", "content": "Добрый день"}]}
+{"id": "greeting_ru_zdorovo", "expected_category": "fallback", "messages": [{"role": "user", "content": "Здравствуйте!"}]}
+{"id": "greeting_en_hello", "expected_category": "fallback", "messages": [{"role": "user", "content": "Hello"}]}
+{"id": "greeting_en_hey", "expected_category": "fallback", "messages": [{"role": "user", "content": "Hey there"}]}
+{"id": "greeting_ru_spasibo", "expected_category": "fallback", "messages": [{"role": "user", "content": "Спасибо"}]}
+{"id": "greeting_en_thanks", "expected_category": "fallback", "messages": [{"role": "user", "content": "Thanks!"}]}
+{"id": "greeting_ok", "expected_category": "fallback", "messages": [{"role": "user", "content": "ок"}]}
+{"id": "greeting_da", "expected_category": "fallback", "messages": [{"role": "user", "content": "да"}]}
+{"id": "greeting_ponyatno", "expected_category": "fallback", "messages": [{"role": "user", "content": "понятно"}]}
+{"id": "fallback_simple_question_ru", "expected_category": "fallback", "messages": [{"role": "user", "content": "Что такое фотосинтез?"}]}
+{"id": "fallback_simple_question_en", "expected_category": "fallback", "messages": [{"role": "user", "content": "What is the capital of France?"}]}
+{"id": "fallback_explain_ru", "expected_category": "fallback", "messages": [{"role": "user", "content": "Объясни как работает гравитация"}]}
+{"id": "fallback_chat_ru", "expected_category": "fallback", "messages": [{"role": "user", "content": "Расскажи интересный факт"}]}
+{"id": "fallback_translate_ru", "expected_category": "fallback", "messages": [{"role": "user", "content": "Переведи на английский: сегодня хорошая погода"}]}
+{"id": "fallback_recommend_ru", "expected_category": "fallback", "messages": [{"role": "user", "content": "Какую книгу почитать?"}]}
+{"id": "fallback_advice_ru", "expected_category": "fallback", "messages": [{"role": "user", "content": "Дай совет как лучше спать"}]}
+{"id": "fallback_short_who", "expected_category": "fallback", "messages": [{"role": "user", "content": "Кто ты?"}]}
+{"id": "fallback_empty_ish", "expected_category": "fallback", "messages": [{"role": "user", "content": "?"}]}
+{"id": "fallback_general_en", "expected_category": "fallback", "messages": [{"role": "user", "content": "Tell me about the history of Rome"}]}
+{"id": "image_gen_ru_narisuj_kota", "expected_category": "image_gen", "messages": [{"role": "user", "content": "нарисуй кота в шляпе"}]}
+{"id": "image_gen_ru_sgeneriruj", "expected_category": "image_gen", "messages": [{"role": "user", "content": "сгенерируй картинку заката над морем"}]}
+{"id": "image_gen_ru_sozday", "expected_category": "image_gen", "messages": [{"role": "user", "content": "создай изображение космического корабля"}]}
+{"id": "image_gen_ru_hochu_kartinku", "expected_category": "image_gen", "messages": [{"role": "user", "content": "хочу картинку котика"}]}
+{"id": "image_gen_ru_sdelaj", "expected_category": "image_gen", "messages": [{"role": "user", "content": "сделай картинку для презентации с горами"}]}
+{"id": "image_gen_ru_narisovat", "expected_category": "image_gen", "messages": [{"role": "user", "content": "можешь нарисовать портрет девушки?"}]}
+{"id": "image_gen_ru_izobrazhi", "expected_category": "image_gen", "messages": [{"role": "user", "content": "изобрази весенний парк"}]}
+{"id": "image_gen_en_generate", "expected_category": "image_gen", "messages": [{"role": "user", "content": "generate an image of a mountain landscape"}]}
+{"id": "image_gen_en_draw", "expected_category": "image_gen", "messages": [{"role": "user", "content": "draw me a futuristic city"}]}
+{"id": "image_gen_en_picture_of", "expected_category": "image_gen", "messages": [{"role": "user", "content": "picture of a sunset over the ocean"}]}
+{"id": "image_gen_en_want_picture", "expected_category": "image_gen", "messages": [{"role": "user", "content": "I want a picture of a dog in a park"}]}
+{"id": "image_gen_typo_kartrinku", "expected_category": "image_gen", "messages": [{"role": "user", "content": "нарисуй катринку котика"}]}
+{"id": "image_gen_typo_izobrazhenie", "expected_category": "image_gen", "messages": [{"role": "user", "content": "сгенерируй изоражение леса"}]}
+{"id": "image_gen_casual_ru", "expected_category": "image_gen", "messages": [{"role": "user", "content": "нарисуй что-нибудь красивое"}]}
+{"id": "image_gen_ru_need_image", "expected_category": "image_gen", "messages": [{"role": "user", "content": "нужна картинка для поста в инсте"}]}
+{"id": "image_gen_ru_daj_kartinku", "expected_category": "image_gen", "messages": [{"role": "user", "content": "дай картинку кота"}]}
+{"id": "image_gen_followup_da", "expected_category": "image_gen", "messages": [{"role": "user", "content": "Сгенерируй изображение заката для превью"}, {"role": "assistant", "content": "Опишите стиль."}, {"role": "user", "content": "да"}]}
+{"id": "image_gen_followup_eshche", "expected_category": "image_gen", "messages": [{"role": "user", "content": "нарисуй кота"}, {"role": "assistant", "content": "Вот ваш кот."}, {"role": "user", "content": "ещё раз но в другом стиле"}]}
+{"id": "image_gen_followup_variant", "expected_category": "image_gen", "messages": [{"role": "user", "content": "сделай картинку горы"}, {"role": "assistant", "content": "Готово!"}, {"role": "user", "content": "сделай другой вариант"}]}
+{"id": "vision_image_what", "expected_category": "vision", "messages": [{"role": "user", "content": [{"type": "text", "text": "Что на этой картинке?"}, {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]}]}
+{"id": "vision_image_describe", "expected_category": "vision", "messages": [{"role": "user", "content": [{"type": "text", "text": "Опиши что ты видишь"}, {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,abc"}}]}]}
+{"id": "vision_image_analyze", "expected_category": "vision", "messages": [{"role": "user", "content": [{"type": "text", "text": "Проанализируй эту схему"}, {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]}]}
+{"id": "vision_image_read_text", "expected_category": "vision", "messages": [{"role": "user", "content": [{"type": "text", "text": "Прочитай текст с фото"}, {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,abc"}}]}]}
+{"id": "vision_image_en", "expected_category": "vision", "messages": [{"role": "user", "content": [{"type": "text", "text": "What do you see in this image?"}, {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]}]}
+{"id": "vision_image_no_text", "expected_category": "vision", "messages": [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]}]}
+{"id": "vision_image_short", "expected_category": "vision", "messages": [{"role": "user", "content": [{"type": "text", "text": "?"}, {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]}]}
+{"id": "code_block_python", "expected_category": "code", "messages": [{"role": "user", "content": "```python\ndef fib(n):\n    return n if n < 2 else fib(n-1)+fib(n-2)\n```"}]}
+{"id": "code_block_js", "expected_category": "code", "messages": [{"role": "user", "content": "```javascript\nconst x = 42;\nconsole.log(x);\n```"}]}
+{"id": "code_keyword_ru_napishi", "expected_category": "code", "messages": [{"role": "user", "content": "напиши функцию сортировки на python"}]}
+{"id": "code_keyword_ru_bag", "expected_category": "code", "messages": [{"role": "user", "content": "у меня баг в коде, помоги починить"}]}
+{"id": "code_keyword_ru_refaktoring", "expected_category": "code", "messages": [{"role": "user", "content": "рефакторинг этого класса нужен"}]}
+{"id": "code_keyword_ru_skript", "expected_category": "code", "messages": [{"role": "user", "content": "напиши скрипт для парсинга сайта"}]}
+{"id": "code_keyword_en_debug", "expected_category": "code", "messages": [{"role": "user", "content": "debug this function please"}]}
+{"id": "code_keyword_en_script", "expected_category": "code", "messages": [{"role": "user", "content": "write a script to parse CSV files"}]}
+{"id": "code_keyword_ru_test", "expected_category": "code", "messages": [{"role": "user", "content": "напиши тест для этой функции"}]}
+{"id": "code_keyword_ru_prilozhenie", "expected_category": "code", "messages": [{"role": "user", "content": "помоги написать приложение на react"}]}
+{"id": "code_keyword_ru_html", "expected_category": "code", "messages": [{"role": "user", "content": "помоги с html страницей"}]}
+{"id": "code_keyword_ru_parser", "expected_category": "code", "messages": [{"role": "user", "content": "сделай парсер для json данных"}]}
+{"id": "code_typo_kod", "expected_category": "code", "messages": [{"role": "user", "content": "напиши код на питоне"}]}
+{"id": "code_typo_sdeloj", "expected_category": "code", "messages": [{"role": "user", "content": "помаги написать скрипт"}]}
+{"id": "code_followup_to_text", "expected_category": "fallback", "messages": [{"role": "user", "content": "напиши код калькулятора"}, {"role": "assistant", "content": "Вот код калькулятора на Python..."}, {"role": "user", "content": "спасибо, а что такое рекурсия?"}]}
+{"id": "math_ru_equation", "expected_category": "math_logic", "messages": [{"role": "user", "content": "реши уравнение x^2 = 4"}]}
+{"id": "math_ru_integral", "expected_category": "math_logic", "messages": [{"role": "user", "content": "найди интеграл от sin(x)"}]}
+{"id": "math_ru_vychisli", "expected_category": "math_logic", "messages": [{"role": "user", "content": "вычисли производную от x^3 + 2x"}]}
+{"id": "math_ru_dokazhi", "expected_category": "math_logic", "messages": [{"role": "user", "content": "докажи что sqrt(2) иррационально"}]}
+{"id": "math_ru_poschitaj", "expected_category": "math_logic", "messages": [{"role": "user", "content": "посчитай 234 * 567 + 89"}]}
+{"id": "math_ru_geometriya", "expected_category": "math_logic", "messages": [{"role": "user", "content": "найди площадь треугольника со сторонами 3 4 5"}]}
+{"id": "math_en_calculate", "expected_category": "math_logic", "messages": [{"role": "user", "content": "calculate the derivative of e^(2x)"}]}
+{"id": "math_en_equation", "expected_category": "math_logic", "messages": [{"role": "user", "content": "solve the equation 2x + 3 = 7"}]}
+{"id": "math_ru_algebra", "expected_category": "math_logic", "messages": [{"role": "user", "content": "помоги с алгеброй - разложить на множители x^2-9"}]}
+{"id": "math_ru_zadacha", "expected_category": "math_logic", "messages": [{"role": "user", "content": "реши задачу: поезд едет со скоростью 60 км/ч"}]}
+{"id": "research_ru_izuchi", "expected_category": "research", "messages": [{"role": "user", "content": "изучи тему квантовых вычислений подробно"}]}
+{"id": "research_ru_sravni", "expected_category": "research", "messages": [{"role": "user", "content": "сравни React и Vue для нового проекта"}]}
+{"id": "research_ru_analiz_rynka", "expected_category": "research", "messages": [{"role": "user", "content": "проанализируй рынок электромобилей в 2026"}]}
+{"id": "research_ru_najdi_info", "expected_category": "research", "messages": [{"role": "user", "content": "найди информацию о последних исследованиях в области ИИ"}]}
+{"id": "research_ru_podrobno", "expected_category": "research", "messages": [{"role": "user", "content": "подробно изучи и расскажи про блокчейн технологии"}]}
+{"id": "research_en_investigate", "expected_category": "research", "messages": [{"role": "user", "content": "investigate the current state of fusion energy research"}]}
+{"id": "research_en_deep_analysis", "expected_category": "research", "messages": [{"role": "user", "content": "do a comprehensive research on climate change effects in Europe"}]}
+{"id": "research_ru_obzor", "expected_category": "research", "messages": [{"role": "user", "content": "сделай обзор лучших фреймворков для ML в 2026"}]}
+{"id": "research_with_url", "expected_category": "research", "messages": [{"role": "user", "content": "изучи эту статью https://arxiv.org/abs/2401.12345 и дай выводы"}]}
+{"id": "research_url_summary", "expected_category": "research", "messages": [{"role": "user", "content": "посмотри https://example.com/report.pdf и сделай резюме"}]}
+{"id": "analytics_ru_csv", "expected_category": "analytics", "messages": [{"role": "user", "content": "проанализируй данные из CSV файла"}]}
+{"id": "analytics_ru_grafik", "expected_category": "analytics", "messages": [{"role": "user", "content": "построй график по этим данным"}]}
+{"id": "analytics_ru_statistika", "expected_category": "analytics", "messages": [{"role": "user", "content": "посчитай статистику: среднее, медиану, стд отклонение"}]}
+{"id": "analytics_ru_otchet", "expected_category": "analytics", "messages": [{"role": "user", "content": "сделай отчет с аналитикой по продажам"}]}
+{"id": "analytics_ru_metriki", "expected_category": "analytics", "messages": [{"role": "user", "content": "проанализируй метрики конверсии за квартал"}]}
+{"id": "analytics_en_dataset", "expected_category": "analytics", "messages": [{"role": "user", "content": "analyze this dataset and find correlations"}]}
+{"id": "analytics_ru_svodka", "expected_category": "analytics", "messages": [{"role": "user", "content": "сделай сводку по таблице продаж"}]}
+{"id": "analytics_ru_pandas", "expected_category": "analytics", "messages": [{"role": "user", "content": "помоги с анализом данных в pandas"}]}
+{"id": "analytics_en_data_science", "expected_category": "analytics", "messages": [{"role": "user", "content": "perform data science analysis on user behavior"}]}
+{"id": "analytics_ru_korrelyaciya", "expected_category": "analytics", "messages": [{"role": "user", "content": "найди корреляцию между ценой и спросом"}]}
+{"id": "creative_ru_stih", "expected_category": "creative", "messages": [{"role": "user", "content": "напиши стих про зиму"}]}
+{"id": "creative_ru_istoriya", "expected_category": "creative", "messages": [{"role": "user", "content": "придумай историю про космических пиратов"}]}
+{"id": "creative_ru_rasskaz", "expected_category": "creative", "messages": [{"role": "user", "content": "напиши короткий рассказ о любви"}]}
+{"id": "creative_ru_shutka", "expected_category": "creative", "messages": [{"role": "user", "content": "расскажи шутку про программистов"}]}
+{"id": "creative_ru_post", "expected_category": "creative", "messages": [{"role": "user", "content": "напиши пост для блога про путешествия"}]}
+{"id": "creative_ru_esse", "expected_category": "creative", "messages": [{"role": "user", "content": "напиши эссе на тему свободы"}]}
+{"id": "creative_ru_scenarij", "expected_category": "creative", "messages": [{"role": "user", "content": "напиши сценарий короткометражки"}]}
+{"id": "creative_en_story", "expected_category": "creative", "messages": [{"role": "user", "content": "write a short story about a detective in space"}]}
+{"id": "creative_en_poem", "expected_category": "creative", "messages": [{"role": "user", "content": "write a poem about the ocean"}]}
+{"id": "creative_en_joke", "expected_category": "creative", "messages": [{"role": "user", "content": "tell me a joke about cats"}]}
+{"id": "creative_ru_sochinenie", "expected_category": "creative", "messages": [{"role": "user", "content": "напиши сочинение на тему экологии"}]}
+{"id": "creative_ru_kopirajting", "expected_category": "creative", "messages": [{"role": "user", "content": "нужен копирайтинг для лендинга"}]}
+{"id": "document_ru_pdf", "expected_category": "document", "messages": [{"role": "user", "content": "проанализируй этот pdf документ"}]}
+{"id": "document_ru_dogovor", "expected_category": "document", "messages": [{"role": "user", "content": "разбери этот договор и выдели ключевые пункты"}]}
+{"id": "document_ru_rezyume", "expected_category": "document", "messages": [{"role": "user", "content": "сделай резюме этого контракта"}]}
+{"id": "document_ru_tekst_nizhe", "expected_category": "document", "messages": [{"role": "user", "content": "проанализируй текст ниже и выдели главное"}]}
+{"id": "document_en_summarize", "expected_category": "document", "messages": [{"role": "user", "content": "summarize this document for me"}]}
+{"id": "document_ru_shpargalka", "expected_category": "document", "messages": [{"role": "user", "content": "сделай шпаргалку по этому документу"}]}
+{"id": "document_ru_scan", "expected_category": "document", "messages": [{"role": "user", "content": "разбери скан документа"}]}
+{"id": "document_en_extract", "expected_category": "document", "messages": [{"role": "user", "content": "extract key points from this document"}]}
+{"id": "document_ru_kontrakt", "expected_category": "document", "messages": [{"role": "user", "content": "проверь контракт на юридические риски"}]}
+{"id": "document_long_text", "expected_category": "document", "messages": [{"role": "user", "content": "Вот длинный текст для анализа. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt. Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem. документ pdf анализ"}]}
+{"id": "audio_gen_ru_muzyka", "expected_category": "audio_gen", "messages": [{"role": "user", "content": "создай музыку для видео"}]}
+{"id": "audio_gen_ru_melodiya", "expected_category": "audio_gen", "messages": [{"role": "user", "content": "сгенерируй мелодию в стиле джаз"}]}
+{"id": "audio_gen_ru_pesnya", "expected_category": "audio_gen", "messages": [{"role": "user", "content": "создай песню про лето"}]}
+{"id": "audio_gen_ru_zvuk", "expected_category": "audio_gen", "messages": [{"role": "user", "content": "сгенерируй звук дождя"}]}
+{"id": "audio_gen_en_music", "expected_category": "audio_gen", "messages": [{"role": "user", "content": "generate music for a podcast intro"}]}
+{"id": "audio_gen_en_song", "expected_category": "audio_gen", "messages": [{"role": "user", "content": "create a song about happiness"}]}
+{"id": "audio_gen_en_compose", "expected_category": "audio_gen", "messages": [{"role": "user", "content": "compose a melody for relaxation"}]}
+{"id": "audio_gen_ru_sdelaj", "expected_category": "audio_gen", "messages": [{"role": "user", "content": "сделай музыку для рекламы"}]}
+{"id": "audio_NOT_gen_about_sound", "expected_category": "fallback", "messages": [{"role": "user", "content": "расскажи про звуковые волны"}]}
+{"id": "audio_NOT_gen_music_theory", "expected_category": "fallback", "messages": [{"role": "user", "content": "объясни теорию музыки"}]}
+{"id": "audio_NOT_gen_audio_format", "expected_category": "fallback", "messages": [{"role": "user", "content": "какие аудио форматы лучше для подкаста?"}]}
+{"id": "context_switch_image_to_code", "expected_category": "code", "messages": [{"role": "user", "content": "нарисуй логотип"}, {"role": "assistant", "content": "Вот логотип."}, {"role": "user", "content": "напиши код для отображения этого логотипа на сайте"}]}
+{"id": "context_switch_code_to_chat", "expected_category": "fallback", "messages": [{"role": "user", "content": "напиши функцию sort"}, {"role": "assistant", "content": "def sort(arr): ..."}, {"role": "user", "content": "кстати, какая погода сегодня?"}]}
+{"id": "context_switch_chat_to_image", "expected_category": "image_gen", "messages": [{"role": "user", "content": "расскажи про импрессионизм"}, {"role": "assistant", "content": "Импрессионизм — направление в искусстве..."}, {"role": "user", "content": "нарисуй картину в стиле импрессионизма"}]}
+{"id": "context_switch_math_to_creative", "expected_category": "creative", "messages": [{"role": "user", "content": "реши уравнение x+1=2"}, {"role": "assistant", "content": "x=1"}, {"role": "user", "content": "напиши стих про математику"}]}
+{"id": "context_switch_research_to_code", "expected_category": "code", "messages": [{"role": "user", "content": "изучи тему нейросетей"}, {"role": "assistant", "content": "Нейронные сети — это..."}, {"role": "user", "content": "напиши код нейросети на pytorch"}]}
+{"id": "multiturn_code_followup", "expected_category": "code", "messages": [{"role": "user", "content": "напиши функцию фибоначчи"}, {"role": "assistant", "content": "def fib(n): ..."}, {"role": "user", "content": "добавь мемоизацию"}]}
+{"id": "multiturn_image_adjust", "expected_category": "image_gen", "messages": [{"role": "user", "content": "нарисуй закат"}, {"role": "assistant", "content": "Вот закат."}, {"role": "user", "content": "сделай ярче и добавь горы"}]}
+{"id": "multiturn_research_deeper", "expected_category": "research", "messages": [{"role": "user", "content": "изучи рынок AI стартапов"}, {"role": "assistant", "content": "Рынок AI стартапов растёт..."}, {"role": "user", "content": "подробно изучи конкурентов в сегменте MLOps"}]}
+{"id": "multiturn_analytics_extend", "expected_category": "analytics", "messages": [{"role": "user", "content": "проанализируй данные продаж"}, {"role": "assistant", "content": "Продажи выросли на 20%..."}, {"role": "user", "content": "построй график по месяцам"}]}
+{"id": "multiturn_creative_continue", "expected_category": "creative", "messages": [{"role": "user", "content": "придумай историю"}, {"role": "assistant", "content": "Жил-был кот..."}, {"role": "user", "content": "продолжи рассказ, добавь интригу"}]}
+{"id": "ambiguous_short_pomogi", "expected_category": "fallback", "messages": [{"role": "user", "content": "помоги"}]}
+{"id": "ambiguous_short_sdelaj", "expected_category": "fallback", "messages": [{"role": "user", "content": "сделай"}]}
+{"id": "ambiguous_short_pokachi", "expected_category": "fallback", "messages": [{"role": "user", "content": "покажи"}]}
+{"id": "ambiguous_short_with_code_ctx", "expected_category": "code", "messages": [{"role": "user", "content": "напиши API endpoint"}, {"role": "assistant", "content": "@app.get('/users')..."}, {"role": "user", "content": "исправь"}]}
+{"id": "ambiguous_short_with_image_ctx", "expected_category": "image_gen", "messages": [{"role": "user", "content": "нарисуй пейзаж"}, {"role": "assistant", "content": "Вот пейзаж."}, {"role": "user", "content": "ещё"}]}
+{"id": "ambiguous_mixed_code_and_text", "expected_category": "code", "messages": [{"role": "user", "content": "объясни и напиши код для бинарного поиска"}]}
+{"id": "typo_narisuj_kartrinku", "expected_category": "image_gen", "messages": [{"role": "user", "content": "нарисуй катринку котика"}]}
+{"id": "typo_sgeneriruj_izobrazhenie", "expected_category": "image_gen", "messages": [{"role": "user", "content": "сгенерируй изоражение леса"}]}
+{"id": "typo_napishi_kod", "expected_category": "code", "messages": [{"role": "user", "content": "напшии код на пайтоне"}]}
+{"id": "typo_reshi_uravnenie", "expected_category": "math_logic", "messages": [{"role": "user", "content": "ришы уравнение 2x=6"}]}
+{"id": "typo_analitika", "expected_category": "analytics", "messages": [{"role": "user", "content": "сделай аналтику по даным продаж"}]}
+{"id": "typo_issleduj", "expected_category": "research", "messages": [{"role": "user", "content": "исследуй тиму блокчейна"}]}
+{"id": "url_with_research_intent", "expected_category": "research", "messages": [{"role": "user", "content": "проанализируй статью https://example.com/paper"}]}
+{"id": "url_casual_no_research", "expected_category": "fallback", "messages": [{"role": "user", "content": "вот забавная ссылка https://funny.com/meme"}]}
+{"id": "url_with_code_intent", "expected_category": "code", "messages": [{"role": "user", "content": "посмотри баг тут https://github.com/org/repo/issues/123 и помоги починить код"}]}
+{"id": "mixed_image_and_gen_keyword", "expected_category": "image_gen", "messages": [{"role": "user", "content": [{"type": "text", "text": "нарисуй похожее"}, {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]}]}
+{"id": "mixed_image_no_gen_keyword", "expected_category": "vision", "messages": [{"role": "user", "content": [{"type": "text", "text": "что тут не так?"}, {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]}]}
+{"id": "long_code_request", "expected_category": "code", "messages": [{"role": "user", "content": "Мне нужно написать приложение на React с авторизацией через OAuth, базой данных PostgreSQL, REST API на Node.js и деплоем в Docker. Начни с архитектуры и потом напиши код основных компонентов."}]}
+{"id": "long_research_request", "expected_category": "research", "messages": [{"role": "user", "content": "Проведи глубокий анализ текущего состояния рынка искусственного интеллекта: основные игроки, тренды, инвестиции, перспективные направления. Сравни подходы OpenAI, Google DeepMind и Anthropic."}]}
+{"id": "long_creative_request", "expected_category": "creative", "messages": [{"role": "user", "content": "Напиши пост для блога на тему «Как ИИ изменит образование в ближайшие 5 лет». Текст должен быть увлекательным, с примерами и статистикой. Целевая аудитория — преподаватели вузов."}]}
+{"id": "edge_empty_after_greeting", "expected_category": "fallback", "messages": [{"role": "user", "content": "Привет!"}, {"role": "assistant", "content": "Привет! Чем могу помочь?"}, {"role": "user", "content": ""}]}
+{"id": "edge_only_emoji", "expected_category": "fallback", "messages": [{"role": "user", "content": "👍"}]}
+{"id": "edge_only_punctuation", "expected_category": "fallback", "messages": [{"role": "user", "content": "..."}]}
+{"id": "edge_number_only", "expected_category": "fallback", "messages": [{"role": "user", "content": "42"}]}
+{"id": "edge_ru_slang_image", "expected_category": "image_gen", "messages": [{"role": "user", "content": "кинь пикчу кота"}]}
+{"id": "edge_code_in_text_no_block", "expected_category": "code", "messages": [{"role": "user", "content": "помоги с ошибкой TypeError: cannot read property of undefined в javascript"}]}
+{"id": "edge_math_in_text", "expected_category": "math_logic", "messages": [{"role": "user", "content": "как решить 2x + 5 = 15?"}]}
+{"id": "bilingual_ru_en_code", "expected_category": "code", "messages": [{"role": "user", "content": "напиши function на javascript для валидации email"}]}
+{"id": "bilingual_ru_en_research", "expected_category": "research", "messages": [{"role": "user", "content": "investigate тему machine learning для бизнеса"}]}
+{"id": "formal_ru_document", "expected_category": "document", "messages": [{"role": "user", "content": "Прошу проанализировать прилагаемый документ и подготовить краткое резюме с выделением ключевых положений."}]}
+{"id": "informal_ru_code", "expected_category": "code", "messages": [{"role": "user", "content": "чел помоги с кодом, ваще не пашет эта функция"}]}
+{"id": "informal_ru_image", "expected_category": "image_gen", "messages": [{"role": "user", "content": "сгенери мне пикчу с котом в космосе"}]}
+{"id": "negative_not_image_gen", "expected_category": "fallback", "messages": [{"role": "user", "content": "расскажи что такое нейросети для генерации изображений"}]}
+{"id": "negative_not_audio_gen_discuss", "expected_category": "fallback", "messages": [{"role": "user", "content": "что такое генерация музыки с помощью ИИ?"}]}
+{"id": "negative_not_code_discuss", "expected_category": "fallback", "messages": [{"role": "user", "content": "что такое программирование?"}]}
+{"id": "negative_picture_idiom", "expected_category": "fallback", "messages": [{"role": "user", "content": "I get the picture now, thanks"}]}
+{"id": "negative_code_word_casual", "expected_category": "fallback", "messages": [{"role": "user", "content": "какой код у этого города?"}]}
+{"id": "ru_complex_multistep", "expected_category": "research", "messages": [{"role": "user", "content": "Исследуй текущие тенденции в области квантовых компьютеров и подготовь обзор с графиками и выводами"}]}
+{"id": "en_complex_multistep", "expected_category": "research", "messages": [{"role": "user", "content": "Research the impact of GPT models on the job market and provide a detailed analysis with data"}]}
+{"id": "image_gen_with_style", "expected_category": "image_gen", "messages": [{"role": "user", "content": "нарисуй портрет в стиле ван гога"}]}
+{"id": "image_gen_abstract", "expected_category": "image_gen", "messages": [{"role": "user", "content": "сгенерируй абстрактное изображение"}]}
+{"id": "code_api_endpoint", "expected_category": "code", "messages": [{"role": "user", "content": "напиши REST API для управления задачами"}]}
+{"id": "code_sql_query", "expected_category": "code", "messages": [{"role": "user", "content": "напиши SQL запрос для выборки пользователей старше 18"}]}
+{"id": "analytics_conversion", "expected_category": "analytics", "messages": [{"role": "user", "content": "проанализируй данные конверсии воронки продаж"}]}
+{"id": "creative_blog_post", "expected_category": "creative", "messages": [{"role": "user", "content": "напиши текст для блога про здоровое питание"}]}
+{"id": "document_summary_en", "expected_category": "document", "messages": [{"role": "user", "content": "summarize the following PDF and list key takeaways"}]}
+{"id": "math_algorithm", "expected_category": "math_logic", "messages": [{"role": "user", "content": "опиши алгоритм Дейкстры и его сложность"}]}
+{"id": "fallback_opinion_ru", "expected_category": "fallback", "messages": [{"role": "user", "content": "какой лучший фильм 2025 года?"}]}
+{"id": "fallback_comparison_ru", "expected_category": "fallback", "messages": [{"role": "user", "content": "iPhone или Samsung, что лучше?"}]}
+{"id": "research_search_keyword", "expected_category": "research", "messages": [{"role": "user", "content": "найди информацию о влиянии кофеина на организм"}]}
+{"id": "audio_gen_make_melody", "expected_category": "audio_gen", "messages": [{"role": "user", "content": "make a melody for a lullaby"}]}
+{"id": "audio_gen_napishi_muzyk", "expected_category": "audio_gen", "messages": [{"role": "user", "content": "напиши музыку для медитации"}]}
+{"id": "code_with_error_msg", "expected_category": "code", "messages": [{"role": "user", "content": "у меня ошибка в коде: RuntimeError: maximum recursion depth exceeded"}]}
+{"id": "creative_poema", "expected_category": "creative", "messages": [{"role": "user", "content": "напиши поэму о природе"}]}
+{"id": "document_pdg_typo", "expected_category": "document", "messages": [{"role": "user", "content": "разбери этот пдф файл"}]}
+{"id": "vision_followup_describe_more", "expected_category": "vision", "messages": [{"role": "user", "content": [{"type": "text", "text": "опиши детальнее"}, {"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]}]}
+{"id": "fallback_weather", "expected_category": "fallback", "messages": [{"role": "user", "content": "какая погода в Москве?"}]}
+{"id": "fallback_recipe", "expected_category": "fallback", "messages": [{"role": "user", "content": "как приготовить борщ?"}]}
+{"id": "image_gen_logo", "expected_category": "image_gen", "messages": [{"role": "user", "content": "сгенерируй изображение логотипа для кафе"}]}
+{"id": "code_golang", "expected_category": "code", "messages": [{"role": "user", "content": "напиши HTTP сервер на golang"}]}
+{"id": "math_logic_prove", "expected_category": "math_logic", "messages": [{"role": "user", "content": "докажи теорему Пифагора"}]}
+{"id": "analytics_datascience", "expected_category": "analytics", "messages": [{"role": "user", "content": "сделай data science анализ датасета пользователей"}]}
+{"id": "research_glubokij_analiz", "expected_category": "research", "messages": [{"role": "user", "content": "глубокий анализ конкурентной среды в fintech"}]}
+{"id": "creative_tekst", "expected_category": "creative", "messages": [{"role": "user", "content": "напиши текст песни про дружбу"}]}
+{"id": "image_gen_generate_picture", "expected_category": "image_gen", "messages": [{"role": "user", "content": "generate a picture of a robot"}]}
+{"id": "code_css", "expected_category": "code", "messages": [{"role": "user", "content": "помоги написать css анимацию"}]}
+{"id": "code_cplusplus", "expected_category": "code", "messages": [{"role": "user", "content": "напиши программу на c++ для сортировки массива"}]}
+{"id": "fallback_joke_question", "expected_category": "fallback", "messages": [{"role": "user", "content": "почему небо голубое?"}]}
+{"id": "image_gen_sgenerirovat_izobrazhenie", "expected_category": "image_gen", "messages": [{"role": "user", "content": "сгенерировать изображение ночного города"}]}
+{"id": "code_java", "expected_category": "code", "messages": [{"role": "user", "content": "java код для чтения файла"}]}
+{"id": "math_matematicheskij", "expected_category": "math_logic", "messages": [{"role": "user", "content": "математический анализ функции y=x^2+3x-5"}]}
+{"id": "image_gen_ru_make_illustration", "expected_category": "image_gen", "messages": [{"role": "user", "content": "создай картинку иллюстрации для детской книги"}]}
+{"id": "document_analyze_file", "expected_category": "document", "messages": [{"role": "user", "content": "проанализируй файл и выдели основные тезисы"}]}
+{"id": "code_python_explicit", "expected_category": "code", "messages": [{"role": "user", "content": "python скрипт для скачивания файлов"}]}
+{"id": "research_poisk", "expected_category": "research", "messages": [{"role": "user", "content": "поиск информации о новых технологиях в медицине"}]}

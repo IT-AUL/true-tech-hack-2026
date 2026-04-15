@@ -776,6 +776,8 @@ try:
 except ValueError:
     AUTO_ROUTE_FAILOVER_MAX = 15
 
+AUTO_ROUTE_ENGINE = os.environ.get('AUTO_ROUTE_ENGINE', 'hybrid').strip().lower() or 'hybrid'
+
 _auto_route_failover_statuses = os.environ.get('AUTO_ROUTE_FAILOVER_HTTP_STATUSES', '400,404,408,429,502,503,504')
 try:
     AUTO_ROUTE_FAILOVER_HTTP_STATUSES = frozenset(
@@ -806,11 +808,36 @@ try:
     ROUTER_SHORT_MESSAGE_LEN = max(0, int(os.environ.get('ROUTER_SHORT_MESSAGE_LEN', '24')))
 except ValueError:
     ROUTER_SHORT_MESSAGE_LEN = 24
+# When the last user message has at least this many characters, do not prepend
+# recent_context to semantic / router query text (embedding drift from old turns).
+try:
+    ROUTER_CONTEXT_NO_MERGE_MIN_CHARS = max(0, int(os.environ.get('ROUTER_CONTEXT_NO_MERGE_MIN_CHARS', '96')))
+except ValueError:
+    ROUTER_CONTEXT_NO_MERGE_MIN_CHARS = 96
 ROUTER_DISABLE_ROUTING_CACHE = os.environ.get('ROUTER_DISABLE_ROUTING_CACHE', '').lower() in (
     '1',
     'true',
     'yes',
 )
+
+# When True: an attached image is context for the LLM/rules pipeline — do not force `vision`
+# unless the text clearly asks to describe/analyze the image; do not upgrade every route to
+# vision at the end of process_auto_routing. Set False for legacy «any image → VLM» behavior.
+ROUTER_SOFT_IMAGE_ATTACHMENT = os.environ.get('ROUTER_SOFT_IMAGE_ATTACHMENT', 'True').lower() in (
+    '1',
+    'true',
+    'yes',
+)
+
+# LLM router adjudicator (see auto_routing._classify_with_llm)
+try:
+    ROUTER_MAX_TOKENS = max(64, int(os.environ.get('ROUTER_MAX_TOKENS', '384')))
+except ValueError:
+    ROUTER_MAX_TOKENS = 384
+try:
+    ROUTER_TEMPERATURE = float(os.environ.get('ROUTER_TEMPERATURE', '0.2'))
+except ValueError:
+    ROUTER_TEMPERATURE = 0.2
 
 
 RAG_EMBEDDING_TIMEOUT = os.environ.get('RAG_EMBEDDING_TIMEOUT', '')

@@ -4,7 +4,7 @@
 </script>
 
 <div
-	class="my-2 w-72 aspect-[4/3] rounded-2xl shimmer-block flex flex-col items-center justify-center gap-2.5 border border-gray-100/50 dark:border-gray-700/30"
+	class="my-2 w-72 max-w-full aspect-[4/3] rounded-2xl shimmer-block flex flex-col items-center justify-center gap-2.5 border border-gray-100/80 dark:border-gray-700/50 bg-gray-50/90 dark:bg-gray-850/50"
 >
 	<div
 		class="size-10 rounded-full bg-white/60 dark:bg-gray-700/40 flex items-center justify-center"
