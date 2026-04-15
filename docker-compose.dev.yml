@@ -23,7 +23,8 @@ services:
       - AUDIO_STT_ENGINE=${AUDIO_STT_ENGINE:-openai}
       - AUDIO_STT_OPENAI_API_BASE_URL=${OPENAI_API_BASE_URL:-https://routerai.ru/api/v1}
       - AUDIO_STT_OPENAI_API_KEY=${OPENAI_API_KEY}
-      - AUDIO_STT_MODEL=${AUDIO_STT_MODEL:-mistralai/voxtral-small-24b-2507}
+      # Default must match models your API key can call (MWS: often whisper-medium / whisper-turbo-local).
+      - AUDIO_STT_MODEL=${AUDIO_STT_MODEL:-whisper-medium}
       - RAG_EMBEDDING_MODEL=baai/bge-m3
       - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-gpthub-dev-secret}
       - ENABLE_SIGNUP=${ENABLE_SIGNUP:-true}
