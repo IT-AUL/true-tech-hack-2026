@@ -675,7 +675,7 @@ async def verify_connection(
                         response_data = await r.text()
 
                     if r.status != 200:
-                        if isinstance(response_data, (dict, list)):
+                        if isinstance(response_data, dict | list):
                             return JSONResponse(status_code=r.status, content=response_data)
                         else:
                             return PlainTextResponse(status_code=r.status, content=response_data)
@@ -701,7 +701,7 @@ async def verify_connection(
                         response_data = await r.text()
 
                     if r.status != 200:
-                        if isinstance(response_data, (dict, list)):
+                        if isinstance(response_data, dict | list):
                             return JSONResponse(status_code=r.status, content=response_data)
                         else:
                             return PlainTextResponse(status_code=r.status, content=response_data)
@@ -1313,7 +1313,7 @@ async def generate_chat_completion(
                 response = await r.text()
 
             if r.status >= 400:
-                if isinstance(response, (dict, list)):
+                if isinstance(response, dict | list):
                     return JSONResponse(status_code=r.status, content=response)
                 else:
                     return PlainTextResponse(status_code=r.status, content=response)
@@ -1399,7 +1399,7 @@ async def embeddings(request: Request, form_data: dict, user):
                 response_data = await r.text()
 
             if r.status >= 400:
-                if isinstance(response_data, (dict, list)):
+                if isinstance(response_data, dict | list):
                     return JSONResponse(status_code=r.status, content=response_data)
                 else:
                     return PlainTextResponse(status_code=r.status, content=response_data)
@@ -1515,7 +1515,7 @@ async def responses(
                 response_data = await r.text()
 
             if r.status >= 400:
-                if isinstance(response_data, (dict, list)):
+                if isinstance(response_data, dict | list):
                     return JSONResponse(status_code=r.status, content=response_data)
                 else:
                     return PlainTextResponse(status_code=r.status, content=response_data)
@@ -1621,7 +1621,7 @@ async def proxy(path: str, request: Request, user=Depends(get_verified_user)):
                 response_data = await r.text()
 
             if r.status >= 400:
-                if isinstance(response_data, (dict, list)):
+                if isinstance(response_data, dict | list):
                     return JSONResponse(status_code=r.status, content=response_data)
                 else:
                     return PlainTextResponse(status_code=r.status, content=response_data)

@@ -358,6 +358,8 @@ from open_webui.config import (
     WEB_SEARCH_CONCURRENT_REQUESTS,
     WEB_SEARCH_DOMAIN_FILTER_LIST,
     WEB_SEARCH_ENGINE,
+    WEB_SEARCH_QUERY_GENERATION_MODEL,
+    WEB_SEARCH_QUERY_GENERATION_PROMPT_TEMPLATE,
     WEB_SEARCH_RESULT_COUNT,
     WEB_SEARCH_TRUST_ENV,
     WEBHOOK_URL,
@@ -1273,6 +1275,8 @@ app.state.config.FOLLOW_UP_GENERATION_PROMPT_TEMPLATE = FOLLOW_UP_GENERATION_PRO
 
 app.state.config.TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE = TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE
 app.state.config.QUERY_GENERATION_PROMPT_TEMPLATE = QUERY_GENERATION_PROMPT_TEMPLATE
+app.state.config.WEB_SEARCH_QUERY_GENERATION_MODEL = WEB_SEARCH_QUERY_GENERATION_MODEL
+app.state.config.WEB_SEARCH_QUERY_GENERATION_PROMPT_TEMPLATE = WEB_SEARCH_QUERY_GENERATION_PROMPT_TEMPLATE
 app.state.config.AUTOCOMPLETE_GENERATION_PROMPT_TEMPLATE = AUTOCOMPLETE_GENERATION_PROMPT_TEMPLATE
 app.state.config.AUTOCOMPLETE_GENERATION_INPUT_MAX_LENGTH = AUTOCOMPLETE_GENERATION_INPUT_MAX_LENGTH
 app.state.config.VOICE_MODE_PROMPT_TEMPLATE = VOICE_MODE_PROMPT_TEMPLATE
@@ -1744,6 +1748,68 @@ async def chat_completion(
     async def process_chat(request, form_data, user, metadata, model):
         try:
             form_data, metadata, events = await process_chat_payload(request, form_data, user, metadata, model)
+
+            if metadata.get('pipeline_done'):
+                # Short-circuit: The agentic pipeline already fulfilled the request
+                content = metadata.get('pipeline_content', '')
+                files = metadata.get('files', [])
+
+                log.info(f'[MAIN] Pipeline-driven short-circuit for message {metadata.get("message_id")}')
+
+                # 1. Save the final message to the database immediately
+                if metadata.get('chat_id') and metadata.get('message_id'):
+                    if not metadata['chat_id'].startswith('local:'):
+                        Chats.upsert_message_to_chat_by_id_and_message_id(
+                            metadata['chat_id'],
+                            metadata['message_id'],
+                            {
+                                'parentId': metadata.get('parent_message_id', None),
+                                'model': model_id,
+                                'content': content,
+                                'files': files,
+                                'done': True,
+                            },
+                        )
+
+                # 2. Emit the final content and file events to the frontend
+                event_emitter = get_event_emitter(metadata)
+                if event_emitter:
+                    # Emit files event for baseline DB/UI sync
+                    if files:
+                        try:
+                            await event_emitter({'type': 'files', 'data': {'files': files}})
+                        except Exception:
+                            pass
+
+                    # Emit the full completion content with files attached to the chunk
+                    # Open WebUI often expects files in choices[0].delta.files or message.files
+                    import asyncio
+
+                    from open_webui.utils.misc import openai_chat_chunk_message_template
+
+                    chunk = openai_chat_chunk_message_template(model_id, content=content)
+
+                    # Direct injection for Svelte frontend
+                    if files:
+                        chunk['files'] = files
+                        chunk['choices'][0]['delta']['files'] = files
+
+                    # Force stop reason
+                    chunk['choices'][0]['finish_reason'] = 'stop'
+
+                    await event_emitter({'type': 'chat:completion', 'data': chunk})
+
+                    # Brief delay to allow frontend to process the JSON before [DONE]
+                    await asyncio.sleep(0.1)
+
+                # 3. Final signaling - Return as StreamingResponse to avoid turning main function into a generator
+                from fastapi.responses import StreamingResponse
+
+                async def short_circuit_stream():
+                    yield f'data: {json.dumps(chunk)}\n\n'
+                    yield 'data: [DONE]\n\n'
+
+                return StreamingResponse(short_circuit_stream(), media_type='text/event-stream')
 
             response = await chat_completion_handler(request, form_data, user)
             if metadata.get('chat_id') and metadata.get('message_id'):

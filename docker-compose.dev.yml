@@ -13,12 +13,11 @@ services:
     env_file:
       - .env
     environment:
-      - OPENAI_API_BASE_URL=${OPENAI_API_BASE_URL:-https://routerai.ru/api/v1}
       # Prefer .env over values already stored in SQLite inside gpthub-data (fixes stale API keys → 401).
       - ENABLE_PERSISTENT_CONFIG=${ENABLE_PERSISTENT_CONFIG:-false}
       # Avoid Ollama connection errors when no daemon on the host; set ENABLE_OLLAMA_API=true in .env if you use Ollama.
       - ENABLE_OLLAMA_API=${ENABLE_OLLAMA_API:-false}
-      - OPENAI_API_BASE_URL=${OPENAI_API_BASE_URL}
+      - OPENAI_API_BASE_URL=${OPENAI_API_BASE_URL:-https://routerai.ru/api/v1}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - AUDIO_STT_ENGINE=${AUDIO_STT_ENGINE:-openai}
       - AUDIO_STT_OPENAI_API_BASE_URL=${OPENAI_API_BASE_URL:-https://routerai.ru/api/v1}

@@ -67,6 +67,9 @@ PATTERNS = {
     'research': re.compile(
         r'(?i)\b(изучи|исследуй|проанализируй\s+рынок|сравни|найди\s+информацию|глубокий\s+анализ|поиск|подробно\s+изучи|research|investigate|search)\b'
     ),
+    'presentation': re.compile(
+        r'(?i)\b(презент\w*|слайд\w*|pptx|powerpoint|presentation\w*|slides?|deck|pitch\s*deck|доклад\w*)\b'
+    ),
     'analytics': re.compile(
         r'(?i)\b(анализ\s+данных|статистика|корреляция|csv|график|таблица|отчет|сводка|аналитика|метрики|data\s+science|pandas|dataset|датасет|analytics)\b'
     ),
@@ -473,6 +476,9 @@ def _classify_with_rules(features: RequestFeatures) -> RoutingDecision | None:
     if PATTERNS['audio_gen'].search(features.text):
         return RoutingDecision('audio_gen', 'low', method='rules')
 
+    if PATTERNS['presentation'].search(features.text):
+        return RoutingDecision('research', 'medium', method='rules')
+
     if features.has_url:
         return RoutingDecision('research', 'medium', method='rules')
 
@@ -814,6 +820,8 @@ def _classify_with_regex(text: str, has_image: bool) -> RoutingDecision:
         cat = 'code'
     elif PATTERNS['math_logic'].search(text):
         cat = 'math_logic'
+    elif PATTERNS['presentation'].search(text):
+        cat = 'research'
     elif PATTERNS['research'].search(text):
         cat = 'research'
     elif PATTERNS['analytics'].search(text):

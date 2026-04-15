@@ -625,7 +625,7 @@ def sanitize_metadata(metadata: dict) -> dict:
         return metadata
 
     def _sanitize(obj):
-        if isinstance(obj, (str, int, float, bool, type(None))):
+        if isinstance(obj, str | int | float | bool | type(None)):
             return obj
         if isinstance(obj, dict):
             return {k: _sanitize(v) for k, v in obj.items() if not callable(v) and _is_serializable(v)}
@@ -642,7 +642,7 @@ def sanitize_metadata(metadata: dict) -> dict:
 
     def _is_serializable(obj):
         """Quick check whether a value can survive JSON serialization."""
-        if isinstance(obj, (str, int, float, bool, type(None), dict, list)):
+        if isinstance(obj, str | int | float | bool | type(None) | dict | list):
             return True
         try:
             json.dumps(obj)

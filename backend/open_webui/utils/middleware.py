@@ -934,7 +934,7 @@ def process_tool_result(
             tool_result_embeds.append(content)
 
             if 200 <= tool_result.status_code < 300:
-                if result_context is not None and isinstance(result_context, (str, dict, list)):
+                if result_context is not None and isinstance(result_context, str | dict | list):
                     tool_result = result_context
                 else:
                     tool_result = {
@@ -995,12 +995,12 @@ def process_tool_result(
                     # Support (html_content, result_context) nested tuple
                     result_context = None
                     html_content = tool_result
-                    if isinstance(tool_result, (tuple, list)) and len(tool_result) == 2:
+                    if isinstance(tool_result, tuple | list) and len(tool_result) == 2:
                         html_content, result_context = tool_result
 
                     # Display as iframe embed
                     tool_result_embeds.append(html_content)
-                    if result_context is not None and isinstance(result_context, (str, dict, list)):
+                    if result_context is not None and isinstance(result_context, str | dict | list):
                         tool_result = result_context
                     else:
                         tool_result = {
@@ -1011,11 +1011,11 @@ def process_tool_result(
                 elif location:
                     # Support (html_content, result_context) nested tuple for location embeds
                     result_context = None
-                    if isinstance(tool_result, (tuple, list)) and len(tool_result) == 2:
+                    if isinstance(tool_result, tuple | list) and len(tool_result) == 2:
                         _, result_context = tool_result
 
                     tool_result_embeds.append(location)
-                    if result_context is not None and isinstance(result_context, (str, dict, list)):
+                    if result_context is not None and isinstance(result_context, str | dict | list):
                         tool_result = result_context
                     else:
                         tool_result = {
@@ -1413,6 +1413,55 @@ async def chat_web_search_handler(request: Request, form_data: dict, extra_param
     messages = form_data['messages']
     user_message = get_last_user_message(messages)
 
+    def normalize_search_query(text: str | None) -> str:
+        if not isinstance(text, str):
+            return ''
+
+        query = ' '.join(text.split()).strip()
+        if not query:
+            return ''
+
+        # Remove typical prompt instructions via regex
+        instruction_patterns = [
+            r'(?i)\b(?:в конце|сделай|используй|найди|найдите|пожалуйста|составь|напиши|сгенерируй|подготовь)\b.*$',
+            r'(?i)\b(?:презентаци[яюи]|доклад)\b.*$',
+        ]
+
+        for pattern in instruction_patterns:
+            query = re.sub(pattern, '', query).strip()
+
+        # Clean up any trailing punctuation that might be left
+        query = re.sub(r'[.,:;!?]+$', '', query).strip()
+
+        if not query:
+            return ''
+
+        # Keep web search queries concise and avoid forwarding full prompts.
+        max_len = 160
+        if len(query) > max_len:
+            query = query[:max_len].rsplit(' ', 1)[0].strip() or query[:max_len]
+        return query
+
+    def normalize_queries(values: list) -> list[str]:
+        normalized_queries: list[str] = []
+        seen: set[str] = set()
+
+        for value in values:
+            query = normalize_search_query(value)
+            if not query:
+                continue
+
+            key = query.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            normalized_queries.append(query)
+
+            if len(normalized_queries) >= 3:
+                break
+
+        return normalized_queries
+
     queries = []
     try:
         res = await generate_queries(
@@ -1427,7 +1476,12 @@ async def chat_web_search_handler(request: Request, form_data: dict, extra_param
             user,
         )
 
-        response = res['choices'][0]['message']['content']
+        if hasattr(res, 'body'):
+            res_data = json.loads(res.body)
+        else:
+            res_data = res
+
+        response = res_data['choices'][0]['message']['content']
 
         try:
             bracket_start = response.rfind('{')
@@ -1440,18 +1494,26 @@ async def chat_web_search_handler(request: Request, form_data: dict, extra_param
             queries = json.loads(response)
             queries = queries.get('queries', [])
         except Exception:
-            queries = [response]
+            queries = [normalize_search_query(response)]
 
         if ENABLE_QUERIES_CACHE:
             request.state.cached_queries = queries
 
     except Exception as e:
         log.exception(e)
-        queries = [user_message]
+        queries = [normalize_search_query(user_message)]
+
+    queries = normalize_queries(queries)
 
     # Check if generated queries are empty
     if len(queries) == 1 and queries[0].strip() == '':
-        queries = [user_message]
+        fallback_query = normalize_search_query(user_message)
+        queries = [fallback_query] if fallback_query else []
+
+    if len(queries) == 0:
+        fallback_query = normalize_search_query(user_message)
+        if fallback_query:
+            queries = [fallback_query]
 
     # Check if queries are not found
     if len(queries) == 0:
@@ -2661,15 +2723,14 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         if mcp_clients:
             metadata['mcp_clients'] = mcp_clients
 
-        # Inject builtin tools for native function calling based on enabled features and model capability
-        # Check if builtin_tools capability is enabled for this model (defaults to True if not specified)
+        # Inject builtin tools based on model capability.
+        # Native mode gets the full builtin toolset; default mode gets a minimal
+        # presentation subset so generate_presentation works even without native FC toggle.
+        function_calling_mode = metadata.get('params', {}).get('function_calling')
         builtin_tools_enabled = (model.get('info', {}).get('meta', {}).get('capabilities') or {}).get(
             'builtin_tools', True
         )
-        if metadata.get('params', {}).get('function_calling') == 'native' and builtin_tools_enabled:
-            # Add file context to user messages
-            chat_id = metadata.get('chat_id')
-            form_data['messages'] = add_file_context(form_data.get('messages', []), chat_id, user)
+        if builtin_tools_enabled:
             builtin_tools = get_builtin_tools(
                 request,
                 {
@@ -2680,9 +2741,48 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 features,
                 model,
             )
-            for name, tool_dict in builtin_tools.items():
-                if name not in tools_dict:
-                    tools_dict[name] = tool_dict
+
+            if function_calling_mode == 'native':
+                # Add file context to user messages for native function calling.
+                chat_id = metadata.get('chat_id')
+                form_data['messages'] = add_file_context(form_data.get('messages', []), chat_id, user)
+                for name, tool_dict in builtin_tools.items():
+                    if name not in tools_dict:
+                        tools_dict[name] = tool_dict
+            else:
+                for name in ('extract_file_content', 'generate_presentation', 'search_web'):
+                    tool_dict = builtin_tools.get(name)
+                    if tool_dict and name not in tools_dict:
+                        tools_dict[name] = tool_dict
+
+        from open_webui.utils.auto_routing import PATTERNS
+
+        user_msg_for_check = get_last_user_message(form_data.get('messages', []))
+        is_pres = False
+        if (
+            user_msg_for_check
+            and isinstance(user_msg_for_check, str)
+            and PATTERNS['presentation'].search(user_msg_for_check)
+        ):
+            is_pres = True
+
+        if is_pres:
+            # We intercept and process here to ensure 100% reliable orchestrated map-reduce!
+            from open_webui.utils.agentic_pipeline import run_agentic_pipeline
+
+            try:
+                form_data, flags = await run_agentic_pipeline(request, form_data, extra_params, user)
+                events.extend(flags.get('events', []))
+
+                if flags.get('done'):
+                    metadata['pipeline_done'] = True
+                    metadata['pipeline_content'] = flags.get('content', '')
+                    if flags.get('files'):
+                        metadata['files'] = (metadata.get('files') or []) + flags['files']
+
+                    return form_data, metadata, events
+            except Exception as e:
+                log.exception(f'Agentic pipeline failed: {e}')
 
         if tools_dict:
             if metadata.get('params', {}).get('function_calling') == 'native':
@@ -3179,7 +3279,7 @@ async def non_streaming_chat_response_handler(response, ctx):
                 if generated_files:
                     await event_emitter(
                         {
-                            'type': 'chat:message:files',
+                            'type': 'files',
                             'data': {
                                 'files': generated_files,
                             },
@@ -4721,6 +4821,31 @@ async def streaming_chat_response_handler(response, ctx):
                             },
                         )
 
+                if not ENABLE_REALTIME_CHAT_SAVE:
+                    # Save message in the database
+                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                        metadata['chat_id'],
+                        metadata['message_id'],
+                        {
+                            'done': True,
+                            'content': serialize_output(output),
+                            'output': output,
+                            **({'usage': usage} if usage else {}),
+                        },
+                    )
+                elif usage:
+                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                        metadata['chat_id'],
+                        metadata['message_id'],
+                        {'done': True, 'usage': usage},
+                    )
+                else:
+                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                        metadata['chat_id'],
+                        metadata['message_id'],
+                        {'done': True},
+                    )
+
                 await event_emitter(
                     {
                         'type': 'chat:completion',
@@ -4729,6 +4854,7 @@ async def streaming_chat_response_handler(response, ctx):
                 )
 
                 await background_tasks_handler(ctx)
+
             except asyncio.CancelledError:
                 log.warning('Task was cancelled!')
                 await event_emitter({'type': 'chat:tasks:cancel'})

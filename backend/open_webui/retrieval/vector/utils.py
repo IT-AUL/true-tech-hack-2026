@@ -19,7 +19,7 @@ def process_metadata(
         if key in KEYS_TO_EXCLUDE:
             continue
         # Convert non-serializable fields to strings
-        if isinstance(value, (datetime, list, dict)):
+        if isinstance(value, datetime | list | dict):
             result[key] = str(value)
         else:
             result[key] = value

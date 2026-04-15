@@ -219,6 +219,360 @@ async def fetch_url(
         return json.dumps({'error': str(e)})
 
 
+async def extract_file_content(
+    file_id: str,
+    offset: int = 0,
+    max_chars: int = 20000,
+    __request__: Request = None,
+    __user__: dict = None,
+) -> str:
+    """
+    Extract text content from an uploaded file by file id.
+
+    Uses extracted text cached in file.data.content (produced by Open WebUI ingestion).
+    If empty, attempts URL fallback for URL-backed files.
+
+    :param file_id: ID of the uploaded file
+    :param offset: Character offset to start reading from (default: 0)
+    :param max_chars: Maximum characters to return (default: 20000)
+    :return: JSON with file metadata and extracted content
+    """
+    if __request__ is None:
+        return json.dumps({'error': 'Request context not available'})
+    if not __user__:
+        return json.dumps({'error': 'User context not available'})
+
+    try:
+        from open_webui.models.files import Files
+        from open_webui.utils.access_control.files import has_access_to_file
+
+        user_id = __user__.get('id')
+        user_role = __user__.get('role', 'user')
+
+        file_item = Files.get_file_by_id(file_id)
+        if not file_item:
+            return json.dumps({'error': 'File not found'})
+
+        if (
+            file_item.user_id != user_id
+            and user_role != 'admin'
+            and not has_access_to_file(
+                file_id=file_id,
+                access_type='read',
+                user=UserModel(**__user__),
+            )
+        ):
+            return json.dumps({'error': 'File not found'})
+
+        content = ''
+        if file_item.data:
+            content = file_item.data.get('content', '') or ''
+
+        if not content:
+            # Fallback path: URL-backed files may store source URL in metadata.
+            possible_url = ''
+            if file_item.meta and isinstance(file_item.meta, dict):
+                for key in ('url', 'source_url', 'source', 'website_url'):
+                    value = file_item.meta.get(key)
+                    if isinstance(value, str) and value.startswith(('http://', 'https://')):
+                        possible_url = value
+                        break
+            if possible_url:
+                fetched, _ = await asyncio.to_thread(get_content_from_url, __request__, possible_url)
+                content = fetched or ''
+
+        total_chars = len(content)
+        offset = max(int(offset), 0)
+        max_chars = min(max(int(max_chars), 1), 100000)
+        sliced = content[offset : offset + max_chars]
+        is_truncated = (offset + len(sliced)) < total_chars
+
+        return json.dumps(
+            {
+                'id': file_item.id,
+                'filename': file_item.filename,
+                'content': sliced,
+                'content_type': (file_item.meta or {}).get('content_type') if file_item.meta else None,
+                'truncated': is_truncated,
+                'total_chars': total_chars,
+                'returned_chars': len(sliced),
+                'offset': offset,
+                **({'next_offset': offset + len(sliced)} if is_truncated else {}),
+            },
+            ensure_ascii=False,
+        )
+    except Exception as e:
+        log.exception(f'extract_file_content error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+async def generate_presentation(
+    topic: str = '',
+    num_slides: int = 7,
+    slides_data: list[dict] = None,
+    __request__: Request = None,
+    __user__: dict = None,
+    __event_emitter__: callable = None,
+    __chat_id__: str = None,
+    __message_id__: str = None,
+    __model__: dict = None,
+) -> str:
+    """
+    Generate a PowerPoint presentation (.pptx) based on a topic or pre-generated slides_data.
+    If slides_data is provided, it performs local PPTX assembly without calling external LLMs.
+
+    :param topic: The subject or context for the presentation.
+    :param num_slides: Desired number of slides (default: 7).
+    :param slides_data: Optional pre-generated list of slide content dictionaries.
+    :return: Confirmation message with FILE_ID for the generated PPTX.
+    """
+    if not __user__:
+        return json.dumps({'error': 'User context not available'})
+
+    try:
+        import asyncio
+        import io
+        import uuid
+
+        from pptx import Presentation
+
+        from open_webui.models.files import FileForm, Files
+        from open_webui.models.users import UserModel
+        from open_webui.storage.provider import Storage
+        from open_webui.utils.chat import generate_chat_completion
+
+        orchestrator_model = __model__['id'] if isinstance(__model__, dict) and 'id' in __model__ else 'default'
+
+        if slides_data:
+            # --- LOCAL ASSEMBLY MODE ---
+            log.info(f'generate_presentation: Using pre-provided slides_data ({len(slides_data)} slides)')
+            slides_json_data = slides_data
+            pres_title = topic or 'Презентация'
+        else:
+            # --- AGENTIC MODE ---
+            if __event_emitter__:
+                await __event_emitter__(
+                    {
+                        'type': 'status',
+                        'data': {
+                            'action': 'presentation',
+                            'description': 'Создание структуры презентации (Планировщик)...',
+                            'done': False,
+                        },
+                    }
+                )
+
+            async def _safe_generate(payload, retries=3):
+                user_model = UserModel(**__user__)
+                for attempt in range(retries):
+                    try:
+                        log.info(
+                            f'generate_presentation: attempting LLM call (attempt {attempt + 1}) for model {payload.get("model")}'
+                        )
+                        return await generate_chat_completion(__request__, form_data=payload, user=user_model)
+                    except Exception as e:
+                        log.error(f'generate_presentation: LLM call failed: {e}')
+                        if attempt == retries - 1:
+                            log.error('generate_presentation: reached max retries, failing.')
+                            raise e
+                        await asyncio.sleep(2)
+                return None
+
+            # 1. PLANNER
+            generation_prompt = f"""Ты Планировщик - эксперт по структуре презентаций.
+Пользователю нужна презентация на тему: "{topic}" (Желаемое количество слайдов: {num_slides})
+Ответь ИСКЛЮЧИТЕЛЬНО валидным JSON объектом следующей структуры:
+{{
+  "title": "Название презентации",
+  "theme": "light",
+  "slides": [
+    {{
+      "title": "Заголовок слайда",
+      "description": "О чем должен быть этот слайд"
+    }}
+  ]
+}}
+"""
+            gen_payload = {
+                'model': orchestrator_model,
+                'messages': [{'role': 'user', 'content': generation_prompt}],
+                'stream': False,
+            }
+
+            gen_resp = await _safe_generate(gen_payload)
+            gen_dict = json.loads(gen_resp.body.decode('utf-8')) if hasattr(gen_resp, 'body') else gen_resp
+            content = gen_dict.get('choices', [{}])[0].get('message', {}).get('content', '')
+            content = content[content.find('{') : content.rfind('}') + 1]
+            parsed_pres = json.loads(content)
+
+            outline_slides = parsed_pres.get('slides', [])
+            pres_title = parsed_pres.get('title', 'Презентация')
+
+            # 2. WORKER (Parallel Content Generation)
+            async def _generate_slide(i, slide_plan):
+                if __event_emitter__:
+                    await __event_emitter__(
+                        {
+                            'type': 'status',
+                            'data': {
+                                'action': 'presentation',
+                                'description': f'Генерация контента слайда {i + 1} из {len(outline_slides[:num_slides])}...',
+                                'done': False,
+                            },
+                        }
+                    )
+                slide_prompt = f"""Ты Писатель. Создай контент для ОДНОГО слайда: "{slide_plan.get('title')}" в презентации "{pres_title}".
+Ответь ИСКЛЮЧИТЕЛЬНО JSONом: {{ "title": "...", "bullets": ["...", "..."], "notes": "..." }}
+"""
+                slide_payload = {
+                    'model': orchestrator_model,
+                    'messages': [{'role': 'user', 'content': slide_prompt}],
+                    'stream': False,
+                }
+                try:
+                    slide_resp = await _safe_generate(slide_payload)
+                    slide_dict = (
+                        json.loads(slide_resp.body.decode('utf-8')) if hasattr(slide_resp, 'body') else slide_resp
+                    )
+                    slide_content = slide_dict.get('choices', [{}])[0].get('message', {}).get('content', '')
+                    slide_content = slide_content[slide_content.find('{') : slide_content.rfind('}') + 1]
+                    return json.loads(slide_content)
+                except Exception as e:
+                    return {'title': slide_plan.get('title', 'Слайд'), 'bullets': ['Ошибка генерации'], 'notes': f'{e}'}
+
+            tasks = [_generate_slide(i, slide_plan) for i, slide_plan in enumerate(outline_slides[:num_slides])]
+            slides_json_data = await asyncio.gather(*tasks)
+
+        # --- PPTX GENERATION ---
+        if __event_emitter__:
+            await __event_emitter__(
+                {
+                    'type': 'status',
+                    'data': {'action': 'presentation', 'description': 'Сборка файла PPTX...', 'done': False},
+                }
+            )
+
+        import re
+
+        def clean_xml_string(s: str) -> str:
+            """Remove characters that are illegal in XML 1.0 (control characters 0-31, except 9, 10, 13)."""
+            if not isinstance(s, str):
+                return str(s)
+            # Match characters outside the allowed ranges for XML 1.0
+            return re.sub(r'[^\x09\x0A\x0D\x20-\x7E\xA0-\uD7FF\uE000-\uFFFD]+', '', s)
+
+        pres_title = clean_xml_string(pres_title)
+
+        prs = Presentation()
+
+        # 1. TITLE SLIDE
+        title_layout = prs.slide_layouts[0]
+        slide = prs.slides.add_slide(title_layout)
+        if slide.shapes.title:
+            slide.shapes.title.text = pres_title[:200]
+        if len(slide.placeholders) > 1:
+            slide.placeholders[1].text = 'Generated by Autonomous Pipeline'
+
+        # 2. CONTENT SLIDES
+        content_layout = prs.slide_layouts[1]
+        for slide_data in slides_json_data:
+            stitle = clean_xml_string(str(slide_data.get('title') or 'Slide'))
+            bullets = slide_data.get('bullets') or []
+            notes = clean_xml_string(str(slide_data.get('notes') or ''))
+
+            slide = prs.slides.add_slide(content_layout)
+            if slide.shapes.title:
+                slide.shapes.title.text = stitle[:150]
+
+            if len(slide.placeholders) > 1:
+                tf = slide.placeholders[1].text_frame
+                tf.clear()
+                if isinstance(bullets, list):
+                    for i, b in enumerate(bullets[:10]):
+                        p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+                        p.text = clean_xml_string(str(b))[:300]
+                        p.level = 0
+                else:
+                    tf.text = 'No content provided.'
+
+            if notes:
+                try:
+                    slide.notes_slide.notes_text_frame.text = notes[:2000]
+                except Exception:
+                    pass
+
+        output = io.BytesIO()
+        prs.save(output)
+        output.seek(0)
+        file_bytes = output.getvalue()
+
+        file_id = str(uuid.uuid4())
+        cleaned = ''.join(c if c.isalnum() or c in ('-', '_', ' ') else '_' for c in pres_title).strip()
+        cleaned = cleaned.replace(' ', '_') or 'presentation'
+        filename = f'{cleaned}.pptx'
+        storage_filename = f'{file_id}_{filename}'
+
+        user = UserModel(**__user__)
+        _, file_path = Storage.upload_file(
+            io.BytesIO(file_bytes),
+            storage_filename,
+            {
+                'OpenWebUI-User-Email': user.email,
+                'OpenWebUI-User-Id': user.id,
+                'OpenWebUI-User-Name': user.name,
+                'OpenWebUI-File-Id': file_id,
+            },
+        )
+
+        file_item = Files.insert_new_file(
+            user.id,
+            FileForm(
+                id=file_id,
+                filename=filename,
+                path=file_path,
+                data={'content': ''},
+                meta={
+                    'name': filename,
+                    'content_type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                    'size': len(file_bytes),
+                },
+            ),
+        )
+
+        file_payload = [
+            {
+                'type': 'file',
+                'id': file_item.id,
+                'url': file_item.id,
+                'name': file_item.filename,
+                'content_type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                'size': len(file_bytes),
+                'status': 'uploaded',
+            }
+        ]
+
+        if __chat_id__ and __message_id__:
+            db_files = Chats.add_message_files_by_id_and_message_id(__chat_id__, __message_id__, file_payload)
+            if db_files is not None:
+                file_payload = db_files
+
+        if __event_emitter__:
+            await __event_emitter__(
+                {
+                    'type': 'status',
+                    'data': {'action': 'presentation', 'description': 'Презентация готова!', 'done': True},
+                }
+            )
+
+        return f'Презентация {filename} успешно сгенерирована. FILE_ID:{file_id}'
+    except Exception as e:
+        import traceback
+
+        log.error(f'generate_presentation error: {e}')
+        log.error(traceback.format_exc())
+        return f'Произошла ошибка при генерации презентации: {e}'
+
+
 async def deep_research(
     query: str,
     breadth: int = 3,
@@ -451,7 +805,7 @@ async def generate_image(
         if __event_emitter__ and image_files:
             await __event_emitter__(
                 {
-                    'type': 'chat:message:files',
+                    'type': 'files',
                     'data': {
                         'files': image_files,
                     },
@@ -518,7 +872,7 @@ async def edit_image(
         if __event_emitter__ and image_files:
             await __event_emitter__(
                 {
-                    'type': 'chat:message:files',
+                    'type': 'files',
                     'data': {
                         'files': image_files,
                     },

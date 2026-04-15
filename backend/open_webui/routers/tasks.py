@@ -11,6 +11,7 @@ from open_webui.config import (
     DEFAULT_QUERY_GENERATION_PROMPT_TEMPLATE,
     DEFAULT_TAGS_GENERATION_PROMPT_TEMPLATE,
     DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE,
+    DEFAULT_WEB_SEARCH_QUERY_GENERATION_PROMPT_TEMPLATE,
 )
 from open_webui.constants import TASKS
 from open_webui.routers.pipelines import process_pipeline_inlet_filter
@@ -59,6 +60,7 @@ async def get_task_config(request: Request, user=Depends(get_verified_user)):
     return {
         'TASK_MODEL': request.app.state.config.TASK_MODEL,
         'TASK_MODEL_EXTERNAL': request.app.state.config.TASK_MODEL_EXTERNAL,
+        'WEB_SEARCH_QUERY_GENERATION_MODEL': request.app.state.config.WEB_SEARCH_QUERY_GENERATION_MODEL,
         'TITLE_GENERATION_PROMPT_TEMPLATE': request.app.state.config.TITLE_GENERATION_PROMPT_TEMPLATE,
         'IMAGE_PROMPT_GENERATION_PROMPT_TEMPLATE': request.app.state.config.IMAGE_PROMPT_GENERATION_PROMPT_TEMPLATE,
         'ENABLE_AUTOCOMPLETE_GENERATION': request.app.state.config.ENABLE_AUTOCOMPLETE_GENERATION,
@@ -79,6 +81,7 @@ async def get_task_config(request: Request, user=Depends(get_verified_user)):
 class TaskConfigForm(BaseModel):
     TASK_MODEL: str | None
     TASK_MODEL_EXTERNAL: str | None
+    WEB_SEARCH_QUERY_GENERATION_MODEL: str | None
     ENABLE_TITLE_GENERATION: bool
     TITLE_GENERATION_PROMPT_TEMPLATE: str
     IMAGE_PROMPT_GENERATION_PROMPT_TEMPLATE: str
@@ -99,6 +102,7 @@ class TaskConfigForm(BaseModel):
 async def update_task_config(request: Request, form_data: TaskConfigForm, user=Depends(get_admin_user)):
     request.app.state.config.TASK_MODEL = form_data.TASK_MODEL
     request.app.state.config.TASK_MODEL_EXTERNAL = form_data.TASK_MODEL_EXTERNAL
+    request.app.state.config.WEB_SEARCH_QUERY_GENERATION_MODEL = form_data.WEB_SEARCH_QUERY_GENERATION_MODEL
     request.app.state.config.ENABLE_TITLE_GENERATION = form_data.ENABLE_TITLE_GENERATION
     request.app.state.config.TITLE_GENERATION_PROMPT_TEMPLATE = form_data.TITLE_GENERATION_PROMPT_TEMPLATE
 
@@ -125,6 +129,7 @@ async def update_task_config(request: Request, form_data: TaskConfigForm, user=D
     return {
         'TASK_MODEL': request.app.state.config.TASK_MODEL,
         'TASK_MODEL_EXTERNAL': request.app.state.config.TASK_MODEL_EXTERNAL,
+        'WEB_SEARCH_QUERY_GENERATION_MODEL': request.app.state.config.WEB_SEARCH_QUERY_GENERATION_MODEL,
         'ENABLE_TITLE_GENERATION': request.app.state.config.ENABLE_TITLE_GENERATION,
         'TITLE_GENERATION_PROMPT_TEMPLATE': request.app.state.config.TITLE_GENERATION_PROMPT_TEMPLATE,
         'IMAGE_PROMPT_GENERATION_PROMPT_TEMPLATE': request.app.state.config.IMAGE_PROMPT_GENERATION_PROMPT_TEMPLATE,
@@ -460,9 +465,19 @@ async def generate_queries(request: Request, form_data: dict, user=Depends(get_v
         models,
     )
 
+    if type == 'web_search':
+        web_search_model = getattr(request.app.state.config, 'WEB_SEARCH_QUERY_GENERATION_MODEL', '')
+        if web_search_model and web_search_model in models:
+            task_model_id = web_search_model
+
     log.debug(f'generating {type} queries using model {task_model_id} for user {user.email}')
 
-    if (request.app.state.config.QUERY_GENERATION_PROMPT_TEMPLATE).strip() != '':
+    if type == 'web_search':
+        if (request.app.state.config.WEB_SEARCH_QUERY_GENERATION_PROMPT_TEMPLATE).strip() != '':
+            template = request.app.state.config.WEB_SEARCH_QUERY_GENERATION_PROMPT_TEMPLATE
+        else:
+            template = DEFAULT_WEB_SEARCH_QUERY_GENERATION_PROMPT_TEMPLATE
+    elif (request.app.state.config.QUERY_GENERATION_PROMPT_TEMPLATE).strip() != '':
         template = request.app.state.config.QUERY_GENERATION_PROMPT_TEMPLATE
     else:
         template = DEFAULT_QUERY_GENERATION_PROMPT_TEMPLATE

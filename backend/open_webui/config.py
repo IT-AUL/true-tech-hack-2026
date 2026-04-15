@@ -1836,6 +1836,18 @@ QUERY_GENERATION_PROMPT_TEMPLATE = PersistentConfig(
     os.environ.get('QUERY_GENERATION_PROMPT_TEMPLATE', ''),
 )
 
+WEB_SEARCH_QUERY_GENERATION_MODEL = PersistentConfig(
+    'WEB_SEARCH_QUERY_GENERATION_MODEL',
+    'task.query.web_search_model',
+    os.environ.get('WEB_SEARCH_QUERY_GENERATION_MODEL', ''),
+)
+
+WEB_SEARCH_QUERY_GENERATION_PROMPT_TEMPLATE = PersistentConfig(
+    'WEB_SEARCH_QUERY_GENERATION_PROMPT_TEMPLATE',
+    'task.query.web_search_prompt_template',
+    os.environ.get('WEB_SEARCH_QUERY_GENERATION_PROMPT_TEMPLATE', ''),
+)
+
 DEFAULT_QUERY_GENERATION_PROMPT_TEMPLATE = """### Task:
 Analyze the chat history and generate high-recall retrieval queries in the same language as the user. Default to **2-4 complementary queries** unless it is absolutely certain that retrieval is unnecessary.
 
@@ -1850,6 +1862,33 @@ Analyze the chat history and generate high-recall retrieval queries in the same 
 - Err on the side of suggesting queries if there is **any chance** they improve recall.
 - Today's date is: {{CURRENT_DATE}}.
 - Always prioritize coverage and recall over elegance.
+
+### Output:
+Strictly return in JSON format:
+{
+  "queries": ["query1", "query2"]
+}
+
+### Chat History:
+<chat_history>
+{{MESSAGES:END:6}}
+</chat_history>
+"""
+
+DEFAULT_WEB_SEARCH_QUERY_GENERATION_PROMPT_TEMPLATE = """### Task:
+Generate concise web search queries from the chat history. Focus on factual keywords and entities only.
+
+### Guidelines:
+- Respond **EXCLUSIVELY** with valid JSON and no extra text.
+- Return in this format: { "queries": ["query1", "query2"] }.
+- Generate **1-3 short search queries** suitable for a search engine.
+- Extract only topic-defining terms (names, products, standards, dates, places, acronyms).
+- Remove meta-instructions such as "make a presentation", "in the end", "use tools", "attach a file".
+- Do not include long sentences, conversational filler, or task instructions.
+- Keep each query under 120 characters when possible.
+- If the user asks in Russian, include at least one Russian query; optionally add one English query for better global coverage.
+- If there is no searchable intent, return { "queries": [] }.
+- Today's date is: {{CURRENT_DATE}}.
 
 ### Output:
 Strictly return in JSON format:

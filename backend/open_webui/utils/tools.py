@@ -37,8 +37,10 @@ from open_webui.tools.builtin import (
     delete_memory,
     edit_image,
     execute_code,
+    extract_file_content,
     fetch_url,
     generate_image,
+    generate_presentation,
     get_current_timestamp,
     list_knowledge,
     list_knowledge_bases,
@@ -483,6 +485,10 @@ def get_builtin_tools(
     # Skills tools - view_skill allows model to load full skill instructions on demand
     if extra_params.get('__skill_ids__'):
         builtin_functions.append(view_skill)
+
+    # Presentation tools - file extraction and PPTX generation pipeline
+    if is_builtin_tool_enabled('presentations'):
+        builtin_functions.extend([extract_file_content, generate_presentation])
 
     for func in builtin_functions:
         callable = get_async_tool_function_and_apply_extra_params(
