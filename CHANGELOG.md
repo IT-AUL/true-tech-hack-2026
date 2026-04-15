@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Секции ниже без суффикса (`[0.8.12]`) — upstream Open WebUI changelog.
 
 ---
+## [0.8.12-gpthub.23] - 2026-04-15
+
+### Changed
+
+- **README:** позиционирование, архитектура, демо для жюри, быстрый старт и образы GHCR/Docker Hub.
+- **docs/auto-routing-presentation-brief.md:** актуализирован enterprise-пайплайн маршрутизации под код `auto_routing.py`.
+
+### Fixed
+
+- **RichTextInput:** при включённом rich text отключены дублирующие узлы StarterKit (`codeBlock`, списки, `listKeymap`), чтобы TipTap не предупреждал о duplicate extension names рядом с `ListKit` и `CodeBlockLowlight`.
+
+---
+
 ## [0.8.12-gpthub.22] - 2026-04-15
 
 ### Added
