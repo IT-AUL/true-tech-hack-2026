@@ -34,6 +34,10 @@ from open_webui.env import (
     GLOBAL_LOG_LEVEL,
     RAG_SYSTEM_CONTEXT,
 )
+from open_webui.memory.mem0_manager import (
+    add_messages_to_project_memory,
+    search_project_memory,
+)
 from open_webui.models.chats import Chats
 from open_webui.models.folders import Folders
 from open_webui.models.functions import Functions
@@ -95,6 +99,7 @@ from open_webui.utils.misc import (
     merge_system_messages,
     replace_system_message_content,
     set_last_user_message_content,
+    strip_attached_files_from_user_text,
     strip_empty_content_blocks,
 )
 from open_webui.utils.payload import apply_system_prompt_to_body
@@ -116,6 +121,24 @@ from starlette.responses import JSONResponse, StreamingResponse
 
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
 log = logging.getLogger(__name__)
+
+# Appended to the merged system message when ENABLE_CHAT_LAST_TURN_PRIORITY_HINT is on and the thread has prior turns.
+_CHAT_LAST_TURN_PRIORITY_HINT = (
+    'Последний запрос пользователя в этом диалоге — основная задача; более ранние реплики дают контекст. '
+    'Если пользователь явно просит продолжить или опирается на предыдущий ответ («как выше», «продолжи»), '
+    'следуй этому. Не подменяй явно названный алгоритм, язык или тему другими без явной просьбы пользователя.'
+)
+
+# Standalone "draw / I want a picture" requests should not pull RAG from unrelated attachments.
+_IMAGE_PROMPT_USES_ATTACHMENT = re.compile(
+    r'(?i)(?:'
+    r'по\s+файл|из\s+файл|из\s+вложен|на\s+основе\s+(?:файл|документ|вложен|скан|этого)|'
+    r'из\s+документ|прикрепл[её]нн|вложенн\w*\s+файл|как\s+в\s+файл|'
+    r'from\s+(?:the\s+)?(?:file|attachment|document)|'
+    r'based\s+on\s+(?:the\s+)?(?:file|attachment|document|this\s+pdf)|'
+    r'using\s+(?:the\s+)?(?:attached|uploaded)'
+    r')'
+)
 
 
 # We believe in one maker of all models, seen and unseen,
@@ -1397,6 +1420,51 @@ async def chat_memory_handler(request: Request, form_data: dict, extra_params: d
     return form_data
 
 
+async def project_memory_handler(
+    project_id: str,
+    user_id: str,
+    form_data: dict,
+) -> dict:
+    """Retrieve facts relevant to the last user message from the project's
+    long-term Mem0/Neo4j memory and prepend them to the system prompt.
+
+    This is a companion to the regular ``chat_memory_handler`` and operates
+    specifically on *project-level* shared memory, not per-user memory.
+    """
+    user_query = get_last_user_message(form_data['messages']) or ''
+    if not user_query:
+        return form_data
+
+    try:
+        facts = await search_project_memory(
+            project_id=project_id,
+            user_id=user_id,
+            query=user_query,
+        )
+    except Exception as exc:
+        log.warning('project_memory_handler: search failed (non-fatal): %s', exc)
+        facts = []
+
+    if not facts:
+        return form_data
+
+    context_lines = []
+    for idx, fact in enumerate(facts, start=1):
+        fact_text = fact.get('memory', '') or fact.get('text', '')
+        if fact_text:
+            context_lines.append(f'{idx}. {fact_text}')
+
+    if context_lines:
+        context_block = 'Project Context (long-term memory):\n' + '\n'.join(context_lines) + '\n'
+        form_data['messages'] = add_or_update_system_message(
+            context_block,
+            form_data['messages'],
+            append=True,
+        )
+
+    return form_data
+
+
 async def chat_web_search_handler(request: Request, form_data: dict, extra_params: dict, user):
     event_emitter = extra_params['__event_emitter__']
     await event_emitter(
@@ -1670,7 +1738,14 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
         message_id = chat.chat.get('history', {}).get('currentId')
         message_list = get_message_list(messages_map, message_id)
 
-    user_message = get_last_user_message(message_list)
+    live_user = get_last_user_message(form_data.get('messages', []))
+    db_user = get_last_user_message(message_list)
+    if isinstance(live_user, str) and live_user.strip():
+        user_message = strip_attached_files_from_user_text(live_user)
+    elif isinstance(db_user, str):
+        user_message = strip_attached_files_from_user_text(db_user)
+    else:
+        user_message = ''
 
     prompt = user_message
     message_images = get_images_from_messages(message_list)
@@ -1746,7 +1821,16 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
 
     else:
         # Create image(s)
-        if request.app.state.config.ENABLE_IMAGE_PROMPT_GENERATION:
+        from open_webui.utils.auto_routing import PATTERNS
+
+        plain_um = user_message.strip() if isinstance(user_message, str) else ''
+        # Obvious image requests: use the user's words; LLM JSON prompt often drifts (wrong subject).
+        use_llm_image_prompt = (
+            request.app.state.config.ENABLE_IMAGE_PROMPT_GENERATION
+            and plain_um
+            and not PATTERNS['image_gen'].search(plain_um)
+        )
+        if use_llm_image_prompt:
             try:
                 res = await generate_image_prompt(
                     request,
@@ -1778,6 +1862,8 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
                 prompt = user_message
 
         try:
+            if isinstance(prompt, list):
+                prompt = ' '.join(str(p) for p in prompt if p).strip() or user_message
             images = await image_generations(
                 request=request,
                 form_data=CreateImageForm(**{'prompt': prompt}),
@@ -1846,6 +1932,13 @@ async def chat_completion_files_handler(
     sources = []
 
     if files := body.get('metadata', {}).get('files', None):
+        from open_webui.utils.auto_routing import PATTERNS
+
+        last_u = get_last_user_message(body.get('messages', []))
+        if isinstance(last_u, str):
+            plain = strip_attached_files_from_user_text(last_u)
+            if plain and PATTERNS['image_gen'].search(plain) and not _IMAGE_PROMPT_USES_ATTACHMENT.search(plain):
+                return body, {'sources': []}
         # Check if all files are in full context mode
         all_full_context = all(item.get('context') == 'full' for item in files)
 
@@ -2157,6 +2250,25 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     # which the frontend strips, causing tool calls to be merged into content.
     chat_id = metadata.get('chat_id')
     parent_message_id = metadata.get('parent_message_id')
+
+    # -----------------------------------------------------------------------
+    # Project Long-Term Memory (Mem0 / Neo4j)
+    # If this chat belongs to a project, retrieve relevant facts from the
+    # graph memory and inject them as extra system context.
+    # -----------------------------------------------------------------------
+    if chat_id and not (chat_id.startswith('local:')):
+        try:
+            from open_webui.models.chats import Chats as ChatsModel
+
+            chat_record = ChatsModel.get_chat_by_id(chat_id)
+            if chat_record and chat_record.project_id:
+                form_data = await project_memory_handler(
+                    project_id=chat_record.project_id,
+                    user_id=user.id,
+                    form_data=form_data,
+                )
+        except Exception as _pm_exc:
+            log.warning('Project memory retrieval failed (non-fatal): %s', _pm_exc)
 
     if chat_id and parent_message_id and not chat_id.startswith('local:'):
         db_messages = load_messages_from_db(chat_id, parent_message_id)
@@ -2754,6 +2866,15 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     # to prevent template parsing errors with strict chat templates (e.g. Qwen)
     form_data['messages'] = merge_system_messages(form_data.get('messages', []))
 
+    if request.app.state.config.ENABLE_CHAT_LAST_TURN_PRIORITY_HINT and any(
+        m.get('role') == 'assistant' for m in form_data['messages']
+    ):
+        form_data['messages'] = add_or_update_system_message(
+            _CHAT_LAST_TURN_PRIORITY_HINT,
+            form_data['messages'],
+            append=True,
+        )
+
     return form_data, metadata, events
 
 
@@ -3053,9 +3174,23 @@ async def background_tasks_handler(ctx):
                             pass
 
 
-async def non_streaming_chat_response_handler(response, ctx):
-    request = ctx['request']
+async def _emit_pending_auto_routing_status(metadata, event_emitter):
+    """
+    Flush auto-routing classifier status before any chat:completion events so the client
+    does not show model tokens before the routing card (ordering via one await chain).
+    """
+    if not event_emitter:
+        return
+    pending = metadata.pop('auto_routing_status_emit', None)
+    if not pending:
+        return
+    try:
+        await event_emitter(pending)
+    except Exception:
+        log.warning('Failed to emit deferred auto-routing status', exc_info=True)
 
+
+async def non_streaming_chat_response_handler(response, ctx):
     user = ctx['user']
     metadata = ctx['metadata']
     events = ctx['events']
@@ -3067,6 +3202,7 @@ async def non_streaming_chat_response_handler(response, ctx):
         return response
 
     if event_emitter:
+        await _emit_pending_auto_routing_status(metadata, event_emitter)
         try:
             if 'error' in response_data:
                 error = response_data.get('error')
@@ -3154,7 +3290,35 @@ async def non_streaming_chat_response_handler(response, ctx):
                             **({'usage': usage} if usage else {}),
                         },
                     )
-            elif choices and choices[0].get('message', {}).get('images'):
+
+                    # -------------------------------------------------------
+                    # Project Long-Term Memory – fire-and-forget extraction
+                    # -------------------------------------------------------
+                    try:
+                        from open_webui.models.chats import Chats as _ChatsModel
+
+                        _chat_rec = _ChatsModel.get_chat_by_id(metadata['chat_id'])
+                        if _chat_rec and _chat_rec.project_id:
+                            _user_msg = (
+                                get_last_user_message(
+                                    list((_chat_rec.chat or {}).get('history', {}).get('messages', {}).values())
+                                )
+                                or ''
+                            )
+                            if _user_msg:
+                                asyncio.ensure_future(
+                                    add_messages_to_project_memory(
+                                        project_id=_chat_rec.project_id,
+                                        user_id=user.id,
+                                        messages=[
+                                            {'role': 'user', 'content': _user_msg},
+                                            {'role': 'assistant', 'content': content},
+                                        ],
+                                    )
+                                )
+                    except Exception as _mem_exc:
+                        log.warning('Project memory extraction failed (non-fatal): %s', _mem_exc)
+
                 generated_images = choices[0]['message'].get('images', [])
                 generated_files = []
                 for idx, image in enumerate(generated_images):
@@ -3215,22 +3379,6 @@ async def non_streaming_chat_response_handler(response, ctx):
                         **({'usage': usage} if usage else {}),
                     },
                 )
-
-                # Send a webhook notification if the user is not active
-                if request.app.state.config.ENABLE_USER_WEBHOOKS and not Users.is_user_active(user.id):
-                    webhook_url = Users.get_user_webhook_url_by_id(user.id)
-                    if webhook_url:
-                        await post_webhook(
-                            request.app.state.WEBUI_NAME,
-                            webhook_url,
-                            f'{title} - {request.app.state.config.WEBUI_URL}/c/{metadata["chat_id"]}\n\n{content}',
-                            {
-                                'action': 'chat',
-                                'message': content,
-                                'title': title,
-                                'url': f'{request.app.state.config.WEBUI_URL}/c/{metadata["chat_id"]}',
-                            },
-                        )
 
                 await background_tasks_handler(ctx)
 
@@ -3559,6 +3707,8 @@ async def streaming_chat_response_handler(response, ctx):
                     reasoning_tags = DEFAULT_REASONING_TAGS
 
             try:
+                await _emit_pending_auto_routing_status(metadata, event_emitter)
+
                 for event in events:
                     await event_emitter(
                         {
@@ -4689,7 +4839,6 @@ async def streaming_chat_response_handler(response, ctx):
                             'done': True,
                             'content': serialize_output(output),
                             'output': output,
-                            **({'usage': usage} if usage else {}),
                         },
                     )
                 elif usage:
@@ -4720,6 +4869,40 @@ async def streaming_chat_response_handler(response, ctx):
                                 'url': f'{request.app.state.config.WEBUI_URL}/c/{metadata["chat_id"]}',
                             },
                         )
+
+                # -----------------------------------------------------------
+                # Project Long-Term Memory – fire-and-forget extraction
+                # (Streaming Response)
+                # -----------------------------------------------------------
+                try:
+                    from open_webui.models.chats import Chats as _ChatsModel
+
+                    _chat_rec = _ChatsModel.get_chat_by_id(metadata['chat_id'])
+                    if _chat_rec and _chat_rec.project_id:
+                        # For streaming, 'content' is the accumulated assistant response
+                        if content:
+                            _user_msg = (
+                                get_last_user_message(
+                                    list((_chat_rec.chat or {}).get('history', {}).get('messages', {}).values())
+                                )
+                                or ''
+                            )
+
+                            if _user_msg:
+                                asyncio.ensure_future(
+                                    add_messages_to_project_memory(
+                                        project_id=_chat_rec.project_id,
+                                        user_id=user.id,
+                                        messages=[
+                                            {'role': 'user', 'content': _user_msg},
+                                            {'role': 'assistant', 'content': content},
+                                        ],
+                                    )
+                                )
+                except Exception as _mem_exc:
+                    log.warning('Project memory extraction failed (streaming, non-fatal): %s', _mem_exc)
+
+                await background_tasks_handler(ctx)
 
                 await event_emitter(
                     {

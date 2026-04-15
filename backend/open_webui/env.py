@@ -776,6 +776,8 @@ try:
 except ValueError:
     AUTO_ROUTE_FAILOVER_MAX = 15
 
+AUTO_ROUTE_ENGINE = os.environ.get('AUTO_ROUTE_ENGINE', 'hybrid').strip().lower() or 'hybrid'
+
 _auto_route_failover_statuses = os.environ.get('AUTO_ROUTE_FAILOVER_HTTP_STATUSES', '400,404,408,429,502,503,504')
 try:
     AUTO_ROUTE_FAILOVER_HTTP_STATUSES = frozenset(
@@ -806,11 +808,36 @@ try:
     ROUTER_SHORT_MESSAGE_LEN = max(0, int(os.environ.get('ROUTER_SHORT_MESSAGE_LEN', '24')))
 except ValueError:
     ROUTER_SHORT_MESSAGE_LEN = 24
+# When the last user message has at least this many characters, do not prepend
+# recent_context to semantic / router query text (embedding drift from old turns).
+try:
+    ROUTER_CONTEXT_NO_MERGE_MIN_CHARS = max(0, int(os.environ.get('ROUTER_CONTEXT_NO_MERGE_MIN_CHARS', '96')))
+except ValueError:
+    ROUTER_CONTEXT_NO_MERGE_MIN_CHARS = 96
 ROUTER_DISABLE_ROUTING_CACHE = os.environ.get('ROUTER_DISABLE_ROUTING_CACHE', '').lower() in (
     '1',
     'true',
     'yes',
 )
+
+# When True: an attached image is context for the LLM/rules pipeline — do not force `vision`
+# unless the text clearly asks to describe/analyze the image; do not upgrade every route to
+# vision at the end of process_auto_routing. Set False for legacy «any image → VLM» behavior.
+ROUTER_SOFT_IMAGE_ATTACHMENT = os.environ.get('ROUTER_SOFT_IMAGE_ATTACHMENT', 'True').lower() in (
+    '1',
+    'true',
+    'yes',
+)
+
+# LLM router adjudicator (see auto_routing._classify_with_llm)
+try:
+    ROUTER_MAX_TOKENS = max(64, int(os.environ.get('ROUTER_MAX_TOKENS', '384')))
+except ValueError:
+    ROUTER_MAX_TOKENS = 384
+try:
+    ROUTER_TEMPERATURE = float(os.environ.get('ROUTER_TEMPERATURE', '0.2'))
+except ValueError:
+    ROUTER_TEMPERATURE = 0.2
 
 
 RAG_EMBEDDING_TIMEOUT = os.environ.get('RAG_EMBEDDING_TIMEOUT', '')
@@ -984,3 +1011,42 @@ EXTERNAL_PWA_MANIFEST_URL = os.environ.get('EXTERNAL_PWA_MANIFEST_URL')
 # Env var values: "true" (anyone), "false" (no one), "members" (only group members).
 _default_group_share = os.environ.get('DEFAULT_GROUP_SHARE_PERMISSION', 'members').strip().lower()
 DEFAULT_GROUP_SHARE_PERMISSION = 'members' if _default_group_share == 'members' else _default_group_share == 'true'
+
+
+####################################
+# NEO4J / MEM0 (Long-Term Memory)
+####################################
+
+# Bolt URI for Neo4j. E.g. bolt://neo4j:7687 (docker service name)
+# See .env or docker-compose.yaml: NEO4J_URI
+NEO4J_URI = os.environ.get('NEO4J_URI', 'bolt://localhost:7687')
+
+# Neo4j credentials – set these in your .env file
+# NEO4J_USERNAME=neo4j
+# NEO4J_PASSWORD=<your-secure-password>
+NEO4J_USERNAME = os.environ.get('NEO4J_USERNAME', 'neo4j')
+NEO4J_PASSWORD = os.environ.get('NEO4J_PASSWORD', '')
+
+# LLM used by Mem0 to extract entities/relations from conversations.
+# Should point to the same OpenAI-compatible API the app uses.
+# MEM0_LLM_MODEL – e.g. gpt-4o-mini, or any model available on your base URL.
+MEM0_LLM_PROVIDER = os.environ.get('MEM0_LLM_PROVIDER', 'openai')
+MEM0_LLM_MODEL = os.environ.get('MEM0_LLM_MODEL', 'qwen/qwen3-next-80b-a3b-instruct')
+MEM0_LLM_BASE_URL = os.environ.get('MEM0_LLM_BASE_URL', os.environ.get('OPENAI_API_BASE_URL', ''))
+MEM0_LLM_API_KEY = os.environ.get('MEM0_LLM_API_KEY', os.environ.get('OPENAI_API_KEY', ''))
+
+# Embedder used by Mem0 for vector similarity search inside memories.
+# MEM0_EMBEDDER_MODEL – e.g. text-embedding-3-small
+MEM0_EMBEDDER_PROVIDER = os.environ.get('MEM0_EMBEDDER_PROVIDER', 'openai')
+MEM0_EMBEDDER_MODEL = os.environ.get('MEM0_EMBEDDER_MODEL', 'baai/bge-m3')
+MEM0_EMBEDDER_BASE_URL = os.environ.get('MEM0_EMBEDDER_BASE_URL', MEM0_LLM_BASE_URL)
+MEM0_EMBEDDER_API_KEY = os.environ.get('MEM0_EMBEDDER_API_KEY', MEM0_LLM_API_KEY)
+
+# Vector store used by Mem0 (qdrant | chroma | …).
+# Defaults to qdrant running at localhost. Adjust if you run your own Qdrant.
+MEM0_VECTOR_STORE_PROVIDER = os.environ.get('MEM0_VECTOR_STORE_PROVIDER', 'qdrant')
+MEM0_VECTOR_STORE_URL = os.environ.get('MEM0_VECTOR_STORE_URL', 'http://localhost:6333')
+MEM0_VECTOR_STORE_COLLECTION = os.environ.get('MEM0_VECTOR_STORE_COLLECTION', 'project_memories_v1')
+
+# How many memory facts to inject into each LLM request (top-k search).
+MEM0_SEARCH_TOP_K = int(os.environ.get('MEM0_SEARCH_TOP_K', '10'))

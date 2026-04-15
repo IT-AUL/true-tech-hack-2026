@@ -46,7 +46,8 @@
 		selectedTerminalId,
 		showFileNavPath,
 		showFileNavDir,
-		chatRequestQueues
+		chatRequestQueues,
+		selectedProjectId
 	} from '$lib/stores';
 
 	import { WEBUI_API_BASE_URL } from '$lib/constants';
@@ -414,22 +415,26 @@
 	};
 
 	const chatEventHandler = async (event, cb) => {
-		console.log(event);
-
 		if (event.chat_id === $chatId) {
 			await tick();
 			let message = history.messages[event.message_id];
 
 			if (message) {
+				if (message.autoRoutePending) {
+					message.autoRoutePending = false;
+				}
+
 				const type = event?.data?.type ?? null;
 				const data = event?.data?.data ?? null;
 
 				if (type === 'status') {
-					if (message?.statusHistory) {
-						message.statusHistory.push(data);
-					} else {
-						message.statusHistory = [data];
-					}
+					// Immutable update: in-place .push() kept the same message reference, so Svelte often
+					// skipped re-rendering ResponseMessage until the next content/done change — routing
+					// looked like it arrived only after the answer finished.
+					message = {
+						...message,
+						statusHistory: message?.statusHistory ? [...message.statusHistory, data] : [data]
+					};
 				} else if (type === 'chat:completion') {
 					chatCompletionEventHandler(data, message, event.chat_id);
 				} else if (type === 'chat:tasks:cancel') {
@@ -557,6 +562,9 @@
 				}
 
 				history.messages[event.message_id] = message;
+				if (type === 'status') {
+					history = { ...history };
+				}
 			}
 		} else {
 			// Non-active chat completion: queue stays in the global store.
@@ -1238,6 +1246,7 @@
 		});
 
 		if (chat) {
+			selectedProjectId.set(chat.project_id || null);
 			tags = await getTagsById(localStorage.token, $chatId).catch(async (error) => {
 				return [];
 			});
@@ -1970,7 +1979,8 @@
 					model: model.id,
 					modelName: model.name ?? model.id,
 					modelIdx: modelIdx ? modelIdx : _modelIdx,
-					timestamp: Math.floor(Date.now() / 1000) // Unix epoch
+					timestamp: Math.floor(Date.now() / 1000), // Unix epoch
+					...(model.id === 'auto' ? { autoRoutePending: true } : {})
 				};
 
 				// Add message to history and Set currentId to messageId
@@ -2004,7 +2014,6 @@
 
 		await Promise.all(
 			selectedModelIds.map(async (modelId, _modelIdx) => {
-				console.log('modelId', modelId);
 				const model = $models.filter((m) => m.id === modelId).at(0);
 
 				if (model) {
@@ -2614,7 +2623,8 @@
 					tags: [],
 					timestamp: Date.now()
 				},
-				$selectedFolder?.id
+				$selectedFolder?.id,
+				$selectedProjectId
 			);
 
 			_chatId = chat.id;
@@ -2628,6 +2638,7 @@
 			currentChatPage.set(1);
 
 			selectedFolder.set(null);
+			selectedProjectId.set(null);
 		} else {
 			_chatId = `local:${$socket?.id}`; // Use socket id for temporary chat
 			await chatId.set(_chatId);
@@ -2757,21 +2768,21 @@
 				<div
 					class="absolute top-0 left-0 w-full h-full bg-cover bg-center bg-no-repeat"
 					style="background-image: url({$selectedFolder?.meta?.background_image_url})  "
-				/>
+				></div>
 
 				<div
 					class="absolute top-0 left-0 w-full h-full bg-linear-to-t from-white to-white/85 dark:from-gray-900 dark:to-gray-900/90 z-0"
-				/>
+				></div>
 			{:else if $settings?.backgroundImageUrl ?? $config?.license_metadata?.background_image_url ?? null}
 				<div
 					class="absolute top-0 left-0 w-full h-full bg-cover bg-center bg-no-repeat"
 					style="background-image: url({$settings?.backgroundImageUrl ??
 						$config?.license_metadata?.background_image_url})  "
-				/>
+				></div>
 
 				<div
 					class="absolute top-0 left-0 w-full h-full bg-linear-to-t from-white to-white/85 dark:from-gray-900 dark:to-gray-900/90 z-0"
-				/>
+				></div>
 			{/if}
 
 			<PaneGroup direction="horizontal" class="w-full h-full">

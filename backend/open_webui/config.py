@@ -1693,6 +1693,12 @@ ADMIN_EMAIL = PersistentConfig(
 ####################################
 
 
+ENABLE_CHAT_LAST_TURN_PRIORITY_HINT = PersistentConfig(
+    'ENABLE_CHAT_LAST_TURN_PRIORITY_HINT',
+    'chat.last_turn_priority_hint',
+    os.environ.get('ENABLE_CHAT_LAST_TURN_PRIORITY_HINT', 'False').lower() == 'true',
+)
+
 TASK_MODEL = PersistentConfig(
     'TASK_MODEL',
     'task.model.default',
@@ -2811,7 +2817,7 @@ PDF_LOADER_MODE = PersistentConfig(
 RAG_EMBEDDING_MODEL = PersistentConfig(
     'RAG_EMBEDDING_MODEL',
     'rag.embedding_model',
-    os.environ.get('RAG_EMBEDDING_MODEL', 'baai/bge-m3'),
+    os.environ.get('RAG_EMBEDDING_MODEL', 'bge-m3'),
 )
 log.info(f'Embedding model set: {RAG_EMBEDDING_MODEL.value}')
 

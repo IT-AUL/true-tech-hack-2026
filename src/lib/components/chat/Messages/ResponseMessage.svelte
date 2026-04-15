@@ -77,6 +77,17 @@
 			description: string;
 			urls?: string[];
 			query?: string;
+			routing?: {
+				category?: string;
+				model_id?: string;
+				model_name?: string;
+				method?: string;
+				stage?: string;
+				engine?: string;
+				confidence?: number;
+				reasoning?: string;
+				trace?: Record<string, unknown>;
+			};
 		}[];
 		status?: {
 			done: boolean;
@@ -113,6 +124,7 @@
 			usage?: unknown;
 		};
 		annotation?: { type: string; rating: number };
+		autoRoutePending?: boolean;
 	}
 
 	export let chatId = '';
@@ -126,7 +138,12 @@
 		if (source) {
 			// Fast path: O(1) check on the fields that change most often (content during streaming, done at end)
 			// Avoids 2x O(n) JSON.stringify calls that are always true during streaming anyway
-			if (message.content !== source.content || message.done !== source.done) {
+			const statusLen = (m: MessageType) => m?.statusHistory?.length ?? 0;
+			if (
+				message.content !== source.content ||
+				message.done !== source.done ||
+				statusLen(message) !== statusLen(source)
+			) {
 				message = structuredClone(source);
 			} else if (JSON.stringify(message) !== JSON.stringify(source)) {
 				// Slow path: full comparison for infrequent changes (sources, annotations, status, etc.)
@@ -797,10 +814,26 @@
 							class="w-full flex flex-col relative {edit ? 'hidden' : ''}"
 							id="response-content-container"
 						>
-							{#if message.content === '' && !message.done && !message.error && !hasVisibleStatus}
-								{#if (message?.statusHistory ?? []).some((s) => s?.routing?.category === 'image_gen')}
-									<ImageSkeleton />
-								{:else}
+							{#if message.content === '' && !message.done && !message.error}
+								{#if message.autoRoutePending && message.model === 'auto' && !hasVisibleStatus}
+									<div
+										class="my-2 max-w-2xl rounded-2xl border border-gray-100/80 dark:border-gray-700/50 bg-gray-50/90 dark:bg-gray-850/50 px-3 py-2.5 flex items-center gap-2.5 shimmer"
+										aria-busy="true"
+									>
+										<div
+											class="size-5 rounded-full bg-gray-200/80 dark:bg-gray-600/50 animate-pulse shrink-0"
+										></div>
+										<span
+											class="text-xs text-gray-500 dark:text-gray-400 font-medium tracking-wide"
+										>
+											{$i18n.t('Choosing a route...')}
+										</span>
+									</div>
+								{:else if (message?.statusHistory ?? []).some((s) => s?.routing?.category === 'image_gen')}
+									{#if !(message?.files ?? []).some((f) => f?.type === 'image')}
+										<ImageSkeleton />
+									{/if}
+								{:else if !hasVisibleStatus}
 									<Skeleton />
 								{/if}
 							{:else if message.content && message.error !== true}

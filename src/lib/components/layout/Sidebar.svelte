@@ -27,7 +27,8 @@
 		selectedFolder,
 		WEBUI_NAME,
 		sidebarWidth,
-		activeChatIds
+		activeChatIds,
+		projects
 	} from '$lib/stores';
 	import { onMount, getContext, tick, onDestroy } from 'svelte';
 
@@ -43,6 +44,7 @@
 		importChats
 	} from '$lib/apis/chats';
 	import { createNewFolder, getFolders, updateFolderParentIdById } from '$lib/apis/folders';
+	import { getProjects } from '$lib/apis/projects';
 	import { checkActiveChats } from '$lib/apis/tasks';
 	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
 
@@ -208,6 +210,16 @@
 		}
 	};
 
+	const initProjects = async () => {
+		const res = await getProjects(localStorage.token).catch((error) => {
+			return null;
+		});
+
+		if (res) {
+			projects.set(res);
+		}
+	};
+
 	const initChatList = async () => {
 		// Reset pagination variables
 		console.log('initChatList');
@@ -216,6 +228,7 @@
 		scrollPaginationEnabled.set(false);
 
 		initFolders();
+		initProjects();
 		await Promise.all([
 			await (async () => {
 				console.log('Init tags');
@@ -827,6 +840,41 @@
 						</Tooltip>
 					</div>
 				{/if}
+
+				<div class="">
+					<Tooltip content={$i18n.t('Projects')} placement="right">
+						<a
+							class=" cursor-pointer flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
+							href="/workspace/projects"
+							on:click={async (e) => {
+								e.stopImmediatePropagation();
+								e.preventDefault();
+
+								goto('/workspace/projects');
+								itemClickHandler();
+							}}
+							aria-label={$i18n.t('Projects')}
+							draggable="false"
+						>
+							<div class=" self-center flex items-center justify-center size-9">
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke-width="1.5"
+									stroke="currentColor"
+									class="size-4.5"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M2.25 21h19.5m-18-18v14.25A2.25 2.25 0 0 0 5.25 19.5h13.5A2.25 2.25 0 0 0 21 17.25V6.75A2.25 2.25 0 0 0 18.75 4.5H12l-2.25-2.25H5.25A2.25 2.25 0 0 0 3 4.5v12m14.25-10.5h1.5M16.5 15h1.5m-1.5-3h1.5m-1.5-3h1.5m-1.5 6h1.5"
+									/>
+								</svg>
+							</div>
+						</a>
+					</Tooltip>
+				</div>
 			</div>
 		</button>
 
@@ -1055,6 +1103,38 @@
 							</a>
 						</div>
 					{/if}
+
+					<div class="px-[0.4375rem] flex justify-center text-gray-800 dark:text-gray-200">
+						<a
+							id="sidebar-projects-button"
+							class="grow flex items-center space-x-3 rounded-2xl px-2.5 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition"
+							href="/workspace/projects"
+							on:click={itemClickHandler}
+							draggable="false"
+							aria-label={$i18n.t('Projects')}
+						>
+							<div class="self-center">
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke-width="2"
+									stroke="currentColor"
+									class="size-4.5"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M2.25 21h19.5m-18-18v14.25A2.25 2.25 0 0 0 5.25 19.5h13.5A2.25 2.25 0 0 0 21 17.25V6.75A2.25 2.25 0 0 0 18.75 4.5H12l-2.25-2.25H5.25A2.25 2.25 0 0 0 3 4.5v12m14.25-10.5h1.5M16.5 15h1.5m-1.5-3h1.5m-1.5-3h1.5m-1.5 6h1.5"
+									/>
+								</svg>
+							</div>
+
+							<div class="flex self-center translate-y-[0.5px]">
+								<div class=" self-center text-sm font-primary">{$i18n.t('Projects')}</div>
+							</div>
+						</a>
+					</div>
 				</div>
 
 				{#if ($models ?? []).length > 0 && (($settings?.pinnedModels ?? []).length > 0 || $config?.default_pinned_models)}

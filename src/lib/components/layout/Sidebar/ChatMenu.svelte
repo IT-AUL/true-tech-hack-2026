@@ -20,7 +20,9 @@
 		getChatPinnedStatusById,
 		toggleChatPinnedStatusById
 	} from '$lib/apis/chats';
-	import { chats, folders, settings, theme, user } from '$lib/stores';
+	import { chats, folders, projects, settings, theme, user } from '$lib/stores';
+	import { getProjects, createNewProject } from '$lib/apis/projects';
+	import Plus from '$lib/components/icons/Plus.svelte';
 	import { createMessagesList } from '$lib/utils';
 	import { downloadChatAsPDF } from '$lib/apis/utils';
 	import Download from '$lib/components/icons/Download.svelte';
@@ -31,6 +33,7 @@
 
 	export let shareHandler: Function;
 	export let moveChatHandler: Function;
+	export let assignProjectHandler: Function;
 
 	export let cloneChatHandler: Function;
 	export let archiveChatHandler: Function;
@@ -422,6 +425,61 @@
 							<div class="truncate">{folder?.name ?? 'Folder'}</div>
 						</button>
 					{/each}
+				</DropdownSub>
+			{/if}
+
+			{#if chatId}
+				<DropdownSub
+					contentClass="select-none rounded-2xl p-1 z-50 bg-white dark:bg-gray-850 dark:text-white border border-gray-100 dark:border-gray-800 shadow-lg max-h-52 overflow-y-auto scrollbar-hidden"
+				>
+					<button
+						slot="trigger"
+						draggable="false"
+						class="flex gap-2 items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl select-none w-full"
+					>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							viewBox="0 0 16 16"
+							fill="currentColor"
+							class="w-4 h-4"
+						>
+							<path
+								d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3Zm2 1v8h8V4H4Z"
+							/>
+						</svg>
+						<div class="flex items-center">{$i18n.t('Project')}</div>
+					</button>
+
+					{#each $projects as project}
+						<button
+							draggable="false"
+							class="flex gap-2 items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl overflow-hidden w-full"
+							on:click={() => {
+								assignProjectHandler(chatId, project.id);
+							}}
+						>
+							<div class="truncate font-medium">{project.title}</div>
+						</button>
+					{/each}
+
+					<button
+						draggable="false"
+						class="flex gap-2 items-center px-3 py-1.5 text-sm cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl overflow-hidden w-full border-t border-gray-50 dark:border-gray-800 mt-1 pt-2"
+						on:click={async () => {
+							const title = prompt($i18n.t('Enter project title:'));
+							if (title) {
+								const res = await createNewProject(localStorage.token, title, '');
+								if (res) {
+									const projectList = await getProjects(localStorage.token);
+									projects.set(projectList);
+									await assignProjectHandler(chatId, res.id);
+								}
+							}
+						}}
+					>
+						<Plus className="size-3.5" />
+						<div class="truncate">{$i18n.t('New Project...')}</div>
+					</button>
 				</DropdownSub>
 			{/if}
 

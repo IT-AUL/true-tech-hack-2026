@@ -2,8 +2,8 @@
 	import { getContext } from 'svelte';
 	const i18n = getContext('i18n');
 	import WebSearchResults from '../WebSearchResults.svelte';
+	import AssistantActivityPanel from '../AssistantActivityPanel.svelte';
 	import Search from '$lib/components/icons/Search.svelte';
-	import { t } from 'i18next';
 
 	export let status = null;
 	export let done = false;
@@ -37,34 +37,7 @@
 				</div>
 			</WebSearchResults>
 		{:else if status?.action === 'auto_routing'}
-			<div
-				class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50"
-			>
-				{#if status?.routing?.category === 'image_gen'}
-					<span class="text-sm">🎨</span>
-				{:else if status?.routing?.category === 'code'}
-					<span class="text-sm">⌨️</span>
-				{:else if status?.routing?.category === 'vision'}
-					<span class="text-sm">👁️</span>
-				{:else if status?.routing?.category === 'audio_gen'}
-					<span class="text-sm">🎵</span>
-				{:else if status?.routing?.category === 'math_logic'}
-					<span class="text-sm">📐</span>
-				{:else if status?.routing?.category === 'research'}
-					<span class="text-sm">🔍</span>
-				{:else if status?.routing?.category === 'analytics'}
-					<span class="text-sm">📊</span>
-				{:else if status?.routing?.category === 'creative'}
-					<span class="text-sm">✍️</span>
-				{:else if status?.routing?.category === 'document'}
-					<span class="text-sm">📄</span>
-				{:else}
-					<span class="text-sm">✨</span>
-				{/if}
-				<span class="text-xs text-gray-600 dark:text-gray-400">
-					{status?.description ?? ''}
-				</span>
-			</div>
+			<AssistantActivityPanel {status} />
 		{:else if status?.action === 'knowledge_search'}
 			<div class="flex flex-col justify-center -space-y-0.5">
 				<div

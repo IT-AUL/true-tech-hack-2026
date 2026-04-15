@@ -45,6 +45,7 @@ from open_webui.utils.misc import (
     convert_logit_bias_input_to_json,
     stream_chunks_handler,
     stream_wrapper,
+    strip_attached_files_from_user_text,
 )
 from open_webui.utils.payload import (
     apply_model_params_to_body_openai,
@@ -219,13 +220,14 @@ def _extract_last_user_text(messages: list[dict]) -> str:
             continue
         content = message.get('content', '')
         if isinstance(content, str):
-            return content.strip()
+            return strip_attached_files_from_user_text(content)
         if isinstance(content, list):
             parts: list[str] = []
             for part in content:
                 if isinstance(part, dict) and part.get('type') in ('text', 'input_text'):
                     parts.append(part.get('text', ''))
-            return ' '.join(part.strip() for part in parts if isinstance(part, str)).strip()
+            joined = ' '.join(p.strip() for p in parts if p).strip()
+            return strip_attached_files_from_user_text(joined)
     return ''
 
 
@@ -248,6 +250,35 @@ def _build_auto_routed_image_generation_response(model_id: str, images: list[dic
         },
         headers={'x-selected-model': model_id},
     )
+
+
+def _resolve_model_id_compat(requested_model_id: str, models: dict | None) -> str:
+    """
+    Normalize provider-specific model aliases to an ID that exists in OPENAI_MODELS.
+    Example: `deepseek/deepseek-r1-distill-qwen-32b` -> `deepseek-r1-distill-qwen-32b`.
+    """
+    if not requested_model_id or not isinstance(models, dict):
+        return requested_model_id
+    if requested_model_id in models:
+        return requested_model_id
+
+    candidates: list[str] = []
+    if '/' in requested_model_id:
+        suffix = requested_model_id.split('/', 1)[1]
+        candidates.append(suffix)
+        candidates.append(suffix.replace('_', '-'))
+    candidates.append(requested_model_id.replace('/', '-'))
+    candidates.append(requested_model_id.replace('/', '_'))
+
+    seen: set[str] = set()
+    for cand in candidates:
+        if not cand or cand in seen:
+            continue
+        seen.add(cand)
+        if cand in models:
+            return cand
+
+    return requested_model_id
 
 
 async def _auto_routed_image_generation_attempt(
@@ -287,14 +318,14 @@ async def _auto_routed_image_generation_attempt(
             return None, 'failover'
         raise
 
-    if metadata and metadata.get('session_id') and metadata.get('chat_id') and metadata.get('message_id'):
+    if metadata and metadata.get('chat_id') and metadata.get('message_id'):
         try:
             event_emitter = get_event_emitter(
                 {
                     'user_id': user.id,
                     'chat_id': metadata['chat_id'],
                     'message_id': metadata['message_id'],
-                    'session_id': metadata['session_id'],
+                    'session_id': metadata.get('session_id'),
                 }
             )
             await event_emitter({'type': 'status', 'data': {'description': 'Image created', 'done': True}})
@@ -1272,8 +1303,9 @@ async def _peek_sse_for_auto_route_failover(
             # Typical successful OpenAI-style stream
             if '"choices"' in text and ('"delta"' in text or '"message"' in text):
                 return bytes(buf), False
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning('SSE peek read error (triggering failover): %s', exc)
+        return bytes(buf), True
     return bytes(buf), False
 
 
@@ -1293,6 +1325,17 @@ async def _openai_upstream_chat_completion_attempt(
     'failover' — try next model (auto-route only);
     'terminal' — return error response to client.
     """
+    models = request.app.state.OPENAI_MODELS
+    if not models:
+        await get_all_models(request, user=user)
+        models = request.app.state.OPENAI_MODELS
+
+    resolved_model_id = _resolve_model_id_compat(model_id, models)
+    if resolved_model_id != model_id:
+        log.info('Resolved model alias %s -> %s', model_id, resolved_model_id)
+        model_id = resolved_model_id
+        payload['model'] = resolved_model_id
+
     model_info = Models.get_model_by_id(model_id)
 
     if model_info:
@@ -1333,7 +1376,6 @@ async def _openai_upstream_chat_completion_attempt(
                 detail='Model not found',
             )
 
-    models = request.app.state.OPENAI_MODELS
     if not models or model_id not in models:
         log.info(f'Model ID {model_id} not in cache, fetching all models...')
         await get_all_models(request, user=user)
@@ -1472,6 +1514,7 @@ async def _openai_upstream_chat_completion_attempt(
             return PlainTextResponse(status_code=r.status, content=err_body), 'terminal'
 
         if 'text/event-stream' in r.headers.get('Content-Type', ''):
+            request_wants_stream = bool(payload.get('stream', False))
             if stream_explicitly_disabled:
                 sse_data = None
                 try:
@@ -1501,6 +1544,25 @@ async def _openai_upstream_chat_completion_attempt(
                     content=sse_data or {},
                     headers={'x-selected-model': model_id},
                 ), 'terminal' if r.status >= 400 else 'success'
+            if not request_wants_stream:
+                # Some providers return SSE despite stream=false; collapse to JSON for frontend callers.
+                sse_text_parts: list[str] = []
+                try:
+                    async for raw_line in r.content:
+                        sse_text_parts.append(raw_line.decode('utf-8', errors='replace'))
+                except Exception as e:
+                    log.error(f'Error reading forced SSE-as-JSON response: {e}')
+                collapsed = _collapse_sse_text_to_chat_completion(''.join(sse_text_parts))
+                if collapsed is not None:
+                    return JSONResponse(
+                        status_code=r.status,
+                        content=collapsed,
+                        headers={'x-selected-model': model_id},
+                    ), 'success'
+                return PlainTextResponse(
+                    status_code=502,
+                    content='Upstream returned non-JSON SSE for non-stream request',
+                ), 'terminal'
             sse_prefix = b''
             if allow_failover:
                 sse_prefix, sse_failover = await _peek_sse_for_auto_route_failover(r.content)
@@ -1553,8 +1615,8 @@ async def _openai_upstream_chat_completion_attempt(
             if is_responses and isinstance(response, dict):
                 response = convert_responses_result(response)
 
-            if allow_failover and isinstance(response, dict) and response.get('error') is not None:
-                if _upstream_error_should_trigger_auto_failover(r.status, response):
+            if isinstance(response, dict) and response.get('error') is not None:
+                if allow_failover and _upstream_error_should_trigger_auto_failover(r.status, response):
                     log.warning(
                         'auto-route failover: upstream %s JSON error on model %s: %s',
                         r.status,
@@ -1562,6 +1624,14 @@ async def _openai_upstream_chat_completion_attempt(
                         str(response)[:500],
                     )
                     return None, 'failover'
+                error_obj = response['error']
+                error_msg = error_obj.get('message', str(error_obj)) if isinstance(error_obj, dict) else str(error_obj)
+                log.warning('Upstream returned 200 with error body on model %s: %s', model_id, error_msg[:500])
+                return JSONResponse(
+                    status_code=502,
+                    content={'error': {'message': error_msg, 'type': 'upstream_error'}},
+                    headers={'x-selected-model': model_id},
+                ), 'terminal'
 
             return JSONResponse(
                 status_code=r.status, content=response, headers={'x-selected-model': model_id}
@@ -1642,38 +1712,77 @@ async def generate_chat_completion(
         resolved_model = models.get(model_id, {})
         model_display_name = resolved_model.get('name', model_id)
         category_label = CATEGORY_LABELS.get(routing_decision.category, routing_decision.category)
+        routing_reasoning = (routing_decision.reasoning or '').strip()
+        llm_like = routing_decision.method in (
+            'llm_adjudicator',
+            'llm_adjudicator_low_conf',
+            'llm+regex_override',
+        )
+        if llm_like and routing_reasoning:
+            first_line = routing_reasoning.split('\n', 1)[0].strip()
+            if len(first_line) > 200:
+                first_line = first_line[:197] + '…'
+            status_description = f'{first_line} → {model_display_name}'
+        else:
+            status_description = f'{category_label} → {model_display_name}'
 
-        if metadata and metadata.get('session_id') and metadata.get('chat_id') and metadata.get('message_id'):
-            try:
-                event_emitter = get_event_emitter(
-                    {
-                        'user_id': user.id,
-                        'chat_id': metadata['chat_id'],
-                        'message_id': metadata['message_id'],
-                        'session_id': metadata['session_id'],
-                    }
-                )
-                await event_emitter(
-                    {
-                        'type': 'status',
-                        'data': {
-                            'action': 'auto_routing',
-                            'description': f'{category_label} → {model_display_name}',
-                            'done': True,
-                            'routing': {
-                                'category': routing_decision.category,
-                                'model_id': model_id,
-                                'model_name': model_display_name,
-                                'method': routing_decision.method,
-                                'confidence': routing_decision.confidence,
-                                'used_model_fallback': routing_decision.used_model_fallback,
-                                'failover_candidate_count': len(routing_decision.failover_candidates),
-                            },
-                        },
-                    }
-                )
-            except Exception as e:
-                log.warning(f'Failed to emit auto-routing status: {e}')
+        # session_id is not required for WebSocket emit (get_event_emitter only needs user/chat/message).
+        if metadata and metadata.get('chat_id') and metadata.get('message_id'):
+            routing_status_event = {
+                'type': 'status',
+                'data': {
+                    'action': 'auto_routing',
+                    'description': status_description,
+                    'done': True,
+                    'routing': {
+                        'category': routing_decision.category,
+                        'model_id': model_id,
+                        'model_name': model_display_name,
+                        'method': routing_decision.method,
+                        'stage': routing_decision.trace.get('stage'),
+                        'engine': routing_decision.trace.get('engine'),
+                        'confidence': routing_decision.confidence,
+                        'used_model_fallback': routing_decision.used_model_fallback,
+                        'failover_candidate_count': len(routing_decision.failover_candidates),
+                        'reasoning': routing_decision.reasoning,
+                        'subtitle': f'{category_label} · {model_display_name}',
+                        'trace': routing_decision.trace,
+                    },
+                },
+            }
+            # Main UI chat path defers emit to middleware so status is sent in the same await chain as
+            # the first model chunks (avoids WebSocket vs. stream reordering on the client).
+            # image_gen: must not defer — _auto_routed_image_generation_attempt emits files before return;
+            # deferred routing would arrive after the image on the client.
+            if getattr(request.state, 'defer_auto_routing_socket_emit', False):
+                if routing_decision.category == 'image_gen':
+                    try:
+                        event_emitter = get_event_emitter(
+                            {
+                                'user_id': user.id,
+                                'chat_id': metadata['chat_id'],
+                                'message_id': metadata['message_id'],
+                                'session_id': metadata.get('session_id'),
+                            }
+                        )
+                        await event_emitter(routing_status_event)
+                    except Exception as e:
+                        log.warning(f'Failed to emit auto-routing status (image_gen): {e}')
+                else:
+                    metadata['auto_routing_status_emit'] = routing_status_event
+            else:
+                try:
+                    event_emitter = get_event_emitter(
+                        {
+                            'user_id': user.id,
+                            'chat_id': metadata['chat_id'],
+                            'message_id': metadata['message_id'],
+                            'session_id': metadata.get('session_id'),
+                        }
+                    )
+                    await event_emitter(routing_status_event)
+                except Exception as e:
+                    log.warning(f'Failed to emit auto-routing status: {e}')
 
         auto_routed = True
         payload_snapshot_pre_model_info = copy.deepcopy(payload)
@@ -1686,6 +1795,7 @@ async def generate_chat_completion(
         candidates = [model_id]
 
     n = len(candidates)
+    last_error_detail = ''
     for attempt_index, try_model_id in enumerate(candidates):
         if auto_routed:
             attempt_payload = copy.deepcopy(payload_snapshot_pre_model_info)
@@ -1695,14 +1805,7 @@ async def generate_chat_completion(
 
         form_data['model'] = try_model_id
 
-        if (
-            auto_routed
-            and attempt_index > 0
-            and metadata
-            and metadata.get('session_id')
-            and metadata.get('chat_id')
-            and metadata.get('message_id')
-        ):
+        if auto_routed and attempt_index > 0 and metadata and metadata.get('chat_id') and metadata.get('message_id'):
             try:
                 from open_webui.socket.main import get_event_emitter
 
@@ -1732,6 +1835,7 @@ async def generate_chat_completion(
                                 'attempt': attempt_index + 1,
                                 'attempts_total': n,
                                 'selected_via_fallback': routing_decision.used_model_fallback,
+                                'reasoning': routing_decision.reasoning,
                             },
                         },
                     }
@@ -1764,13 +1868,16 @@ async def generate_chat_completion(
         except HTTPException:
             raise
         if outcome == 'failover':
+            last_error_detail = f'model={try_model_id}'
             continue
         return response
 
-    raise HTTPException(
-        status_code=502,
-        detail='Open WebUI: Auto-route could not reach any model',
+    detail = (
+        f'Все модели ({n}) недоступны. Последняя попытка: {last_error_detail}'
+        if last_error_detail
+        else f'Auto-route: все {n} модели-кандидата вернули ошибку'
     )
+    raise HTTPException(status_code=502, detail=detail)
 
 
 async def embeddings(request: Request, form_data: dict, user):
@@ -1795,6 +1902,8 @@ async def embeddings(request: Request, form_data: dict, user):
     if not models or model_id not in models:
         await get_all_models(request, user=user)
         models = request.app.state.OPENAI_MODELS
+    model_id = _resolve_model_id_compat(model_id, models)
+    form_data['model'] = model_id
     if model_id in models:
         idx = models[model_id]['urlIdx']
 
@@ -1894,6 +2003,8 @@ async def responses(
         if not models or model_id not in models:
             await get_all_models(request, user=user)
             models = request.app.state.OPENAI_MODELS
+        model_id = _resolve_model_id_compat(model_id, models)
+        payload['model'] = model_id
         if model_id in models:
             idx = models[model_id]['urlIdx']
 

@@ -50,6 +50,12 @@ jobs:
             echo "Either 'image' or 'version' input must be provided." >&2
             exit 1
           fi
+          # Guard against accidental leading/trailing spaces in workflow inputs.
+          IMAGE="$(echo "$IMAGE" | xargs)"
+          if [ -z "$IMAGE" ]; then
+            echo "Resolved image is empty after trimming input whitespace." >&2
+            exit 1
+          fi
           echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
 
       - name: Ensure runtime env exists

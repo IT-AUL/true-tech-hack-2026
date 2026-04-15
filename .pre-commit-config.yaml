@@ -25,6 +25,11 @@ repos:
         entry: bash scripts/hooks/check-merge-conflict-staged.sh
         language: system
         pass_filenames: false
+      - id: check-static-deletions-staged
+        name: block accidental static deletions (staged)
+        entry: bash scripts/hooks/check-static-deletions-staged.sh
+        language: system
+        pass_filenames: false
       - id: no-commit-to-main
         name: don't commit to main
         entry: bash scripts/hooks/check-no-commit-main.sh

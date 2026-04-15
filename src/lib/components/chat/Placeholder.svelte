@@ -17,7 +17,9 @@
 		temporaryChatEnabled,
 		selectedFolder,
 		chats,
-		currentChatPage
+		currentChatPage,
+		projects,
+		selectedProjectId
 	} from '$lib/stores';
 	import { sanitizeResponseContent, extractCurlyBraceWords } from '$lib/utils';
 	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
@@ -84,6 +86,46 @@
 				<EyeSlash strokeWidth="2.5" className="size-4" />{$i18n.t('Temporary Chat')}
 			</div>
 		</Tooltip>
+	{/if}
+
+	{#if $selectedProjectId}
+		<div class="flex justify-center mb-2">
+			<div
+				class="flex items-center gap-2 px-3 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-full text-xs font-medium border border-blue-100 dark:border-blue-800"
+			>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					viewBox="0 0 20 20"
+					fill="currentColor"
+					class="size-3.5"
+				>
+					<path
+						fill-rule="evenodd"
+						d="M2 4.75A2.75 2.75 0 0 1 4.75 2h10.5A2.75 2.75 0 0 1 18 4.75v10.5A2.75 2.75 0 0 1 15.25 18H4.75A2.75 2.75 0 0 1 2 15.25V4.75Zm2.75-.75a1.25 1.25 0 0 0-1.25 1.25v10.5c0 .69.56 1.25 1.25 1.25h10.5c.69 0 1.25-.56 1.25-1.25V5.25c0-.69-.56-1.25-1.25-1.25H4.75Z"
+						clip-rule="evenodd"
+					/>
+				</svg>
+				<span
+					>{$i18n.t('Project')}: {$projects.find((p) => p.id === $selectedProjectId)?.title}</span
+				>
+
+				<button
+					class="ml-1 hover:text-blue-800 dark:hover:text-blue-200 transition"
+					on:click={() => selectedProjectId.set(null)}
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						viewBox="0 0 20 20"
+						fill="currentColor"
+						class="size-3.5"
+					>
+						<path
+							d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z"
+						/>
+					</svg>
+				</button>
+			</div>
+		</div>
 	{/if}
 
 	<div

@@ -16,6 +16,18 @@ from open_webui.env import CHAT_STREAM_RESPONSE_CHUNK_MAX_BUFFER_SIZE
 
 log = logging.getLogger(__name__)
 
+_ATTACHED_FILES_BLOCK_RE = re.compile(
+    r'<attached_files>\s*.*?\s*</attached_files>\s*',
+    re.DOTALL | re.IGNORECASE,
+)
+
+
+def strip_attached_files_from_user_text(text: str | None) -> str:
+    """Remove injected <attached_files> blocks so routing and image prompts use the user's words only."""
+    if not text or not isinstance(text, str):
+        return ''
+    return _ATTACHED_FILES_BLOCK_RE.sub('', text).strip()
+
 
 def deep_update(d, u):
     for k, v in u.items():
