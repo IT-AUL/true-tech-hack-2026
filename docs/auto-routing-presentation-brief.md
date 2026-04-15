@@ -65,6 +65,56 @@ flowchart LR
     M8 --> O
 ```
 
+### Запрос с моделью Auto (последовательность)
+
+Ту же последовательность см. в корневом [README.md](../README.md) (раздел про авто-маршрутизацию и схемы).
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as Пользователь
+  participant UI as Интерфейс чата
+  participant API as Backend chat
+  participant AR as auto_routing
+  participant Cat as Каталог моделей
+  participant Pr as OpenAI-compatible API
+
+  U->>UI: сообщение, выбрано Auto
+  UI->>API: POST chat/completions
+  API->>AR: классификация и маршрут
+  AR-->>API: категория, кандидаты моделей
+  API->>Cat: ранжирование, failover в модальности
+  Cat-->>API: model_id
+  API->>Pr: запрос к модели
+  Pr-->>UI: ответ
+  API-->>UI: статус маршрута для панели статусов
+```
+
+### Три уровня классификации (enterprise)
+
+```mermaid
+flowchart TD
+  IN([Последний user-turn]) --> A[Уровень 1: guardrails]
+  A -->|категория найдена| CAT[Категория и сложность]
+  A --> B[Уровень 2: LLM-арбитр]
+  B -->|override правилами или regex при необходимости| CAT
+  B -->|ещё нет категории| C[Уровень 3: кеш и запасные слои]
+  C --> CAT
+  CAT --> PICK[Подбор модели и failover в модальности]
+  PICK --> UI[Ответ и статус маршрута в UI]
+```
+
+### От категории к ответу (failover)
+
+```mermaid
+flowchart LR
+  C[Категория] --> R[Ранжирование по имени и tier]
+  R --> T[Первая подходящая модель]
+  T -->|ошибка провайдера| N[Следующий кандидат в той же категории]
+  N --> T
+  T -->|успех| OUT[Ответ пользователю]
+```
+
 ## 4. Контур сервисов и моделей
 
 ```mermaid

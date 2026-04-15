@@ -13,13 +13,15 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6.svg?logo=typescript&logoColor=white)](https://typescriptlang.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4.svg?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 
+> **GitHub и GitLab.** Исходный код, задачи и CI — в репозитории **[github.com/IT-AUL/true-tech-hack-2026](https://github.com/IT-AUL/true-tech-hack-2026)**. Собранные **Docker-образы**: **[Docker Hub — itaul/gpthub](https://hub.docker.com/r/itaul/gpthub)** и **[GitHub Container Registry](https://github.com/IT-AUL/true-tech-hack-2026/pkgs/container/true-tech-hack-2026)**. Копия в **GitLab** обновляется при синхронизации ветки `main` из GitHub.
+
 > Форк [Open WebUI](https://github.com/open-webui/open-webui), доработанный до **единого рабочего пространства с ИИ**: один интерфейс для диалогов, файлов, мультимодальных моделей и фоновых задач (титулы, теги, follow-up). Все запросы к LLM идут через **OpenAI-совместимый API** (в проде — MWS GPT и выбранные эндпоинты из конфигурации).
 
 ## Позиционирование
 
-- **Один вход для команды** — чат, модели, память, загрузка документов и сценарии «задача → ответ» без переключения между разными тулзами.
+- **Один вход для команды** — чат, модели, память, загрузка документов и сценарии «задача → ответ» без смены отдельных инструментов.
 - **Умная маршрутизация** — бэкенд классифицирует намерение и подбирает модальность (текст, код, картинка, поиск и т.д.); пользователь может оставить режим **Авто** или выбрать профиль задачи в workspace.
-- **Контроль данных** — готовый **self-hosted** сценарий: образы в GHCR и Docker Hub, деплой на свою инфраструктуру, ключи и `OPENAI_API_BASE_URL` только у вас.
+- **Контроль данных** — готовый **self-hosted** сценарий: образы в [GHCR](https://github.com/IT-AUL/true-tech-hack-2026/pkgs/container/true-tech-hack-2026) и на [Docker Hub](https://hub.docker.com/r/itaul/gpthub), деплой на свою инфраструктуру, ключи и `OPENAI_API_BASE_URL` только у вас.
 
 ## Архитектура (кратко)
 
@@ -47,7 +49,61 @@ flowchart LR
 | **Маршрутизация** | `utils/auto_routing.py` + конфиг задач — выбор модели под тип запроса. |
 | **Данные** | SQLite по умолчанию; опционально PostgreSQL; векторное хранилище для RAG/памяти. |
 
-Репозиторий и CI ведутся в **GitHub**; зеркало `main` на GitLab — см. [docs/GITLAB_SETUP.md](docs/GITLAB_SETUP.md).
+### Авто-маршрутизация: схемы
+
+Когда в чате выбрана виртуальная модель **Auto**, бэкенд сам определяет **категорию задачи** (текст, код, картинка, vision и т.д.), подбирает кандидатов из каталога и вызывает нужный сценарий (обычный чат, генерация изображения, аудио и т.п.). Подробный разбор сценариев и таблиц — в **[docs/auto-routing-presentation-brief.md](docs/auto-routing-presentation-brief.md)**.
+
+**1. Поток запроса (упрощённо)**
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as Пользователь
+  participant UI as Интерфейс чата
+  participant API as Backend chat
+  participant AR as auto_routing
+  participant Cat as Каталог моделей
+  participant Pr as OpenAI-compatible API
+
+  U->>UI: сообщение, выбрано Auto
+  UI->>API: POST chat/completions
+  API->>AR: классификация и маршрут
+  AR-->>API: категория, кандидаты моделей
+  API->>Cat: ранжирование, failover в модальности
+  Cat-->>API: model_id
+  API->>Pr: запрос к модели
+  Pr-->>UI: ответ
+  API-->>UI: статус маршрута для панели статусов
+```
+
+**2. Классификация: три уровня и ранний выход**
+
+Сначала срабатывают **жёсткие правила и LLM**; если категория ещё не определена, подключаются **кеш** и **запасные слои** (small-talk в диалоге, semantic, явные правила, regex). На любом шаге при успехе дальнейшая классификация не выполняется. Полный порядок ветвлений — в `backend/open_webui/utils/auto_routing.py`.
+
+```mermaid
+flowchart TD
+  IN([Последний user-turn]) --> A[Уровень 1: guardrails]
+  A -->|категория найдена| CAT[Категория и сложность]
+  A --> B[Уровень 2: LLM-арбитр]
+  B -->|override правилами или regex при необходимости| CAT
+  B -->|ещё нет категории| C[Уровень 3: кеш и запасные слои]
+  C --> CAT
+  CAT --> PICK[Подбор модели и failover в модальности]
+  PICK --> UI[Ответ и статус маршрута в UI]
+```
+
+**3. От категории к ответу**
+
+```mermaid
+flowchart LR
+  C[Категория: image_gen, code, vision, ...] --> R[Ранжирование по имени и tier]
+  R --> T[Первая подходящая модель]
+  T -->|ошибка провайдера| N[Следующий кандидат в той же категории]
+  N --> T
+  T -->|успех| OUT[Ответ пользователю]
+```
+
+**Ссылки:** репозиторий на **[GitHub](https://github.com/IT-AUL/true-tech-hack-2026)** · образ **[Docker Hub — itaul/gpthub](https://hub.docker.com/r/itaul/gpthub)** · **[пакет GHCR](https://github.com/IT-AUL/true-tech-hack-2026/pkgs/container/true-tech-hack-2026)** · настройка копии в GitLab: [docs/GITLAB_SETUP.md](docs/GITLAB_SETUP.md).
 
 ---
 
@@ -110,6 +166,68 @@ OPENAI_API_KEY=<your-key> docker compose -f docker-compose.dev.yml up --build
 | `WEBUI_SECRET_KEY` | Секрет сессий; в dev в compose есть дефолт — для публичного стенда задайте свой. |
 | `ENABLE_OLLAMA_API` | `false`, если Ollama не используется (уменьшает шум в логах). |
 
+### Примеры: Docker и настройка API
+
+**1. Сборка из репозитория и запуск compose** (как выше, с явным `.env`):
+
+```bash
+cp deploy/.env.example .env
+# Отредактируйте .env: OPENAI_API_KEY, OPENAI_API_BASE_URL, WEBUI_SECRET_KEY
+
+docker compose -f docker-compose.dev.yml --env-file .env up --build -d
+# Проверка: curl -sf http://localhost:${PORT:-3000}/health
+```
+
+**2. Готовый образ с [Docker Hub](https://hub.docker.com/r/itaul/gpthub)** (без локальной сборки):
+
+```bash
+export VERSION=latest   # или конкретный тег, например 0.8.12-gpthub.23
+docker pull itaul/gpthub:${VERSION}
+
+docker run -d --name gpthub --rm \
+  -p 3000:8080 \
+  -e OPENAI_API_BASE_URL=https://api.gpt.mws.ru/v1 \
+  -e OPENAI_API_KEY="ваш-ключ" \
+  -e WEBUI_SECRET_KEY="$(openssl rand -hex 24)" \
+  -e ENABLE_OLLAMA_API=false \
+  -e ENABLE_PERSISTENT_CONFIG=false \
+  itaul/gpthub:${VERSION}
+```
+
+Данные приложения в этом варианте не сохраняются после удаления контейнера; для постоянного тома добавьте `-v gpthub-data:/app/backend/data`.
+
+**3. Образ с [GHCR](https://github.com/IT-AUL/true-tech-hack-2026/pkgs/container/true-tech-hack-2026)**:
+
+```bash
+export VERSION=0.8.12-gpthub.23   # подставьте актуальный тег из Releases
+docker pull ghcr.io/it-aul/true-tech-hack-2026:${VERSION}
+
+docker run -d --name gpthub --rm \
+  -p 3000:8080 \
+  -e OPENAI_API_BASE_URL=https://api.gpt.mws.ru/v1 \
+  -e OPENAI_API_KEY="ваш-ключ" \
+  -e WEBUI_SECRET_KEY="$(openssl rand -hex 24)" \
+  -e ENABLE_OLLAMA_API=false \
+  ghcr.io/it-aul/true-tech-hack-2026:${VERSION}
+```
+
+Для приватного пакета: `echo "$GITHUB_TOKEN" | docker login ghcr.io -u USERNAME --password-stdin`.
+
+**4. Compose с готовым образом** (каталог `deploy/`, переменная `GPTHUB_IMAGE` из [deploy/.env.example](deploy/.env.example)):
+
+```bash
+cp deploy/.env.example /tmp/gpthub.env
+# В файле задайте OPENAI_*, WEBUI_SECRET_KEY и строку:
+# GPTHUB_IMAGE=itaul/gpthub:0.8.12-gpthub.23
+# или GPTHUB_IMAGE=ghcr.io/it-aul/true-tech-hack-2026:0.8.12-gpthub.23
+
+docker compose -f deploy/docker-compose.prod.yml --env-file /tmp/gpthub.env up -d
+```
+
+В [deploy/docker-compose.prod.yml](deploy/docker-compose.prod.yml) порт по умолчанию слушает на `127.0.0.1` — удобно за nginx; для прямого доступа с хоста при необходимости измените привязку порта.
+
+Интерфейс: `http://localhost:3000` (или `PORT` из `.env`). Проверка бэкенда: `GET /health`.
+
 Роуты API наследуются от Open WebUI; кастомные эндпоинты форка — под префиксом `/api/v1/` (см. [docs/API_CHANGES.md](docs/API_CHANGES.md)).
 
 ## Образы Docker: GitHub Container Registry и Docker Hub
@@ -118,10 +236,10 @@ OPENAI_API_KEY=<your-key> docker compose -f docker-compose.dev.yml up --build
 
 | Реестр | Пример образа | Примечание |
 |--------|----------------|------------|
-| **GHCR** | `ghcr.io/it-aul/true-tech-hack-2026:<версия>` | Привязан к [репозиторию GitHub](https://github.com/IT-AUL/true-tech-hack-2026/pkgs/container/true-tech-hack-2026); удобно для CI и деплоя с `GITHUB_TOKEN`. |
-| **Docker Hub** | `itaul/gpthub:<версия>` | Публичные pull’ы, знакомый UX `docker pull`; учётная запись организации задаётся секретами `DOCKERHUB_*` в CI. |
+| **GHCR** | `ghcr.io/it-aul/true-tech-hack-2026:<версия>` | Страница пакета: [github.com/IT-AUL/true-tech-hack-2026/pkgs/container/true-tech-hack-2026](https://github.com/IT-AUL/true-tech-hack-2026/pkgs/container/true-tech-hack-2026). Удобно для CI и деплоя с `GITHUB_TOKEN`. |
+| **Docker Hub** | `itaul/gpthub:<версия>` | Репозиторий образов: [hub.docker.com/r/itaul/gpthub](https://hub.docker.com/r/itaul/gpthub). Публичные `docker pull`; в CI используются секреты `DOCKERHUB_*`. |
 
-Также публикуются теги `:latest` на успешной сборке. Актуальная версия в бейдже **release** вверху README и в [Releases](https://github.com/IT-AUL/true-tech-hack-2026/releases).
+Также публикуются теги `:latest` на успешной сборке. Актуальная версия — в бейдже **release** вверху README и в **[Releases на GitHub](https://github.com/IT-AUL/true-tech-hack-2026/releases)**.
 
 ## Разработка
 
