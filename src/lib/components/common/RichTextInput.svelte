@@ -725,11 +725,22 @@
 				StarterKit.configure({
 					link: link,
 					code: false, // Disabled in favor of FixedCode (see workaround above)
-					// When rich text is off, disable Strike from StarterKit so we can
-					// re-add it below without its Mod-Shift-s shortcut (which conflicts
-					// with the Toggle Sidebar shortcut). When rich text is on, the user
-					// can undo strikethrough via the toolbar, so the shortcut is fine.
-					...(richText ? {} : { strike: false })
+					// When richText is on, ListKit + CodeBlockLowlight replace list/codeBlock
+					// extensions from StarterKit — registering both causes TipTap duplicate-name warnings.
+					...(richText
+						? {
+								codeBlock: false,
+								bulletList: false,
+								orderedList: false,
+								listItem: false,
+								listKeymap: false
+							}
+						: {
+								// When rich text is off, disable Strike from StarterKit so we can
+								// re-add it below without its Mod-Shift-s shortcut (which conflicts
+								// with the Toggle Sidebar shortcut).
+								strike: false
+							})
 				}),
 				FixedCode,
 				...(dragHandle ? [ListItemDragHandle] : []),
