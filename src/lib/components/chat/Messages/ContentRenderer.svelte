@@ -176,7 +176,7 @@
 
 			if (
 				($settings?.detectArtifacts ?? true) &&
-				(['html', 'svg'].includes(lang) || (lang === 'xml' && code.includes('svg'))) &&
+				(['html', 'svg', 'python', 'javascript', 'typescript', 'ts', 'tsx', 'jsx', 'json', 'bash', 'markdown', 'md', 'brief', 'presentation'].includes(lang) || (lang === 'xml' && code.includes('svg'))) &&
 				!$mobile &&
 				$chatId
 			) {

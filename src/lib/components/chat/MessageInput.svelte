@@ -99,6 +99,8 @@
 	import InputModal from '../common/InputModal.svelte';
 	import Expand from '../icons/Expand.svelte';
 	import QueuedMessageItem from './MessageInput/QueuedMessageItem.svelte';
+	import TaskRouterSelector from '../workspace/TaskRouterSelector.svelte';
+	import InlinePromptHints from './InlinePromptHints.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -134,6 +136,8 @@
 	export let pendingOAuthTools = [];
 
 	let showTerminalMenu = false;
+
+	export let taskMode: 'auto' | 'chat' | 'code' | 'research' | 'vision' = 'auto';
 
 	export let messageQueue: { id: string; prompt: string; files: any[] }[] = [];
 	export let onQueueSendNow: (id: string) => void = () => {};
@@ -1237,11 +1241,15 @@
 
 						<div
 							id="message-input-container"
-							class="flex-1 flex flex-col relative w-full shadow-lg rounded-3xl border {$temporaryChatEnabled
-								? 'border-dashed border-gray-100 dark:border-gray-800 hover:border-gray-200 focus-within:border-gray-200 hover:dark:border-gray-700 focus-within:dark:border-gray-700'
-								: ' border-gray-100/30 dark:border-gray-850/30 hover:border-gray-200 focus-within:border-gray-100 hover:dark:border-gray-800 focus-within:dark:border-gray-800'}  transition px-1 bg-white/5 dark:bg-gray-500/5 backdrop-blur-sm dark:text-gray-100"
+							class="flex-1 flex flex-col relative w-full shadow hover:shadow-md rounded-[28px] border transition-all duration-300 transform pt-0 {$temporaryChatEnabled
+								? 'border-dashed border-gray-200 dark:border-gray-750 focus-within:border-gray-300 focus-within:dark:border-gray-650'
+								: 'border-gray-200/80 dark:border-gray-800/80 focus-within:border-gray-300 focus-within:dark:border-gray-700 focus-within:ring-4 focus-within:ring-black/5 dark:focus-within:ring-white/5'} px-3 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl focus-within:shadow-lg dark:text-gray-100"
 							dir={$settings?.chatDirection ?? 'auto'}
 						>
+							<div class="w-full flex-none mt-2.5 flex justify-start pl-1">
+								<TaskRouterSelector bind:mode={taskMode} />
+							</div>
+
 							{#if atSelectedModel !== undefined}
 								<div class="px-3 pt-3 text-left w-full flex flex-col z-10">
 									<div class="flex items-center justify-between w-full">
@@ -1418,7 +1426,7 @@
 														)}
 													placeholder={placeholder
 														? placeholder
-														: $i18n.t('Ask anything, paste a link, or drop a file...')}
+														: $i18n.t('Спросите что угодно, вставьте ссылку или загрузите файл...')}
 													largeTextAsFile={($settings?.largeTextAsFile ?? false) && !shiftKey}
 													autocomplete={$config?.features?.enable_autocomplete_generation &&
 														($settings?.promptAutocomplete ?? false)}
@@ -1569,6 +1577,29 @@
 									{/if}
 								</div>
 							</div>
+
+							<InlinePromptHints
+								inputValue={prompt}
+								visible={!prompt || prompt.trim().length <= 50}
+								fetchAutoComplete={async (text) => {
+									if (selectedModelIds.length === 0 || !selectedModelIds.at(0)) {
+										return null;
+									}
+									return await generateAutoCompletion(
+										localStorage.token,
+										selectedModelIds.at(0),
+										text,
+										history?.currentId
+											? createMessagesList(history, history.currentId)
+											: null
+									).catch(() => null);
+								}}
+								on:select={(e) => {
+									prompt = e.detail.text;
+									chatInputElement?.setText(e.detail.text);
+									document.getElementById('chat-input')?.focus();
+								}}
+							/>
 
 							<div class=" flex justify-between mt-0.5 mb-2.5 mx-0.5 max-w-full" dir="ltr">
 								<div class="ml-1 self-end flex items-center flex-1 max-w-[80%]">

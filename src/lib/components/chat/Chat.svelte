@@ -150,6 +150,7 @@
 	let imageGenerationEnabled = false;
 	let webSearchEnabled = false;
 	let codeInterpreterEnabled = false;
+	let taskMode: 'auto' | 'chat' | 'code' | 'research' | 'vision' = 'auto';
 
 	let showCommands = false;
 
@@ -1020,10 +1021,16 @@
 						contents = [...contents, { type: 'iframe', content: renderedContent }];
 					});
 				} else {
-					// Check for SVG content
+					// Extract other artifact types like SVG, generic Code, and Markdown
 					for (const block of codeBlocks) {
-						if (block.lang === 'svg' || (block.lang === 'xml' && block.code.includes('<svg'))) {
+						const lang = block.lang.toLowerCase();
+						if (lang === 'svg' || (lang === 'xml' && block.code.includes('<svg'))) {
 							contents = [...contents, { type: 'svg', content: block.code }];
+						} else if (['python', 'javascript', 'typescript', 'ts', 'tsx', 'jsx', 'json', 'bash'].includes(lang)) {
+							// If we didn't group HTML+CSS+JS, we show JS as raw code, etc.
+							contents = [...contents, { type: 'code', lang: lang, content: block.code }];
+						} else if (['markdown', 'md', 'brief', 'presentation'].includes(lang)) {
+							contents = [...contents, { type: 'markdown', lang: lang, content: block.code }];
 						}
 					}
 				}
@@ -2292,6 +2299,7 @@
 					...($terminalServers ?? []).filter((t) => !t.id)
 				],
 				features: getFeatures(),
+				task_mode: taskMode !== 'auto' ? taskMode : undefined,
 				variables: {
 					...getPromptVariables(
 						$user?.name,
@@ -2903,6 +2911,7 @@
 									bind:atSelectedModel
 									bind:showCommands
 									bind:dragged
+									bind:taskMode
 									toolServers={$toolServers}
 									{generating}
 									{stopResponse}
@@ -2985,6 +2994,7 @@
 									bind:webSearchEnabled
 									bind:atSelectedModel
 									bind:showCommands
+									bind:taskMode
 									bind:dragged
 									{pendingOAuthTools}
 									toolServers={$toolServers}

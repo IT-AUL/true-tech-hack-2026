@@ -1882,7 +1882,7 @@ Strictly return in JSON format:
 ENABLE_AUTOCOMPLETE_GENERATION = PersistentConfig(
     'ENABLE_AUTOCOMPLETE_GENERATION',
     'task.autocomplete.enable',
-    os.environ.get('ENABLE_AUTOCOMPLETE_GENERATION', 'False').lower() == 'true',
+    os.environ.get('ENABLE_AUTOCOMPLETE_GENERATION', 'True').lower() == 'true',
 )
 
 AUTOCOMPLETE_GENERATION_INPUT_MAX_LENGTH = PersistentConfig(
@@ -1899,45 +1899,18 @@ AUTOCOMPLETE_GENERATION_PROMPT_TEMPLATE = PersistentConfig(
 
 
 DEFAULT_AUTOCOMPLETE_GENERATION_PROMPT_TEMPLATE = """### Task:
-You are an autocompletion system. Continue the text in `<text>` based on the **completion type** in `<type>` and the given language.
+You are an autocompletion system. Continue the current text naturally and concisely.
 
-### **Instructions**:
-1. Analyze `<text>` for context and meaning.
-2. Use `<type>` to guide your output:
-   - **General**: Provide a natural, concise continuation.
-   - **Search Query**: Complete as if generating a realistic search query.
-3. Start as if you are directly continuing `<text>`. Do **not** repeat, paraphrase, or respond as a model. Simply complete the text.
-4. Ensure the continuation:
-   - Flows naturally from `<text>`.
-   - Avoids repetition, overexplaining, or unrelated ideas.
-5. If unsure, return: `{ "text": "" }`.
+### Examples:
+- "The sun was setting" -> "over the horizon."
+- "What is the capital" -> "of France?"
 
-### **Output Rules**:
-- Respond only in JSON format: `{ "text": "<your_completion>" }`.
-
-### **Examples**:
-#### Example 1:
-Input:
-<type>General</type>
-<text>The sun was setting over the horizon, painting the sky</text>
-Output:
-{ "text": "with vibrant shades of orange and pink." }
-
-#### Example 2:
-Input:
-<type>Search Query</type>
-<text>Top-rated restaurants in</text>
-Output:
-{ "text": "New York City for Italian cuisine." }
-
----
 ### Context:
 <chat_history>
-{{MESSAGES:END:6}}
+{{MESSAGES:END:3}}
 </chat_history>
-<type>{{TYPE}}</type>
 <text>{{PROMPT}}</text>
-#### Output:
+#### Completion:
 """
 
 

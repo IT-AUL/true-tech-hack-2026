@@ -366,11 +366,11 @@
 				</div>
 			{:else if message.content !== ''}
 				<div class="w-full">
-					<div class="flex {($settings?.chatBubble ?? true) ? 'justify-end pb-1' : 'w-full'}">
+					<div class="flex {($settings?.chatBubble ?? true) ? 'justify-end pb-2' : 'w-full'}">
 						<div
 							class="rounded-3xl {($settings?.chatBubble ?? true)
-								? `max-w-[90%] px-4 py-1.5  bg-gray-50 dark:bg-gray-850 ${
-										message.files ? 'rounded-tr-lg' : ''
+								? `max-w-[85%] px-5 py-3 bg-gray-100 dark:bg-gray-800/80 text-gray-900 dark:text-gray-100 shadow-sm ${
+										message.files ? 'rounded-tr-xl' : ''
 									}`
 								: ' w-full'}"
 						>
