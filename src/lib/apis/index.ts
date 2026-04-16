@@ -1012,6 +1012,11 @@ export const generateAutoCompletion = async (
 
 		let cleaned = rawResponse.trim();
 
+		// Strip <think>...</think> reasoning blocks (DeepSeek, Qwen, etc.)
+		cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+		// Also strip unclosed <think> tags (model may still be "thinking")
+		cleaned = cleaned.replace(/<think>[\s\S]*/gi, '').trim();
+
 		// Strip code fences.
 		const codeFenceMatch = cleaned.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
 		if (codeFenceMatch) {

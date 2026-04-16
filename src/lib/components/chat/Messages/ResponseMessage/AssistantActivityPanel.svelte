@@ -91,7 +91,7 @@
 		<div class="font-medium text-gray-800 dark:text-gray-200 leading-snug line-clamp-1 truncate" title={primary}>
 			{primary || $i18n.t('Processing...')}
 		</div>
-		{#if status?.routing?.reasoning && !isDone}
+		{#if status?.routing?.reasoning}
 			<p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 leading-relaxed line-clamp-2">
 				{status.routing.reasoning}
 			</p>

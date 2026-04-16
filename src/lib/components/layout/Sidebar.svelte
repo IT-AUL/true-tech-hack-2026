@@ -726,9 +726,9 @@
 					>
 						<div class=" self-center flex items-center justify-center size-9">
 							<img
-								src="{WEBUI_BASE_URL}/static/vibehub_logo.svg"
-								class="size-6 rounded-full dark:invert-[0.8]"
-								alt="logo"
+								src="/static/vibehub_v_icon.svg"
+								class="size-6 group-hover:hidden invert dark:invert-0"
+								alt="VibeHub"
 							/>
 
 							<Sidebar className="size-5 hidden group-hover:flex" />
@@ -949,26 +949,19 @@
 				class="sidebar px-[0.5625rem] pt-2 pb-1.5 flex justify-between space-x-1 text-gray-600 dark:text-gray-400 sticky top-0 z-10 -mb-3"
 			>
 				<a
-					class="flex items-center rounded-xl size-8.5 h-full justify-center hover:bg-gray-100/50 dark:hover:bg-gray-850/50 transition no-drag-region"
+					class="flex items-center rounded-xl h-full px-1 hover:bg-gray-100/50 dark:hover:bg-gray-850/50 transition no-drag-region"
 					href="/"
 					draggable="false"
 					on:click={newChatHandler}
 				>
 					<img
 						src="{WEBUI_BASE_URL}/static/vibehub_logo.svg"
-						class="size-6 rounded-full dark:invert-[0.8]"
-						alt="logo"
+						class="h-6 w-auto invert dark:invert-0"
+						alt="VibeHub"
 					/>
 				</a>
 
-				<a href="/" class="flex flex-1 px-1.5" on:click={newChatHandler}>
-					<div
-						id="sidebar-webui-name"
-						class=" self-center font-medium text-gray-850 dark:text-white font-primary"
-					>
-						{$WEBUI_NAME}
-					</div>
-				</a>
+				<div class="flex-1"></div>
 				<Tooltip
 					content={$showSidebar ? $i18n.t('Close Sidebar') : $i18n.t('Open Sidebar')}
 					placement="bottom"

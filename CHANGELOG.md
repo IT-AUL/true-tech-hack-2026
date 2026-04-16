@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Секции ниже без суффикса (`[0.8.12]`) — upstream Open WebUI changelog.
 
 ---
+## [0.8.12-gpthub.25] - 2026-04-17
+
+### Added
+
+- **VibeHub Design Iteration:** Глобальные улучшения дизайна (vibrant colors, glassmorphism, кастомные иконки, новый UI стартовой страницы).
+
+### Fixed
+
+- **VibeHub Logo:** Исправлен путь к логотипу в сайдбаре.
+- **Auto-routing UI Leak:** Из метаданных фоновых задач (генерация заголовка, тегов) принудительно удаляется `message_id`, что предотвращает утечку статусов авторутинга в UI основного чата.
+- **Auto-routing Crash:** Добавлен null check для ответов провайдеров в LLM классификаторе, исправивший ошибку `NoneType object has no attribute 'strip'`.
+
+---
+
 ## [0.8.12-gpthub.24] - 2026-04-15
 
 ### Changed

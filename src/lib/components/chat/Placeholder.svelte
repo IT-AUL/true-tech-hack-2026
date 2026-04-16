@@ -73,6 +73,34 @@
 	}
 
 	$: models = selectedModels.map((id) => $_models.find((m) => m.id === id));
+
+	// Suggestion cards pool — randomized 4 shown per session
+	const allSuggestions = [
+		{ icon: '✍️', title: 'Написать текст', subtitle: 'Письмо, статья, пост, описание', prompt: 'Напиши ' },
+		{ icon: '🎨', title: 'Создать изображение', subtitle: 'Логотип, иллюстрация, арт', prompt: 'Сгенерируй изображение: ' },
+		{ icon: '💻', title: 'Написать код', subtitle: 'Python, JS, SQL, API, скрипт', prompt: 'Напиши код: ' },
+		{ icon: '📊', title: 'Анализ данных', subtitle: 'Графики, выводы, тренды', prompt: 'Проанализируй данные и выдели ключевое: ' },
+		{ icon: '🔍', title: 'Найти информацию', subtitle: 'Факты, исследования, сравнения', prompt: 'Найди информацию о ' },
+		{ icon: '📝', title: 'Сделать резюме', subtitle: 'Сократить текст до главного', prompt: 'Сделай краткую выжимку: ' },
+		{ icon: '🌐', title: 'Перевести', subtitle: 'С/на любой язык мира', prompt: 'Переведи на английский: ' },
+		{ icon: '🧠', title: 'Объяснить тему', subtitle: 'Простыми словами о сложном', prompt: 'Объясни простыми словами: ' },
+		{ icon: '📧', title: 'Написать письмо', subtitle: 'Деловое, личное, follow-up', prompt: 'Напиши деловое письмо: ' },
+		{ icon: '🚀', title: 'Придумать идею', subtitle: 'Стартап, контент, проект', prompt: 'Придумай идею для ' },
+		{ icon: '🐛', title: 'Найти баг в коде', subtitle: 'Дебаг, оптимизация, ревью', prompt: 'Найди ошибку в этом коде: ' },
+		{ icon: '📋', title: 'Составить план', subtitle: 'Проект, обучение, мероприятие', prompt: 'Составь подробный план: ' },
+	];
+
+	let visibleSuggestions = [];
+
+	// shuffle and pick 4
+	function pickSuggestions() {
+		const shuffled = [...allSuggestions].sort(() => Math.random() - 0.5);
+		visibleSuggestions = shuffled.slice(0, 4);
+	}
+
+	onMount(() => {
+		pickSuggestions();
+	});
 </script>
 
 <div class="m-auto w-full max-w-6xl px-2 @2xl:px-20 translate-y-6 py-24 text-center">
@@ -151,7 +179,7 @@
 					<div
 						class="text-2xl @sm:text-3xl font-medium tracking-tight text-gray-900 dark:text-white"
 					>
-						{$i18n.t('How can I help you?')}
+						Чем могу помочь?
 					</div>
 				</div>
 			{/if}
@@ -176,7 +204,7 @@
 					{toolServers}
 					{stopResponse}
 					{createMessagePair}
-					placeholder={$i18n.t('Ask anything, paste a link, or drop a file...')}
+					placeholder={'Спросите что угодно, вставьте ссылку или файл...'}
 					{onChange}
 					{onUpload}
 					on:submit={(e) => {
@@ -195,32 +223,30 @@
 			<FolderPlaceholder folder={$selectedFolder} />
 		</div>
 	{:else}
-		<div class="mx-auto max-w-xl font-primary mt-1" in:fade={{ duration: 300, delay: 150 }}>
-			<div class="flex flex-wrap justify-center gap-2 px-4">
-				{#each [{ text: 'Summarize this article', icon: '📝' }, { text: 'Generate an image of ', icon: '🎨' }, { text: 'Explain how ', icon: '💡' }, { text: 'Write code for ', icon: '⌨️' }, { text: 'Translate to English: ', icon: '🌐' }, { text: 'Analyze this data ', icon: '📊' }] as chip, idx}
+		<div class="mx-auto max-w-2xl font-primary mt-2" in:fade={{ duration: 300, delay: 150 }}>
+			<div class="grid grid-cols-2 gap-3 px-4">
+				{#each visibleSuggestions as card, idx}
 					<button
-						class="inline-flex items-center gap-1.5 px-3.5 py-2 text-[13px] rounded-full
-							border border-gray-200/80 dark:border-gray-700/60
-							text-gray-600 dark:text-gray-400
-							hover:border-gray-300 dark:hover:border-gray-600
-							hover:text-gray-900 dark:hover:text-gray-200
-							hover:bg-gray-50/80 dark:hover:bg-gray-800/50
-							active:scale-[0.97]
-							transition-all duration-150 cursor-pointer select-none"
-						style="animation: chipFadeIn 0.3s ease both; animation-delay: {idx * 60}ms"
+						class="group flex flex-col items-start gap-1 p-4 rounded-2xl text-left
+							bg-white/50 dark:bg-gray-800/30
+							border border-gray-200/70 dark:border-gray-800/60
+							hover:bg-white dark:hover:bg-gray-800/60
+							hover:border-gray-300 dark:hover:border-gray-700
+							hover:shadow-md dark:hover:shadow-gray-900/30
+							active:scale-[0.98]
+							transition-all duration-200 cursor-pointer select-none"
+						style="animation: fadeInUpScale {250 + idx * 80}ms cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0;"
 						on:click={() => {
-							messageInput?.setText(chip.text);
+							messageInput?.setText(card.prompt);
 						}}
 					>
-						<span class="text-sm leading-none">{chip.icon}</span>
-						<span>{chip.text}</span>
+						<div class="flex items-center gap-2">
+							<span class="text-lg leading-none opacity-80 group-hover:opacity-100 transition-opacity">{card.icon}</span>
+							<span class="text-sm font-medium text-gray-800 dark:text-gray-200 group-hover:text-black dark:group-hover:text-white transition-colors">{card.title}</span>
+						</div>
+						<span class="text-xs text-gray-400 dark:text-gray-500 group-hover:text-gray-500 dark:group-hover:text-gray-400 transition-colors line-clamp-1">{card.subtitle}</span>
 					</button>
 				{/each}
-			</div>
-			<div class="text-center mt-4">
-				<span class="text-xs text-gray-400/70 dark:text-gray-600">
-					{$i18n.t('AI will select the best model automatically')}
-				</span>
 			</div>
 		</div>
 	{/if}

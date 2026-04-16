@@ -42,9 +42,9 @@
 
 	export let id = '';
 	export let value = '';
-	export let placeholder = $i18n.t('Select a model');
+	export let placeholder = 'Выберите модель';
 	export let searchEnabled = true;
-	export let searchPlaceholder = $i18n.t('Search a model');
+	export let searchPlaceholder = 'Поиск модели...';
 
 	export let items: {
 		label: string;
@@ -55,7 +55,7 @@
 	}[] = [];
 
 	export let className = 'w-[32rem]';
-	export let triggerClassName = 'text-lg';
+	export let triggerClassName = 'text-sm font-medium';
 
 	export let pinModelHandler: (modelId: string) => void = () => {};
 
@@ -420,8 +420,11 @@
 		id="model-selector-{id}-button"
 	>
 		<div
-			class="flex w-full text-left px-0.5 bg-transparent truncate {triggerClassName} justify-between {($settings?.highContrastMode ??
-			false)
+			class="flex w-full text-left px-2 py-1 rounded-lg bg-transparent truncate {triggerClassName} justify-between items-center gap-1
+				border border-transparent hover:border-gray-200 dark:hover:border-gray-700
+				hover:bg-gray-50 dark:hover:bg-gray-800/50
+				transition-all duration-150
+				{($settings?.highContrastMode ?? false)
 				? 'dark:placeholder-gray-100 placeholder-gray-800'
 				: 'placeholder-gray-400'}"
 			on:mouseenter={async () => {
@@ -434,16 +437,16 @@
 			}}
 		>
 			{#if selectedModel}
-				<span class="flex items-center gap-1">
+				<span class="flex items-center gap-1.5 truncate">
 					{#if value === 'auto'}
-						<span class="text-base leading-none">✨</span>
+						<span class="text-sm leading-none">✨</span>
 					{/if}
-					{selectedModel.label}
+					<span class="truncate">{selectedModel.label}</span>
 				</span>
 			{:else}
-				{placeholder}
+				<span class="text-gray-400">{placeholder}</span>
 			{/if}
-			<ChevronDown className=" self-center ml-2 size-3" strokeWidth="2.5" />
+			<ChevronDown className="self-center shrink-0 size-3 opacity-50" strokeWidth="2.5" />
 		</div>
 	</DropdownMenu.Trigger>
 

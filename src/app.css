@@ -33,6 +33,10 @@
 /* --app-text-scale is updated via the UI Scale slider (Interface.svelte) */
 :root {
 	--app-text-scale: 1;
+	/* VibeHub brand accent */
+	--vibehub-accent: #6366f1;
+	--vibehub-accent-hover: #818cf8;
+	--vibehub-accent-muted: rgba(99, 102, 241, 0.1);
 }
 
 html {
@@ -262,6 +266,17 @@ select {
 	to {
 		opacity: 1;
 		transform: translateY(0);
+	}
+}
+
+@keyframes fadeInUpScale {
+	from {
+		opacity: 0;
+		transform: translateY(12px) scale(0.96);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
 	}
 }
 

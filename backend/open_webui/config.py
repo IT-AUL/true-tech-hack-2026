@@ -1168,7 +1168,7 @@ DEFAULT_LOCALE = PersistentConfig(
     os.environ.get('DEFAULT_LOCALE', ''),
 )
 
-DEFAULT_MODELS = PersistentConfig('DEFAULT_MODELS', 'ui.default_models', os.environ.get('DEFAULT_MODELS', None))
+DEFAULT_MODELS = PersistentConfig('DEFAULT_MODELS', 'ui.default_models', os.environ.get('DEFAULT_MODELS', 'auto'))
 
 DEFAULT_PINNED_MODELS = PersistentConfig(
     'DEFAULT_PINNED_MODELS',
@@ -1711,6 +1711,12 @@ TASK_MODEL_EXTERNAL = PersistentConfig(
     os.environ.get('TASK_MODEL_EXTERNAL', ''),
 )
 
+AUTOCOMPLETE_MODEL = PersistentConfig(
+    'AUTOCOMPLETE_MODEL',
+    'task.model.autocomplete',
+    os.environ.get('AUTOCOMPLETE_MODEL', ''),
+)
+
 TITLE_GENERATION_PROMPT_TEMPLATE = PersistentConfig(
     'TITLE_GENERATION_PROMPT_TEMPLATE',
     'task.title.prompt_template',
@@ -1899,11 +1905,22 @@ AUTOCOMPLETE_GENERATION_PROMPT_TEMPLATE = PersistentConfig(
 
 
 DEFAULT_AUTOCOMPLETE_GENERATION_PROMPT_TEMPLATE = """### Task:
-You are an autocompletion system. Continue the current text naturally and concisely.
+You are an inline input predictor. Your goal is to predict what the user will type next.
+The user is currently typing a message to an AI assistant. You must predict the REST OF THEIR MESSAGE.
+DO NOT act as the AI assistant answering the query. ONLY finish the user's sentence.
 
 ### Examples:
-- "The sun was setting" -> "over the horizon."
-- "What is the capital" -> "of France?"
+- User input: "Напиши код на" -> Completion: "Python для парсинга сайта"
+- User input: "СОЗДАЙ график функции" -> Completion: "синуса от 0 до 2 пи"
+- User input: "Please translate this" -> Completion: "text to English"
+
+### Rules:
+- Continue naturally in the SAME language as the input text.
+- Keep completions SHORT (2-10 words max).
+- DO NOT answer the prompt. DO NOT generate an AI response like "Certainly" or "Here is".
+- DO NOT repeat the input text. Only output the NEW continuation.
+- DO NOT use <think>, <reasoning>, or any XML tags. Output ONLY plain text.
+- DO NOT explain or add commentary. Just the completion text.
 
 ### Context:
 <chat_history>
