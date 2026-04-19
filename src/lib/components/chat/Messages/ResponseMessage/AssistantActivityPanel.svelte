@@ -12,6 +12,7 @@
 	import Document from '$lib/components/icons/Document.svelte';
 	import Sparkles from '$lib/components/icons/Sparkles.svelte';
 	import Bolt from '$lib/components/icons/Bolt.svelte';
+	import Database from '$lib/components/icons/Database.svelte';
 
 	/** @type {{ routing?: Record<string, unknown>; description?: string; done?: boolean } | null} */
 	export let status = null;
@@ -30,6 +31,7 @@
 		analytics: 'from-violet-500/20 to-purple-500/20 border-violet-200/60 dark:border-violet-700/40',
 		creative: 'from-rose-500/20 to-pink-500/20 border-rose-200/60 dark:border-rose-700/40',
 		document: 'from-stone-500/20 to-gray-500/20 border-stone-200/60 dark:border-stone-700/40',
+		memory: 'from-fuchsia-500/20 to-indigo-500/20 border-fuchsia-200/60 dark:border-fuchsia-700/40',
 		fallback: 'from-gray-500/10 to-gray-500/10 border-gray-200/60 dark:border-gray-700/40',
 	};
 
@@ -43,6 +45,7 @@
 		analytics: 'text-violet-500 dark:text-violet-400',
 		creative: 'text-rose-500 dark:text-rose-400',
 		document: 'text-stone-500 dark:text-stone-400',
+		memory: 'text-fuchsia-500 dark:text-fuchsia-400',
 		fallback: 'text-gray-500 dark:text-gray-400',
 	};
 
@@ -80,6 +83,8 @@
 			<PencilSquare className="w-4 h-4" />
 		{:else if cat === 'document'}
 			<Document className="w-4 h-4" />
+		{:else if cat === 'memory'}
+			<Database className="w-4 h-4" />
 		{:else if cat === 'fallback'}
 			<Bolt className="w-4 h-4" />
 		{:else}
