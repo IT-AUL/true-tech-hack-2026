@@ -11,6 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Секции ниже без суффикса (`[0.8.12]`) — upstream Open WebUI changelog.
 
 ---
+
+## [0.8.12-gpthub.26] - 2026-04-19
+
+### Added
+
+- **Multi-tier Memory Architecture Phase 1**: Переход на каскадную архитектуру памяти (Mem0 + Redis + Qdrant); внедрена явная проверка коллекции Qdrant (`project_memories_v1` с 1024 dims), добавлен модуль `prompt_assembler.py` для сборки контекстных токенов.
+- **Memory Feature Routing**: `candidate_extractor.py` для гибридного извлечения фактов (RegEx + LLM) и `write_policy.py` для управления политиками записи по скоупам. Изменена логика UI: статус памяти теперь аккуратно откладывается (Deferred status emission) до начала стриминга сообщения в WebSocket-middleware.
+
+---
+
 ## [0.8.12-gpthub.25] - 2026-04-17
 
 ### Added
