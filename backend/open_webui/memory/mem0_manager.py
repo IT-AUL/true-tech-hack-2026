@@ -30,7 +30,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from functools import lru_cache
 from typing import Any
 
 log = logging.getLogger(__name__)
@@ -42,9 +41,15 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-@lru_cache(maxsize=1)
+_mem0_instance = None
+
 def _get_mem0_client():
     """Return a fully-configured Mem0 Memory instance (singleton)."""
+    global _mem0_instance
+    
+    if _mem0_instance is not None:
+        return _mem0_instance
+    
     from open_webui.env import (
         MEM0_EMBEDDER_API_KEY,
         MEM0_EMBEDDER_BASE_URL,
@@ -69,6 +74,8 @@ def _get_mem0_client():
             "mem0ai is not installed. Add 'mem0ai' to requirements.txt and rebuild the Docker image."
         ) from exc
 
+    from open_webui.env import MEM0_EMBEDDING_DIMS
+
     config: dict[str, Any] = {
         'llm': {
             'provider': MEM0_LLM_PROVIDER,
@@ -89,17 +96,43 @@ def _get_mem0_client():
             'config': {
                 'url': MEM0_VECTOR_STORE_URL,
                 'collection_name': MEM0_VECTOR_STORE_COLLECTION,
+                'embedding_model_dims': MEM0_EMBEDDING_DIMS,
             },
         },
-        'graph_store': {
+        'custom_fact_extraction_prompt': (
+            "You are a Personal Memory Assistant. Your ONLY job is to extract "
+            "factual information ABOUT THE USER from the conversation.\n\n"
+            "Focus on:\n"
+            "- User's name, location, role, company, team\n"
+            "- User's preferences (language, tools, frameworks, style)\n"
+            "- User's goals, projects, deadlines\n"
+            "- Technical decisions the user made\n"
+            "- Important facts the user shared about themselves\n\n"
+            "DO NOT extract:\n"
+            "- What the assistant said or how the assistant behaves\n"
+            "- Generic conversational patterns\n"
+            "- Greetings or pleasantries\n\n"
+            "Return each fact as a short, clear sentence about the user. "
+            "If no user facts are found, return an empty list.\n"
+            "Example: 'User's name is Renat' or 'User prefers dark theme' or "
+            "'User is building a project called VibeHub'."
+        ),
+    }
+
+    # Only enable Neo4j graph store if credentials are actually configured.
+    # Without this, local development works with just the vector store.
+    if NEO4J_PASSWORD:
+        config['graph_store'] = {
             'provider': 'neo4j',
             'config': {
                 'url': NEO4J_URI,
                 'username': NEO4J_USERNAME,
                 'password': NEO4J_PASSWORD,
             },
-        },
-    }
+        }
+        log.info('Initializing Mem0 Memory client with Neo4j graph store at %s', NEO4J_URI)
+    else:
+        log.info('Initializing Mem0 Memory client WITHOUT graph store (Neo4j not configured)')
 
     # Inject custom base_url for OpenAI-compatible providers if set
     if MEM0_LLM_BASE_URL:
@@ -107,8 +140,35 @@ def _get_mem0_client():
     if MEM0_EMBEDDER_BASE_URL:
         config['embedder']['config']['openai_base_url'] = MEM0_EMBEDDER_BASE_URL
 
-    log.info('Initializing Mem0 Memory client with Neo4j graph store at %s', NEO4J_URI)
-    return Memory.from_config(config)
+    try:
+        instance = Memory.from_config(config)
+        _mem0_instance = instance
+        # Ensure the Qdrant collection exists with the correct dimensions.
+        # Mem0's from_config creates it, but if the collection was deleted externally
+        # (e.g., during development), we need to re-create it explicitly.
+        try:
+            from qdrant_client import QdrantClient
+            from qdrant_client.models import Distance, VectorParams
+            qc = QdrantClient(url=MEM0_VECTOR_STORE_URL)
+            collection_name = MEM0_VECTOR_STORE_COLLECTION
+            existing = [c.name for c in qc.get_collections().collections]
+            if collection_name not in existing:
+                qc.create_collection(
+                    collection_name=collection_name,
+                    vectors_config=VectorParams(
+                        size=MEM0_EMBEDDING_DIMS,
+                        distance=Distance.COSINE,
+                    ),
+                )
+                log.info(f'Created Qdrant collection "{collection_name}" with dims={MEM0_EMBEDDING_DIMS}')
+            else:
+                log.info(f'Qdrant collection "{collection_name}" already exists')
+        except Exception as qe:
+            log.warning(f'Qdrant collection pre-check failed (non-fatal): {qe}')
+        return instance
+    except Exception as exc:
+        log.warning('Mem0 initialization failed: %s', exc)
+        raise
 
 
 # ---------------------------------------------------------------------------

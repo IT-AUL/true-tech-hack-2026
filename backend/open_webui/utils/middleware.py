@@ -1385,84 +1385,77 @@ async def chat_completion_tools_handler(
     return body, {'sources': sources}
 
 
-async def chat_memory_handler(request: Request, form_data: dict, extra_params: dict, user):
+async def chat_memory_handler(request: Request, form_data: dict, extra_params: dict, user, project_id: str = None):
     try:
-        results = await query_memory(
-            request,
-            QueryMemoryForm(
-                **{
-                    'content': get_last_user_message(form_data['messages']) or '',
-                    'k': 3,
-                }
-            ),
-            user,
-        )
-    except Exception as e:
-        log.debug(e)
-        results = None
+        from open_webui.memory_v2.context_resolver import resolve_context
+        from open_webui.memory_v2.retrieval_gateway import get_context_bundle
 
-    user_context = ''
-    if results and hasattr(results, 'documents'):
-        if results.documents and len(results.documents) > 0:
-            for doc_idx, doc in enumerate(results.documents[0]):
-                created_at_date = 'Unknown Date'
-
-                if results.metadatas[0][doc_idx].get('created_at'):
-                    created_at_timestamp = results.metadatas[0][doc_idx]['created_at']
-                    created_at_date = time.strftime('%Y-%m-%d', time.localtime(created_at_timestamp))
-
-                user_context += f'{doc_idx + 1}. [{created_at_date}] {doc}\n'
-
-    form_data['messages'] = add_or_update_system_message(
-        f'User Context:\n{user_context}\n', form_data['messages'], append=True
-    )
-
-    return form_data
-
-
-async def project_memory_handler(
-    project_id: str,
-    user_id: str,
-    form_data: dict,
-) -> dict:
-    """Retrieve facts relevant to the last user message from the project's
-    long-term Mem0/Neo4j memory and prepend them to the system prompt.
-
-    This is a companion to the regular ``chat_memory_handler`` and operates
-    specifically on *project-level* shared memory, not per-user memory.
-    """
-    user_query = get_last_user_message(form_data['messages']) or ''
-    if not user_query:
-        return form_data
-
-    try:
-        facts = await search_project_memory(
+        thread_id = form_data.get('id') or extra_params.get('__chat_id__') or 'unknown-thread'
+        messages = form_data.get('messages', [])
+        
+        resolved = await resolve_context(
+            user_id=user.id,
             project_id=project_id,
-            user_id=user_id,
-            query=user_query,
+            thread_id=thread_id,
+            messages=messages,
         )
-    except Exception as exc:
-        log.warning('project_memory_handler: search failed (non-fatal): %s', exc)
-        facts = []
 
-    if not facts:
-        return form_data
-
-    context_lines = []
-    for idx, fact in enumerate(facts, start=1):
-        fact_text = fact.get('memory', '') or fact.get('text', '')
-        if fact_text:
-            context_lines.append(f'{idx}. {fact_text}')
-
-    if context_lines:
-        context_block = 'Project Context (long-term memory):\n' + '\n'.join(context_lines) + '\n'
-        form_data['messages'] = add_or_update_system_message(
-            context_block,
-            form_data['messages'],
-            append=True,
+        # Do NOT emit via WebSocket here — the response message doesn't exist yet
+        # on the client, so the event would be silently dropped.  Instead, run
+        # retrieval without event_emitter and store the status for deferred emit
+        # inside generate_chat_completion (same path as routing status).
+        bundle = await get_context_bundle(
+            request=request,
+            user=user,
+            project_id=project_id,
+            thread_id=thread_id,
+            resolved=resolved,
+            event_emitter=None,  # deferred
         )
+
+        total_facts = (
+            len(bundle.get("user_preferences", []))
+            + len(bundle.get("project_facts", []))
+            + len(bundle.get("prior_decisions", []))
+        )
+
+        # Store deferred memory status in metadata so openai.py can emit it
+        # after the SSE stream starts (when the response message exists on client).
+        metadata = extra_params.get('__metadata__', {})
+        if total_facts > 0:
+            metadata['__memory_status__'] = {
+                'type': 'status',
+                'data': {
+                    'action': 'memory',
+                    'description': f'Memory · {total_facts} facts',
+                    'done': True,
+                    'routing': {
+                        'category': 'memory',
+                        'subtitle': f'Memory · {total_facts} facts',
+                        'reasoning': f'Retrieved {total_facts} relevant facts from long-term memory.',
+                    },
+                },
+            }
+        log.info(f'[MEMORY] Bundle: {total_facts} facts (user_prefs={len(bundle.get("user_preferences", []))}, project={len(bundle.get("project_facts", []))})')
+
+        # Store resolved context for background write after response
+        metadata['__memory_resolved__'] = resolved
+        extra_params['__metadata__'] = metadata
+
+        # Assemble Prompt Slots
+        from open_webui.memory_v2.prompt_assembler import assemble_memory_prompt
+        system_injection = assemble_memory_prompt(bundle, resolved)
+
+        if system_injection:
+            form_data['messages'] = add_or_update_system_message(
+                system_injection, form_data['messages'], append=True
+            )
+
+    except Exception as e:
+        log.exception(f"chat_memory_handler v2 error: {e}")
 
     return form_data
+
 
 
 async def chat_web_search_handler(request: Request, form_data: dict, extra_params: dict, user):
@@ -2252,21 +2245,16 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     parent_message_id = metadata.get('parent_message_id')
 
     # -----------------------------------------------------------------------
-    # Project Long-Term Memory (Mem0 / Neo4j)
-    # If this chat belongs to a project, retrieve relevant facts from the
-    # graph memory and inject them as extra system context.
+    # Project ID Extraction
     # -----------------------------------------------------------------------
+    project_id = None
     if chat_id and not (chat_id.startswith('local:')):
         try:
             from open_webui.models.chats import Chats as ChatsModel
 
             chat_record = ChatsModel.get_chat_by_id(chat_id)
             if chat_record and chat_record.project_id:
-                form_data = await project_memory_handler(
-                    project_id=chat_record.project_id,
-                    user_id=user.id,
-                    form_data=form_data,
-                )
+                project_id = chat_record.project_id
         except Exception as _pm_exc:
             log.warning('Project memory retrieval failed (non-fatal): %s', _pm_exc)
 
@@ -2456,9 +2444,8 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 )
 
         if 'memory' in features and features['memory']:
-            # Skip forced memory injection when native FC is enabled - model can use memory tools
-            if metadata.get('params', {}).get('function_calling') != 'native':
-                form_data = await chat_memory_handler(request, form_data, extra_params, user)
+            # Always run memory cascade (V2 architecture manages budgeting and injection)
+            form_data = await chat_memory_handler(request, form_data, extra_params, user, project_id=project_id)
 
         if 'web_search' in features and features['web_search']:
             # Skip forced RAG web search when native FC is enabled - model can use web_search tool
@@ -3296,26 +3283,22 @@ async def non_streaming_chat_response_handler(response, ctx):
                     # -------------------------------------------------------
                     try:
                         from open_webui.models.chats import Chats as _ChatsModel
+                        from open_webui.memory_v2.write_policy import write_memory_candidates
 
                         _chat_rec = _ChatsModel.get_chat_by_id(metadata['chat_id'])
                         if _chat_rec and _chat_rec.project_id:
-                            _user_msg = (
-                                get_last_user_message(
-                                    list((_chat_rec.chat or {}).get('history', {}).get('messages', {}).values())
+                            _hist_messages = list((_chat_rec.chat or {}).get('history', {}).get('messages', {}).values())
+                            
+                            asyncio.ensure_future(
+                                write_memory_candidates(
+                                    user_id=user.id,
+                                    project_id=_chat_rec.project_id,
+                                    thread_id=metadata['chat_id'],
+                                    messages=_hist_messages,
+                                    response_text=content,
+                                    resolved={}
                                 )
-                                or ''
                             )
-                            if _user_msg:
-                                asyncio.ensure_future(
-                                    add_messages_to_project_memory(
-                                        project_id=_chat_rec.project_id,
-                                        user_id=user.id,
-                                        messages=[
-                                            {'role': 'user', 'content': _user_msg},
-                                            {'role': 'assistant', 'content': content},
-                                        ],
-                                    )
-                                )
                     except Exception as _mem_exc:
                         log.warning('Project memory extraction failed (non-fatal): %s', _mem_exc)
 
@@ -4881,24 +4864,19 @@ async def streaming_chat_response_handler(response, ctx):
                     if _chat_rec and _chat_rec.project_id:
                         # For streaming, 'content' is the accumulated assistant response
                         if content:
-                            _user_msg = (
-                                get_last_user_message(
-                                    list((_chat_rec.chat or {}).get('history', {}).get('messages', {}).values())
+                            from open_webui.memory_v2.write_policy import write_memory_candidates
+                            _hist_messages = list((_chat_rec.chat or {}).get('history', {}).get('messages', {}).values())
+                            
+                            asyncio.ensure_future(
+                                write_memory_candidates(
+                                    user_id=user.id,
+                                    project_id=_chat_rec.project_id,
+                                    thread_id=metadata['chat_id'],
+                                    messages=_hist_messages,
+                                    response_text=content,
+                                    resolved={}
                                 )
-                                or ''
                             )
-
-                            if _user_msg:
-                                asyncio.ensure_future(
-                                    add_messages_to_project_memory(
-                                        project_id=_chat_rec.project_id,
-                                        user_id=user.id,
-                                        messages=[
-                                            {'role': 'user', 'content': _user_msg},
-                                            {'role': 'assistant', 'content': content},
-                                        ],
-                                    )
-                                )
                 except Exception as _mem_exc:
                     log.warning('Project memory extraction failed (streaming, non-fatal): %s', _mem_exc)
 

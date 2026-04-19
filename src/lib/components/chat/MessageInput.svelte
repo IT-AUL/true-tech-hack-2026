@@ -1580,7 +1580,7 @@
 
 							<InlinePromptHints
 								inputValue={prompt}
-								visible={!prompt || prompt.trim().length <= 50}
+								visible={!prompt || prompt.trim().length <= 200}
 								fetchAutoComplete={async (text) => {
 									if (selectedModelIds.length === 0 || !selectedModelIds.at(0)) {
 										return null;

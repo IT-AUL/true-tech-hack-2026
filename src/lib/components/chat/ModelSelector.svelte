@@ -129,8 +129,13 @@
 
 {#if showSetDefault}
 	<div
-		class="relative text-left mt-[1px] ml-1 text-[0.7rem] text-gray-600 dark:text-gray-400 font-primary"
+		class="relative text-left mt-[1px] ml-1 text-[0.7rem] text-gray-500 dark:text-gray-500 font-primary hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
 	>
-		<button on:click={saveDefaultModel}> {$i18n.t('Set as default')}</button>
+		<button on:click={saveDefaultModel} class="flex items-center gap-1 cursor-pointer">
+			<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="size-3">
+				<path fill-rule="evenodd" d="M10 1a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 1zM5.05 3.05a.75.75 0 011.06 0l1.062 1.06A.75.75 0 116.11 5.173L5.05 4.11a.75.75 0 010-1.06zm9.9 0a.75.75 0 010 1.06l-1.06 1.062a.75.75 0 01-1.062-1.061l1.061-1.06a.75.75 0 011.06 0zM3 8a7 7 0 1114 0A7 7 0 013 8zm8.625 4.913l.22-.015A1 1 0 0013 11.98V10.02a1 1 0 00-1.155-.919l-.22.015A3.003 3.003 0 0110 13a3.003 3.003 0 01-1.625-3.884l-.22-.015A1 1 0 007 10.02v1.96a1 1 0 001.155.919l.22-.015A4.993 4.993 0 0010 14c.614 0 1.202-.11 1.745-.312z" clip-rule="evenodd" />
+			</svg>
+			По умолчанию
+		</button>
 	</div>
 {/if}

@@ -1626,7 +1626,8 @@ async def _classify_with_llm(
             resp.raise_for_status()
             data = resp.json()
 
-            raw = data['choices'][0]['message']['content'].strip()
+            message_content = data['choices'][0]['message'].get('content', '') or ''
+            raw = message_content.strip()
             match = re.search(r'(\{.*\})', raw, re.DOTALL)
             if match:
                 raw = match.group(1)

@@ -1768,6 +1768,14 @@ async def generate_chat_completion(
                     }
                 )
                 await event_emitter(routing_status_event)
+
+                # Also emit deferred memory status if available.
+                # Memory retrieval runs before the SSE stream starts (in middleware),
+                # so we store the status in metadata and emit it here, where the
+                # response message already exists on the client.
+                memory_status = metadata.get('__memory_status__')
+                if memory_status:
+                    await event_emitter(memory_status)
             except Exception as e:
                 log.warning(f'Failed to emit auto-routing status: {e}')
 
@@ -1780,6 +1788,20 @@ async def generate_chat_completion(
             candidates = [model_id]
     else:
         candidates = [model_id]
+        # Emit deferred memory status for non-auto-routed requests
+        # (auto-routed requests already emit it alongside routing status above).
+        memory_status = metadata.get('__memory_status__') if metadata else None
+        if memory_status and metadata.get('chat_id') and metadata.get('message_id'):
+            try:
+                mem_emitter = get_event_emitter({
+                    'user_id': user.id,
+                    'chat_id': metadata['chat_id'],
+                    'message_id': metadata['message_id'],
+                    'session_id': metadata.get('session_id'),
+                })
+                await mem_emitter(memory_status)
+            except Exception:
+                pass  # non-fatal
 
     n = len(candidates)
     last_error_detail = ''

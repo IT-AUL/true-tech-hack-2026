@@ -125,9 +125,9 @@ if 'cuda_error' in locals():
 
 SRC_LOG_LEVELS = {}  # Legacy variable, do not remove
 
-WEBUI_NAME = os.environ.get('WEBUI_NAME', 'Open WebUI')
-if WEBUI_NAME != 'Open WebUI':
-    WEBUI_NAME += ' (Open WebUI)'
+WEBUI_NAME = os.environ.get('WEBUI_NAME', 'VibeHub')
+if WEBUI_NAME not in ('VibeHub', 'Open WebUI'):
+    WEBUI_NAME += ' (VibeHub)'
 
 WEBUI_FAVICON_URL = 'https://openwebui.com/favicon.png'
 
@@ -1038,9 +1038,10 @@ MEM0_LLM_API_KEY = os.environ.get('MEM0_LLM_API_KEY', os.environ.get('OPENAI_API
 # Embedder used by Mem0 for vector similarity search inside memories.
 # MEM0_EMBEDDER_MODEL – e.g. text-embedding-3-small
 MEM0_EMBEDDER_PROVIDER = os.environ.get('MEM0_EMBEDDER_PROVIDER', 'openai')
-MEM0_EMBEDDER_MODEL = os.environ.get('MEM0_EMBEDDER_MODEL', 'baai/bge-m3')
+MEM0_EMBEDDER_MODEL = os.environ.get('MEM0_EMBEDDER_MODEL', 'bge-m3')
 MEM0_EMBEDDER_BASE_URL = os.environ.get('MEM0_EMBEDDER_BASE_URL', MEM0_LLM_BASE_URL)
 MEM0_EMBEDDER_API_KEY = os.environ.get('MEM0_EMBEDDER_API_KEY', MEM0_LLM_API_KEY)
+MEM0_EMBEDDING_DIMS = int(os.environ.get('MEM0_EMBEDDING_DIMS', '1024'))  # bge-m3=1024, text-embedding-3-small=1536
 
 # Vector store used by Mem0 (qdrant | chroma | …).
 # Defaults to qdrant running at localhost. Adjust if you run your own Qdrant.

@@ -1,4 +1,5 @@
 import logging
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
@@ -200,6 +201,7 @@ async def generate_title(request: Request, form_data: dict, user=Depends(get_ver
             'task': str(TASKS.TITLE_GENERATION),
             'task_body': form_data,
             'chat_id': form_data.get('chat_id', None),
+            'message_id': None,
         },
     }
 
@@ -268,6 +270,7 @@ async def generate_follow_ups(request: Request, form_data: dict, user=Depends(ge
             'task': str(TASKS.FOLLOW_UP_GENERATION),
             'task_body': form_data,
             'chat_id': form_data.get('chat_id', None),
+            'message_id': None,
         },
     }
 
@@ -336,6 +339,7 @@ async def generate_chat_tags(request: Request, form_data: dict, user=Depends(get
             'task': str(TASKS.TAGS_GENERATION),
             'task_body': form_data,
             'chat_id': form_data.get('chat_id', None),
+            'message_id': None,
         },
     }
 
@@ -398,6 +402,7 @@ async def generate_image_prompt(request: Request, form_data: dict, user=Depends(
             'task': str(TASKS.IMAGE_PROMPT_GENERATION),
             'task_body': form_data,
             'chat_id': form_data.get('chat_id', None),
+            'message_id': None,
         },
     }
 
@@ -478,6 +483,7 @@ async def generate_queries(request: Request, form_data: dict, user=Depends(get_v
             'task': str(TASKS.QUERY_GENERATION),
             'task_body': form_data,
             'chat_id': form_data.get('chat_id', None),
+            'message_id': None,
         },
     }
 
@@ -525,11 +531,37 @@ async def generate_autocompletion(request: Request, form_data: dict, user=Depend
             detail='Model not found',
         )
 
-    # Check if the user has a custom task model
-    # If the user has a custom task model, use that model
-    task_model_id = model_id
+    # Use the fast/cheap task model for autocomplete — not the user's chat model
+    autocomplete_model_configured = getattr(request.app.state.config, 'AUTOCOMPLETE_MODEL', None)
+    
+    if autocomplete_model_configured and autocomplete_model_configured in models:
+        task_model_id = autocomplete_model_configured
+    else:
+        # Heuristic: Find the lightest model automatically for autocomplete to ensure sub-50ms TTFT
+        lightweight_keywords = ['8b', '7b', '3b', '1.5b', 'coder', 'distill']
+        heavy_keywords = ['32b', '70b', '72b', 'pro', 'opus']
+        
+        best_model_id = None
+        
+        # fallback to get_task_model_id if no light model found
+        default_task_model = get_task_model_id(
+            model_id,
+            request.app.state.config.TASK_MODEL,
+            request.app.state.config.TASK_MODEL_EXTERNAL,
+            models,
+        )
 
-    log.debug(f'generating autocompletion using model {task_model_id} for user {user.email}')
+        for m_id in models.keys():
+            m_id_lower = m_id.lower()
+            if any(h in m_id_lower for h in heavy_keywords):
+                continue
+            if any(l in m_id_lower for l in lightweight_keywords):
+                best_model_id = m_id
+                break
+                
+        task_model_id = best_model_id if best_model_id else default_task_model
+
+    log.debug(f'generating autocompletion using task model {task_model_id} (chat model: {model_id}) for user {user.email}')
 
     if (request.app.state.config.AUTOCOMPLETE_GENERATION_PROMPT_TEMPLATE).strip() != '':
         template = request.app.state.config.AUTOCOMPLETE_GENERATION_PROMPT_TEMPLATE
@@ -542,13 +574,15 @@ async def generate_autocompletion(request: Request, form_data: dict, user=Depend
         'model': task_model_id,
         'messages': [{'role': 'user', 'content': content}],
         'stream': False,
-        'max_tokens': 50,
-        'temperature': 0.1,
+        'max_tokens': 300,
+        'temperature': 0.6,
+        'top_p': 0.9,
         'metadata': {
             **(request.state.metadata if hasattr(request.state, 'metadata') else {}),
             'task': str(TASKS.AUTOCOMPLETE_GENERATION),
             'task_body': form_data,
             'chat_id': form_data.get('chat_id', None),
+            'message_id': None,
         },
     }
 
@@ -559,7 +593,36 @@ async def generate_autocompletion(request: Request, form_data: dict, user=Depend
         raise e
 
     try:
-        return await generate_chat_completion(request, form_data=payload, user=user)
+        result = await generate_chat_completion(request, form_data=payload, user=user)
+
+        # Post-process: strip <think> reasoning blocks from response
+        # (DeepSeek R1, Qwen, etc. may emit these even when asked not to)
+
+        if hasattr(result, 'body'):
+            # StreamingResponse or similar — return as-is
+            return result
+
+        result_data = result if isinstance(result, dict) else (result.body if hasattr(result, 'body') else None)
+
+        if isinstance(result, JSONResponse):
+            return result
+
+        # result is likely a dict from generate_chat_completion
+        if isinstance(result, dict) and 'choices' in result:
+            for choice in result.get('choices', []):
+                msg = choice.get('message', {})
+                content_val = msg.get('content', '')
+                if content_val:
+                    # Strip <think>...</think> blocks (closed)
+                    cleaned = re.sub(r'<think>[\s\S]*?</think>', '', content_val, flags=re.IGNORECASE).strip()
+                    # Strip unclosed <think> (model ran out of tokens while thinking)
+                    cleaned = re.sub(r'<think>[\s\S]*$', '', cleaned, flags=re.IGNORECASE).strip()
+                    # Strip quotes and code fences
+                    cleaned = re.sub(r'^```[\s\S]*?```$', '', cleaned, flags=re.MULTILINE).strip()
+                    cleaned = cleaned.strip('"\'` \n')
+                    msg['content'] = cleaned
+
+        return result
     except Exception as e:
         log.error(f'Error generating chat completion: {e}')
         return JSONResponse(
@@ -615,6 +678,7 @@ async def generate_emoji(request: Request, form_data: dict, user=Depends(get_ver
             'task': str(TASKS.EMOJI_GENERATION),
             'task_body': form_data,
             'chat_id': form_data.get('chat_id', None),
+            'message_id': None,
         },
     }
 
@@ -665,6 +729,7 @@ async def generate_moa_response(request: Request, form_data: dict, user=Depends(
         'metadata': {
             **(request.state.metadata if hasattr(request.state, 'metadata') else {}),
             'chat_id': form_data.get('chat_id', None),
+            'message_id': None,
             'task': str(TASKS.MOA_RESPONSE_GENERATION),
             'task_body': form_data,
         },
