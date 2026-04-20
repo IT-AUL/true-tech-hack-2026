@@ -819,7 +819,7 @@ class ChatTable:
                 query = query.filter_by(folder_id=None)
 
             if not include_pinned:
-                query = query.filter(or_(not Chat.pinned, Chat.pinned is None))
+                query = query.filter(or_(Chat.pinned.is_(False), Chat.pinned.is_(None)))
 
             if not include_archived:
                 query = query.filter_by(archived=False)
