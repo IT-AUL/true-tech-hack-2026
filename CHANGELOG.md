@@ -12,6 +12,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.12-gpthub.27] - 2026-04-20
+
+### Added
+
+- **Production Deploy Stack**: `deploy/docker-compose.prod.yml` расширен — добавлены сервисы Qdrant и Redis с healthcheck, docker-сетью `gpthub-net` и закрытыми портами только на `127.0.0.1`. `deploy/deploy.sh` — полноценный CLI для управления деплоем (build / up / down / restart / status / logs / qdrant-drop-collection).
+- **`<think>` Tag Stripping**: В `mem0_manager.py` добавлены `_strip_think()` и `_sanitize_messages()` — защита от утечки reasoning-блоков thinking-моделей (Qwen3/GLM/R1) в факты Qdrant. Промпт `custom_fact_extraction_prompt` расширен явным запретом thinking-блоков.
+- **Task Model Pinning**: В `.env` явно зафиксированы `AUTOCOMPLETE_MODEL`, `TASK_MODEL`, `TASK_MODEL_EXTERNAL` → `llama-3.1-8b-instruct`, устранена недетерминированная эвристика перебора модели.
+
+### Changed
+
+- **Embeddings**: `RAG_EMBEDDING_MODEL` и `MEM0_EMBEDDER_MODEL` обновлены до `qwen3-embedding-8b` (4096 dims); `MEM0_EMBEDDING_DIMS` default обновлён с 1024 → 4096. Qdrant-коллекция `project_memories_v1` пересоздаётся с новой размерностью.
+- **Router**: `ROUTER_MODEL` / `REKA_ROUTER_MODEL` переключены с `gpt-oss-20b` → `llama-3.1-8b-instruct`; `heavy_keywords` в heuristic-fallback расширен (`235b`, `357b`, `k2`, `alpha`).
+- **STT**: `AUDIO_STT_MODEL` обновлён с `whisper-medium` → `whisper-turbo-local`.
+- **Mem0 LLM**: `MEM0_LLM_MODEL` откатен с `Qwen3-235B` обратно на `qwen2.5-72b-instruct` — thinking-модели ломают JSON-парсинг Mem0 через `<think>` теги.
+
+### Fixed
+
+- `retrieval_gateway.py`: `WARNING "No event_emitter available"` → `DEBUG` (деферированный emit — намеренное поведение).
+- `retrieval_gateway.py`: `WARNING "Failed to fetch user memory: 404"` → `DEBUG` (норм. состояние когда у пользователя нет воспоминаний).
+- `tasks.py`: устаревший ambiguous variable `l` переименован; расширен `heavy_keywords`-список для корректного исключения больших моделей из autocomplete.
+
+---
+
 ## [0.8.12-gpthub.26] - 2026-04-19
 
 ### Added
