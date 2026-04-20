@@ -1,81 +1,119 @@
-# =============================================================================
-# GPTHub — Production Stack
-# Запуск: docker compose -f deploy/docker-compose.prod.yml --env-file .env.prod up -d
-# =============================================================================
-
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: gpthub-redis
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis-data:/data
+    networks:
+      - gpthub-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  qdrant:
+    image: qdrant/qdrant:v1.10.1
+    container_name: gpthub-qdrant
+    volumes:
+      - qdrant-data:/qdrant/storage
+    ports:
+      - "127.0.0.1:6333:6333"
+    networks:
+      - gpthub-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'printf \"\" > /dev/tcp/localhost/6333' 2>/dev/null && exit 0 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
   gpthub:
     image: ${GPTHUB_IMAGE:-gpthub-app:latest}
     container_name: gpthub
     ports:
       - "127.0.0.1:${PORT:-3000}:8080"
-    env_file:
-      - ../.env.prod          # все переменные из .env.prod пробрасываются внутрь
-    environment:
-      # Переопределяем только то, что отличается внутри docker-сети
-      - MEM0_VECTOR_STORE_URL=http://qdrant:6333
-      - REDIS_URL=redis://redis:6379/0
-      - OLLAMA_BASE_URL=http://host.docker.internal:11434
-    volumes:
-      - gpthub-data:/app/backend/data
-    extra_hosts:
-      - host.docker.internal:host-gateway
-    restart: unless-stopped
     depends_on:
-      qdrant:
-        condition: service_healthy
       redis:
         condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    environment:
+      - OPENAI_API_BASE_URL=${OPENAI_API_BASE_URL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}
+      - ENABLE_SIGNUP=${ENABLE_SIGNUP:-false}
+      - DEFAULT_USER_ROLE=${DEFAULT_USER_ROLE:-user}
+      - ENABLE_COMMUNITY_SHARING=false
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/backend/data/webui.db}
+      - SCARF_NO_ANALYTICS=true
+      - DO_NOT_TRACK=true
+      - ANONYMIZED_TELEMETRY=false
+      # Task models
+      - AUTOCOMPLETE_MODEL=${AUTOCOMPLETE_MODEL:-llama-3.1-8b-instruct}
+      - TASK_MODEL=${TASK_MODEL:-llama-3.1-8b-instruct}
+      - TASK_MODEL_EXTERNAL=${TASK_MODEL_EXTERNAL:-llama-3.1-8b-instruct}
+      # Mem0 / Memory V2
+      - MEM0_LLM_PROVIDER=${MEM0_LLM_PROVIDER:-openai}
+      - MEM0_LLM_MODEL=${MEM0_LLM_MODEL}
+      - MEM0_LLM_BASE_URL=${MEM0_LLM_BASE_URL}
+      - MEM0_LLM_API_KEY=${MEM0_LLM_API_KEY}
+      - MEM0_EMBEDDER_PROVIDER=${MEM0_EMBEDDER_PROVIDER:-openai}
+      - MEM0_EMBEDDER_MODEL=${MEM0_EMBEDDER_MODEL}
+      - MEM0_EMBEDDER_BASE_URL=${MEM0_EMBEDDER_BASE_URL}
+      - MEM0_EMBEDDER_API_KEY=${MEM0_EMBEDDER_API_KEY}
+      - MEM0_VECTOR_STORE_PROVIDER=${MEM0_VECTOR_STORE_PROVIDER:-qdrant}
+      - MEM0_VECTOR_STORE_URL=http://qdrant:6333
+      - MEM0_EMBEDDING_DIMS=${MEM0_EMBEDDING_DIMS:-4096}
+      - NEO4J_URI=${NEO4J_URI:-}
+      - NEO4J_USERNAME=${NEO4J_USERNAME:-}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-}
+      # Redis
+      - REDIS_URL=redis://redis:6379/0
+      # RAG
+      - RAG_OPENAI_API_BASE_URL=${RAG_OPENAI_API_BASE_URL}
+      - RAG_OPENAI_API_KEY=${RAG_OPENAI_API_KEY}
+      - RAG_EMBEDDING_ENGINE=${RAG_EMBEDDING_ENGINE:-openai}
+      - RAG_EMBEDDING_MODEL=${RAG_EMBEDDING_MODEL:-qwen3-embedding-8b}
+      # Router
+      - ROUTER_MODEL=${ROUTER_MODEL:-llama-3.1-8b-instruct}
+      - ROUTER_API_BASE_URL=${ROUTER_API_BASE_URL}
+      - ROUTER_API_KEY=${ROUTER_API_KEY}
+      - REKA_API_KEY=${REKA_API_KEY}
+      - REKA_API_URL=${REKA_API_URL}
+      - REKA_ROUTER_MODEL=${REKA_ROUTER_MODEL:-llama-3.1-8b-instruct}
+      - ROUTERAI_API_URL=${ROUTERAI_API_URL}
+      - ROUTERAI_API_KEY=${ROUTERAI_API_KEY}
+      # STT
+      - AUDIO_STT_ENGINE=${AUDIO_STT_ENGINE:-openai}
+      - AUDIO_STT_OPENAI_API_BASE_URL=${AUDIO_STT_OPENAI_API_BASE_URL}
+      - AUDIO_STT_OPENAI_API_KEY=${AUDIO_STT_OPENAI_API_KEY}
+      - AUDIO_STT_MODEL=${AUDIO_STT_MODEL:-whisper-turbo-local}
+      # CORS
+      - CORS_ALLOW_ORIGIN=${CORS_ALLOW_ORIGIN:-*}
+      - FORWARDED_ALLOW_IPS=${FORWARDED_ALLOW_IPS:-*}
+    volumes:
+      - gpthub-data:/app/backend/data
+    networks:
+      - gpthub-net
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 90s
-    networks:
-      - gpthub-net
-
-  qdrant:
-    image: qdrant/qdrant:latest
-    container_name: gpthub-qdrant
-    volumes:
-      - qdrant-data:/qdrant/storage
-    ports:
-      - "127.0.0.1:6333:6333"   # REST API (только localhost, не наружу)
-    environment:
-      - QDRANT__SERVICE__GRPC_PORT=6334
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:6333/readyz"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    networks:
-      - gpthub-net
-
-  redis:
-    image: redis:7-alpine
-    container_name: gpthub-redis
-    command: redis-server --save 60 1 --loglevel warning --maxmemory 256mb --maxmemory-policy allkeys-lru
-    volumes:
-      - redis-data:/data
-    ports:
-      - "127.0.0.1:6379:6379"   # только localhost
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 3s
-      retries: 5
-    networks:
-      - gpthub-net
-
-volumes:
-  gpthub-data: {}
-  qdrant-data: {}
-  redis-data: {}
+      start_period: 60s
 
 networks:
   gpthub-net:
     driver: bridge
+
+volumes:
+  gpthub-data:
+  redis-data:
+  qdrant-data:
