@@ -996,6 +996,14 @@
 					} else {
 						scrollTop = e.target.scrollTop;
 					}
+
+					// Infinite scroll: load more chats when near bottom
+					if ($scrollPaginationEnabled && !chatListLoading && !allChatsLoaded) {
+						const { scrollHeight, clientHeight } = e.target;
+						if (scrollHeight - scrollTop - clientHeight < 200) {
+							loadMoreChats();
+						}
+					}
 				}}
 			>
 				<div class="pb-1.5">
@@ -1313,6 +1321,48 @@
 						</div>
 					</Folder>
 				{/if}
+
+				<div class="px-2 mt-4 mb-2">
+					<div class="text-xs font-semibold text-gray-500 uppercase tracking-wider pl-2.5">
+						Предыдущие чаты
+					</div>
+				</div>
+				<div class="pt-1.5 pb-20">
+					{#if $chats !== null}
+						{#each $chats as chat, idx (`chat-${chat.id}`)}
+							<div class="px-[0.4375rem] flex justify-center text-gray-800 dark:text-gray-200">
+								<ChatItem
+									className="w-full"
+									id={chat.id}
+									title={chat.title}
+									createdAt={chat.updated_at}
+									selected={chat.id === selectedChatId || chat.id === $chatId}
+									{shiftKey}
+									on:select={() => {
+										selectedChatId = chat.id;
+									}}
+									on:unselect={() => {
+										selectedChatId = null;
+									}}
+									on:change={() => {
+										initChatList();
+									}}
+									on:dragEnd={(e) => {
+										// Handle drag end
+									}}
+								/>
+							</div>
+						{/each}
+					{/if}
+
+					<div class="w-full flex justify-center py-2">
+						{#if chatListLoading}
+							<Spinner className="size-4" />
+						{:else if !allChatsLoaded}
+							<div class="h-10 w-full" />
+						{/if}
+					</div>
+				</div>
 			</div>
 
 			<div class="px-1.5 pt-1.5 pb-2 sticky bottom-0 z-10 -mt-3 sidebar">
