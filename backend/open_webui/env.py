@@ -1041,7 +1041,7 @@ MEM0_EMBEDDER_PROVIDER = os.environ.get('MEM0_EMBEDDER_PROVIDER', 'openai')
 MEM0_EMBEDDER_MODEL = os.environ.get('MEM0_EMBEDDER_MODEL', 'bge-m3')
 MEM0_EMBEDDER_BASE_URL = os.environ.get('MEM0_EMBEDDER_BASE_URL', MEM0_LLM_BASE_URL)
 MEM0_EMBEDDER_API_KEY = os.environ.get('MEM0_EMBEDDER_API_KEY', MEM0_LLM_API_KEY)
-MEM0_EMBEDDING_DIMS = int(os.environ.get('MEM0_EMBEDDING_DIMS', '1024'))  # bge-m3=1024, text-embedding-3-small=1536
+MEM0_EMBEDDING_DIMS = int(os.environ.get('MEM0_EMBEDDING_DIMS', '4096'))  # qwen3-embedding-8b=4096, bge-m3=1024, text-embedding-3-small=1536
 
 # Vector store used by Mem0 (qdrant | chroma | …).
 # Defaults to qdrant running at localhost. Adjust if you run your own Qdrant.

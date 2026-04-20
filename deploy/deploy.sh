@@ -1,76 +1,106 @@
 #!/usr/bin/env bash
+# =============================================================================
+# GPTHub Production Deploy Script
+# Использование: ./deploy/deploy.sh [build|up|down|restart|logs|status]
+# =============================================================================
+
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEPLOY_ROOT="${DEPLOY_ROOT:-/opt/gpthub}"
-COMPOSE_SRC="$SCRIPT_DIR/docker-compose.prod.yml"
-COMPOSE_DST="$DEPLOY_ROOT/docker-compose.prod.yml"
-ENV_SRC="$SCRIPT_DIR/.env.example"
-ENV_DST="$DEPLOY_ROOT/.env"
-VERSION="${1:-latest}"
-PRUNE_IMAGES="${PRUNE_IMAGES:-true}"
+COMPOSE_FILE="$(dirname "$0")/docker-compose.prod.yml"
+ENV_FILE="$(dirname "$0")/.env.prod"
+PROJECT_NAME="gpthub"
 
-mkdir -p "$DEPLOY_ROOT"
-cp "$COMPOSE_SRC" "$COMPOSE_DST"
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
 
-if [ ! -f "$ENV_DST" ]; then
-  cp "$ENV_SRC" "$ENV_DST"
-  echo "Created $ENV_DST from template."
-  echo "Fill in OPENAI_API_KEY, WEBUI_SECRET_KEY, and other secrets, then rerun."
-  exit 1
+log()   { echo -e "${GREEN}[DEPLOY]${NC} $1"; }
+warn()  { echo -e "${YELLOW}[WARN]${NC}  $1"; }
+error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
+
+# Проверяем наличие .env.prod
+if [ ! -f "$ENV_FILE" ]; then
+    error ".env.prod not found at $ENV_FILE\nCopy deploy/.env.prod, fill in WEBUI_SECRET_KEY and CORS_ALLOW_ORIGIN first."
 fi
 
-CURRENT_IMAGE="$(grep '^GPTHUB_IMAGE=' "$ENV_DST" | tail -1 | cut -d= -f2- || true)"
-CURRENT_IMAGE="$(echo "${CURRENT_IMAGE:-}" | xargs)"
-
-if [ -z "${GPTHUB_IMAGE:-}" ]; then
-  if [ "$VERSION" != "latest" ]; then
-    IMAGE_REPO="${CURRENT_IMAGE%:*}"
-    if [ -z "$IMAGE_REPO" ] || [ "$IMAGE_REPO" = "$CURRENT_IMAGE" ]; then
-      IMAGE_REPO="gpthub-app"
-    fi
-    GPTHUB_IMAGE="${IMAGE_REPO}:${VERSION}"
-  elif [ -n "$CURRENT_IMAGE" ]; then
-    GPTHUB_IMAGE="$CURRENT_IMAGE"
-  else
-    GPTHUB_IMAGE="gpthub-app:latest"
-  fi
+# Проверяем что WEBUI_SECRET_KEY задан
+if grep -q "ЗАМЕНИ_НА_СЛУЧАЙНУЮ_СТРОКУ" "$ENV_FILE" 2>/dev/null; then
+    error "WEBUI_SECRET_KEY still has placeholder value! Generate one:\n  python3 -c \"import secrets; print(secrets.token_hex(32))\""
 fi
 
-# Protect against accidental spaces from env/workflow inputs.
-GPTHUB_IMAGE="$(echo "${GPTHUB_IMAGE:-}" | xargs)"
-if [ -z "$GPTHUB_IMAGE" ]; then
-  echo "GPTHUB_IMAGE resolved to empty value."
-  exit 1
-fi
+CMD="${1:-up}"
 
-if grep -q '^GPTHUB_IMAGE=' "$ENV_DST"; then
-  sed -i.bak "s|^GPTHUB_IMAGE=.*|GPTHUB_IMAGE=${GPTHUB_IMAGE}|" "$ENV_DST"
-else
-  printf '\nGPTHUB_IMAGE=%s\n' "$GPTHUB_IMAGE" >> "$ENV_DST"
-fi
-rm -f "${ENV_DST}.bak"
+case "$CMD" in
+  build)
+    log "Building Docker image..."
+    cd "$(dirname "$0")/.."
+    docker build \
+      --build-arg BUILD_HASH="$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')" \
+      --build-arg USE_SLIM=true \
+      -t gpthub-app:latest \
+      -t "gpthub-app:$(git rev-parse --short HEAD 2>/dev/null || echo 'local')" \
+      .
+    log "Build complete: gpthub-app:latest"
+    ;;
 
-echo "Deploying GPTHub image: $GPTHUB_IMAGE"
-docker compose -f "$COMPOSE_DST" --env-file "$ENV_DST" pull
-docker compose -f "$COMPOSE_DST" --env-file "$ENV_DST" up -d
+  up)
+    log "Starting GPTHub stack..."
+    docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
+    log "Stack started. Check logs: ./deploy/deploy.sh logs"
+    log "Health: curl http://localhost:3000/health"
+    ;;
 
-PORT="$(awk -F= '/^PORT=/{print $2}' "$ENV_DST" | tail -1)"
-PORT="${PORT:-3000}"
+  down)
+    warn "Stopping GPTHub stack (data volumes preserved)..."
+    docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" down
+    ;;
 
-echo "Waiting for health check on port ${PORT}..."
-for attempt in $(seq 1 30); do
-  if curl -sf "http://127.0.0.1:${PORT}/health" >/dev/null; then
-    echo "GPTHub is healthy."
-    docker compose -f "$COMPOSE_DST" --env-file "$ENV_DST" ps
-    if [ "$PRUNE_IMAGES" = "true" ]; then
-      docker image prune -f
-    fi
-    exit 0
-  fi
-  sleep 2
-done
+  restart)
+    warn "Restarting GPTHub app only (Qdrant/Redis keep running)..."
+    docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" restart gpthub
+    ;;
 
-echo "Deployment completed but health check failed."
-docker compose -f "$COMPOSE_DST" --env-file "$ENV_DST" ps
-exit 1
+  pull)
+    log "Pulling latest code from git..."
+    cd "$(dirname "$0")/.."
+    git pull origin develop
+    log "Run './deploy/deploy.sh build' then './deploy/deploy.sh restart' to apply."
+    ;;
+
+  logs)
+    docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" \
+      logs -f --tail=100 "${2:-gpthub}"
+    ;;
+
+  status)
+    log "=== Container Status ==="
+    docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" --env-file "$ENV_FILE" ps
+    echo ""
+    log "=== Qdrant Health ==="
+    curl -s http://localhost:6333/readyz | python3 -m json.tool 2>/dev/null || echo "Qdrant not responding"
+    echo ""
+    log "=== Redis Health ==="
+    docker exec gpthub-redis redis-cli ping 2>/dev/null || echo "Redis not responding"
+    echo ""
+    log "=== App Health ==="
+    curl -s http://localhost:3000/health | python3 -m json.tool 2>/dev/null || echo "App not responding"
+    ;;
+
+  qdrant-drop-collection)
+    COLLECTION="${2:-project_memories_v1}"
+    warn "Dropping Qdrant collection: $COLLECTION"
+    curl -sf -X DELETE "http://localhost:6333/collections/$COLLECTION" | python3 -m json.tool
+    log "Collection dropped. It will be recreated with correct dims on next memory write."
+    ;;
+
+  *)
+    echo "Usage: $0 [build|up|down|restart|pull|logs|status|qdrant-drop-collection]"
+    echo ""
+    echo "  build                     Build Docker image from source"
+    echo "  up                        Start all services (detached)"
+    echo "  down                      Stop all services"
+    echo "  restart                   Restart only gpthub container"
+    echo "  pull                      Pull latest git code"
+    echo "  logs [service]            Tail logs (default: gpthub)"
+    echo "  status                    Show health of all services"
+    echo "  qdrant-drop-collection    Drop Qdrant collection (triggers re-index)"
+    ;;
+esac

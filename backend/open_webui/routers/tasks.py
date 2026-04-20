@@ -533,16 +533,17 @@ async def generate_autocompletion(request: Request, form_data: dict, user=Depend
 
     # Use the fast/cheap task model for autocomplete — not the user's chat model
     autocomplete_model_configured = getattr(request.app.state.config, 'AUTOCOMPLETE_MODEL', None)
-    
+
     if autocomplete_model_configured and autocomplete_model_configured in models:
         task_model_id = autocomplete_model_configured
+        log.debug(f'autocomplete: using pinned model {task_model_id}')
     else:
-        # Heuristic: Find the lightest model automatically for autocomplete to ensure sub-50ms TTFT
-        lightweight_keywords = ['8b', '7b', '3b', '1.5b', 'coder', 'distill']
-        heavy_keywords = ['32b', '70b', '72b', 'pro', 'opus']
-        
+        # Heuristic fallback: find the lightest available model for sub-50ms TTFT
+        lightweight_keywords = ['8b', '7b', '3b', '1.5b', 'llama', 'distill']
+        heavy_keywords = ['32b', '70b', '72b', '235b', '357b', 'k2', 'pro', 'opus', 'alpha']
+
         best_model_id = None
-        
+
         # fallback to get_task_model_id if no light model found
         default_task_model = get_task_model_id(
             model_id,
@@ -555,11 +556,12 @@ async def generate_autocompletion(request: Request, form_data: dict, user=Depend
             m_id_lower = m_id.lower()
             if any(h in m_id_lower for h in heavy_keywords):
                 continue
-            if any(l in m_id_lower for l in lightweight_keywords):
+            if any(light in m_id_lower for light in lightweight_keywords):
                 best_model_id = m_id
                 break
-                
+
         task_model_id = best_model_id if best_model_id else default_task_model
+        log.debug(f'autocomplete: heuristic selected {task_model_id}')
 
     log.debug(f'generating autocompletion using task model {task_model_id} (chat model: {model_id}) for user {user.email}')
 

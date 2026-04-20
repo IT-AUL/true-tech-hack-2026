@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import Any
 
 log = logging.getLogger(__name__)
@@ -42,6 +43,26 @@ log = logging.getLogger(__name__)
 
 
 _mem0_instance = None
+
+
+def _strip_think(text: str) -> str:
+    """Remove <think>...</think> reasoning blocks emitted by Qwen3/GLM/R1 models."""
+    # Remove closed blocks
+    text = re.sub(r'<think>[\s\S]*?</think>', '', text, flags=re.IGNORECASE)
+    # Remove unclosed blocks (model cut off mid-thought)
+    text = re.sub(r'<think>[\s\S]*$', '', text, flags=re.IGNORECASE)
+    return text.strip()
+
+
+def _sanitize_messages(messages: list[dict]) -> list[dict]:
+    """Strip thinking blocks from all message content before writing to memory."""
+    cleaned = []
+    for msg in messages:
+        content = msg.get('content', '')
+        if isinstance(content, str):
+            content = _strip_think(content)
+        cleaned.append({**msg, 'content': content})
+    return cleaned
 
 def _get_mem0_client():
     """Return a fully-configured Mem0 Memory instance (singleton)."""
@@ -100,22 +121,24 @@ def _get_mem0_client():
             },
         },
         'custom_fact_extraction_prompt': (
-            "You are a Personal Memory Assistant. Your ONLY job is to extract "
-            "factual information ABOUT THE USER from the conversation.\n\n"
-            "Focus on:\n"
+            'You are a Personal Memory Assistant. Your ONLY job is to extract '
+            'factual information ABOUT THE USER from the conversation.\n\n'
+            'Focus on:\n'
             "- User's name, location, role, company, team\n"
             "- User's preferences (language, tools, frameworks, style)\n"
             "- User's goals, projects, deadlines\n"
-            "- Technical decisions the user made\n"
-            "- Important facts the user shared about themselves\n\n"
-            "DO NOT extract:\n"
-            "- What the assistant said or how the assistant behaves\n"
-            "- Generic conversational patterns\n"
-            "- Greetings or pleasantries\n\n"
-            "Return each fact as a short, clear sentence about the user. "
-            "If no user facts are found, return an empty list.\n"
-            "Example: 'User's name is Renat' or 'User prefers dark theme' or "
-            "'User is building a project called VibeHub'."
+            '- Technical decisions the user made\n'
+            '- Important facts the user shared about themselves\n\n'
+            'DO NOT extract:\n'
+            '- What the assistant said or how the assistant behaves\n'
+            '- Generic conversational patterns\n'
+            '- Greetings or pleasantries\n\n'
+            'Return each fact as a short, clear sentence about the user. '
+            'If no user facts are found, return an empty list.\n'
+            "Example: \"User's name is Renat\" or \"User prefers dark theme\" or "
+            '"User is building a project called VibeHub".\n\n'
+            'IMPORTANT: Output ONLY the JSON list of facts. '
+            'Do NOT use <think>...</think> blocks or any chain-of-thought reasoning.'
         ),
     }
 
@@ -193,10 +216,13 @@ async def add_messages_to_project_memory(
 
     def _sync_add():
         mem = _get_mem0_client()
+        # Strip <think>...</think> blocks from thinking models (Qwen3, GLM, R1)
+        # before writing to Qdrant to prevent reasoning traces polluting facts.
+        clean_messages = _sanitize_messages(messages)
         # agent_id scopes memories to the project so different projects
         # share no facts, even for the same user.
         mem.add(
-            messages=messages,
+            messages=clean_messages,
             user_id=user_id,
             agent_id=f'project-{project_id}',
             metadata={'project_id': project_id},

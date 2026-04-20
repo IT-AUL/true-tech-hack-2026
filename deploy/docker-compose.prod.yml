@@ -1,29 +1,81 @@
+# =============================================================================
+# GPTHub — Production Stack
+# Запуск: docker compose -f deploy/docker-compose.prod.yml --env-file .env.prod up -d
+# =============================================================================
+
 services:
   gpthub:
     image: ${GPTHUB_IMAGE:-gpthub-app:latest}
     container_name: gpthub
     ports:
       - "127.0.0.1:${PORT:-3000}:8080"
+    env_file:
+      - ../.env.prod          # все переменные из .env.prod пробрасываются внутрь
     environment:
-      - OPENAI_API_BASE_URL=${OPENAI_API_BASE_URL}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY}
-      - ENABLE_SIGNUP=${ENABLE_SIGNUP:-false}
-      - DEFAULT_USER_ROLE=${DEFAULT_USER_ROLE:-user}
-      - ENABLE_COMMUNITY_SHARING=false
-      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/backend/data/webui.db}
-      - SCARF_NO_ANALYTICS=true
-      - DO_NOT_TRACK=true
-      - ANONYMIZED_TELEMETRY=false
+      # Переопределяем только то, что отличается внутри docker-сети
+      - MEM0_VECTOR_STORE_URL=http://qdrant:6333
+      - REDIS_URL=redis://redis:6379/0
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
     volumes:
       - gpthub-data:/app/backend/data
+    extra_hosts:
+      - host.docker.internal:host-gateway
     restart: unless-stopped
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 90s
+    networks:
+      - gpthub-net
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: gpthub-qdrant
+    volumes:
+      - qdrant-data:/qdrant/storage
+    ports:
+      - "127.0.0.1:6333:6333"   # REST API (только localhost, не наружу)
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:6333/readyz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - gpthub-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: gpthub-redis
+    command: redis-server --save 60 1 --loglevel warning --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    ports:
+      - "127.0.0.1:6379:6379"   # только localhost
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - gpthub-net
 
 volumes:
-  gpthub-data:
+  gpthub-data: {}
+  qdrant-data: {}
+  redis-data: {}
+
+networks:
+  gpthub-net:
+    driver: bridge
