@@ -1,7 +1,7 @@
 # GPTHub / VibeHub — единое ИИ-пространство
 
 [![CI](https://github.com/IT-AUL/true-tech-hack-2026/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/IT-AUL/true-tech-hack-2026/actions/workflows/ci.yml)
-[![release](https://img.shields.io/static/v1?label=release&message=0.8.12-gpthub.27&color=blue)](https://github.com/IT-AUL/true-tech-hack-2026/releases/latest)
+[![release](https://img.shields.io/static/v1?label=release&message=0.8.12-gpthub.28&color=blue)](https://github.com/IT-AUL/true-tech-hack-2026/releases/latest)
 [![upstream](https://img.shields.io/static/v1?label=upstream&message=Open%20WebUI%200.8.12&color=8A2BE2&logo=github)](https://github.com/open-webui/open-webui)
 [![license](https://img.shields.io/badge/license-BSD--3--Clause-green.svg)](LICENSE)
 [![Docker Hub](https://img.shields.io/docker/pulls/itaul/gpthub?logo=docker&logoColor=white)](https://hub.docker.com/r/itaul/gpthub)
