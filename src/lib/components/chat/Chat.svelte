@@ -47,7 +47,8 @@
 		showFileNavPath,
 		showFileNavDir,
 		chatRequestQueues,
-		selectedProjectId
+		selectedProjectId,
+		projects
 	} from '$lib/stores';
 
 	import { WEBUI_API_BASE_URL } from '$lib/constants';
@@ -108,6 +109,7 @@
 	import Sidebar from '../icons/Sidebar.svelte';
 	import Image from '../common/Image.svelte';
 	import { getBanners } from '$lib/apis/configs';
+	import SpaceDashboard from '../workspace/SpaceDashboard.svelte';
 
 	export let chatIdProp = '';
 
@@ -150,7 +152,7 @@
 	let imageGenerationEnabled = false;
 	let webSearchEnabled = false;
 	let codeInterpreterEnabled = false;
-	let taskMode: 'auto' | 'chat' | 'code' | 'research' | 'vision' = 'auto';
+	let taskMode: 'auto' | 'chat' | 'code' | 'analysis' | 'product' = 'auto';
 
 	let showCommands = false;
 
@@ -2171,11 +2173,20 @@
 			params?.stream_response ??
 			true;
 
+		const systemModePrompts = {
+			'code': "You are an elite senior software developer. Write clean, robust code. You must output code inside standard markdown code blocks.",
+			'analysis': "You are an expert data storyteller and business analyst. Format your output as a professional report using Markdown tables, bullet points, and clear executive summaries.",
+			'product': "You are an elite product manager. Output requirements in a detailed PRD format using Markdown: include Objectives, User Stories, Acceptance Criteria, and Technical Considerations."
+		};
+
+		let modeSystemContent = taskMode !== 'auto' ? (systemModePrompts[taskMode] || "") : "";
+		let combinedSystemContent = `${params?.system ?? $settings.system ?? ''}\n${modeSystemContent}`.trim();
+
 		let messages = [
-			params?.system || $settings.system
+			combinedSystemContent
 				? {
 						role: 'system',
-						content: `${params?.system ?? $settings?.system ?? ''}`
+						content: combinedSystemContent
 					}
 				: undefined,
 			..._messages.map((message) => ({
@@ -2646,7 +2657,7 @@
 			currentChatPage.set(1);
 
 			selectedFolder.set(null);
-			selectedProjectId.set(null);
+			// We do not clear selectedProjectId here to maintain the Space concept
 		} else {
 			_chatId = `local:${$socket?.id}`; // Use socket id for temporary chat
 			await chatId.set(_chatId);
@@ -2894,6 +2905,21 @@
 							</div>
 
 							<div class=" pb-2 {dragged ? 'z-0' : 'z-10'}">
+								{#if $selectedProjectId}
+									{#each $projects as project}
+										{#if project.id === $selectedProjectId}
+											<div class="flex items-center justify-center mb-2 animate-fade-in relative z-20">
+												<div class="px-3 py-1.5 bg-indigo-50/80 dark:bg-indigo-900/20 backdrop-blur-md rounded-2xl border border-indigo-100/50 dark:border-indigo-800/30 flex items-center gap-2 shadow-xs">
+													<div class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse hidden md:block"></div>
+													<div class="text-xs font-medium text-indigo-700 dark:text-indigo-300">
+														Вы в Пространстве «{project.title}»
+													</div>
+													<span class="text-[10px] text-indigo-500/70 border border-indigo-500/20 px-1.5 rounded bg-white dark:bg-black/20 font-bold ml-1 mt-0.5">ПАМЯТЬ АКТИВНА</span>
+												</div>
+											</div>
+										{/if}
+									{/each}
+								{/if}
 								<MessageInput
 									bind:this={messageInput}
 									{history}
@@ -2979,7 +3005,7 @@
 								</div>
 							</div>
 						{:else}
-							<div class="flex items-center h-full">
+							<div class="flex items-center h-full w-full">
 								<Placeholder
 									{history}
 									{selectedModels}

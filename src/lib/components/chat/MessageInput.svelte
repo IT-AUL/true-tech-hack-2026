@@ -137,7 +137,7 @@
 
 	let showTerminalMenu = false;
 
-	export let taskMode: 'auto' | 'chat' | 'code' | 'research' | 'vision' = 'auto';
+	export let taskMode: 'auto' | 'chat' | 'code' | 'analysis' | 'product' = 'auto';
 
 	export let messageQueue: { id: string; prompt: string; files: any[] }[] = [];
 	export let onQueueSendNow: (id: string) => void = () => {};

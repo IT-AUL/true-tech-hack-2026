@@ -2497,9 +2497,11 @@ async def process_auto_routing(
     # --- Frontend task_mode override (user explicitly selected a mode from the UI pill bar) ---
     _TASK_MODE_TO_CATEGORY = {
         'code': 'code',
-        'research': 'research',
-        'vision': 'vision',
+        'analysis': 'analytics',
+        'product': 'creative',
         'chat': 'fallback',
+        'vision': 'vision',
+        'research': 'research',
     }
     task_mode = payload.get('task_mode') or (metadata.get('task_mode') if isinstance(metadata, dict) else None)
     if task_mode and task_mode in _TASK_MODE_TO_CATEGORY:

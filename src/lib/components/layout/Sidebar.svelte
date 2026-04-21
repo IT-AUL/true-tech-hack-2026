@@ -28,7 +28,8 @@
 		WEBUI_NAME,
 		sidebarWidth,
 		activeChatIds,
-		projects
+		projects,
+		selectedProjectId
 	} from '$lib/stores';
 	import { onMount, getContext, tick, onDestroy } from 'svelte';
 
@@ -68,6 +69,7 @@
 	import Note from '../icons/Note.svelte';
 	import { slide } from 'svelte/transition';
 	import HotkeyHint from '../common/HotkeyHint.svelte';
+	import SpacesColumn from './Sidebar/SpacesColumn.svelte';
 
 	const BREAKPOINT = 768;
 
@@ -217,6 +219,10 @@
 
 		if (res) {
 			projects.set(res);
+			
+			if (res.length === 0 && window.location.pathname === '/') {
+				goto('/workspace/onboarding');
+			}
 		}
 	};
 
@@ -398,8 +404,8 @@
 		selectedChatId = null;
 	};
 
-	const MIN_WIDTH = 220;
-	const MAX_WIDTH = 480;
+	const MIN_WIDTH = 300;
+	const MAX_WIDTH = 520;
 
 	let isResizing = false;
 
@@ -411,7 +417,7 @@
 		isResizing = true;
 
 		startClientX = e.clientX;
-		startWidth = $sidebarWidth ?? 260;
+		startWidth = $sidebarWidth ?? 340;
 
 		document.body.style.userSelect = 'none';
 	};
@@ -703,226 +709,11 @@
 />
 
 {#if !$mobile && !$showSidebar}
-	<div
-		class=" pt-[7px] pb-2 px-2 flex flex-col justify-between text-black dark:text-white hover:bg-gray-50/30 dark:hover:bg-gray-950/30 h-full z-10 transition-all border-e-[0.5px] border-gray-50 dark:border-gray-850/30"
-		id="sidebar"
-	>
-		<button
-			class="flex flex-col flex-1 {isWindows ? 'cursor-pointer' : 'cursor-[e-resize]'}"
-			on:click={async () => {
-				showSidebar.set(!$showSidebar);
-			}}
-		>
-			<div class="pb-1.5">
-				<Tooltip
-					content={$showSidebar ? $i18n.t('Close Sidebar') : $i18n.t('Open Sidebar')}
-					placement="right"
-				>
-					<button
-						class="flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition group {isWindows
-							? 'cursor-pointer'
-							: 'cursor-[e-resize]'}"
-						aria-label={$showSidebar ? $i18n.t('Close Sidebar') : $i18n.t('Open Sidebar')}
-					>
-						<div class=" self-center flex items-center justify-center size-9">
-							<img
-								src="/static/vibehub_v_icon.svg"
-								class="size-6 group-hover:hidden invert dark:invert-0"
-								alt="VibeHub"
-							/>
-
-							<Sidebar className="size-5 hidden group-hover:flex" />
-						</div>
-					</button>
-				</Tooltip>
-			</div>
-
-			<div class="-mt-[0.5px]">
-				<div class="">
-					<Tooltip content={$i18n.t('New Chat')} placement="right">
-						<a
-							class=" cursor-pointer flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
-							href="/"
-							draggable="false"
-							on:click={async (e) => {
-								e.stopImmediatePropagation();
-								e.preventDefault();
-
-								goto('/');
-								newChatHandler();
-							}}
-							aria-label={$i18n.t('New Chat')}
-						>
-							<div class=" self-center flex items-center justify-center size-9">
-								<PencilSquare className="size-4.5" />
-							</div>
-						</a>
-					</Tooltip>
-				</div>
-
-				<div>
-					<Tooltip content={$i18n.t('Search')} placement="right">
-						<button
-							class=" cursor-pointer flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
-							on:click={(e) => {
-								e.stopImmediatePropagation();
-								e.preventDefault();
-
-								showSearch.set(true);
-							}}
-							draggable="false"
-							aria-label={$i18n.t('Search')}
-						>
-							<div class=" self-center flex items-center justify-center size-9">
-								<Search className="size-4.5" />
-							</div>
-						</button>
-					</Tooltip>
-				</div>
-
-				{#if ($config?.features?.enable_notes ?? false) && ($user?.role === 'admin' || ($user?.permissions?.features?.notes ?? true))}
-					<div class="">
-						<Tooltip content={$i18n.t('Notes')} placement="right">
-							<a
-								class=" cursor-pointer flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
-								href="/notes"
-								on:click={async (e) => {
-									e.stopImmediatePropagation();
-									e.preventDefault();
-
-									goto('/notes');
-									itemClickHandler();
-								}}
-								draggable="false"
-								aria-label={$i18n.t('Notes')}
-							>
-								<div class=" self-center flex items-center justify-center size-9">
-									<Note className="size-4.5" />
-								</div>
-							</a>
-						</Tooltip>
-					</div>
-				{/if}
-
-				{#if $user?.role === 'admin' || $user?.permissions?.workspace?.models || $user?.permissions?.workspace?.knowledge || $user?.permissions?.workspace?.prompts || $user?.permissions?.workspace?.tools}
-					<div class="">
-						<Tooltip content={$i18n.t('Workspace')} placement="right">
-							<a
-								class=" cursor-pointer flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
-								href="/workspace"
-								on:click={async (e) => {
-									e.stopImmediatePropagation();
-									e.preventDefault();
-
-									goto('/workspace');
-									itemClickHandler();
-								}}
-								aria-label={$i18n.t('Workspace')}
-								draggable="false"
-							>
-								<div class=" self-center flex items-center justify-center size-9">
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										fill="none"
-										viewBox="0 0 24 24"
-										stroke-width="1.5"
-										stroke="currentColor"
-										class="size-4.5"
-									>
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											d="M13.5 16.875h3.375m0 0h3.375m-3.375 0V13.5m0 3.375v3.375M6 10.5h2.25a2.25 2.25 0 0 0 2.25-2.25V6a2.25 2.25 0 0 0-2.25-2.25H6A2.25 2.25 0 0 0 3.75 6v2.25A2.25 2.25 0 0 0 6 10.5Zm0 9.75h2.25A2.25 2.25 0 0 0 10.5 18v-2.25a2.25 2.25 0 0 0-2.25-2.25H6a2.25 2.25 0 0 0-2.25 2.25V18A2.25 2.25 0 0 0 6 20.25Zm9.75-9.75H18a2.25 2.25 0 0 0 2.25-2.25V6A2.25 2.25 0 0 0 18 3.75h-2.25A2.25 2.25 0 0 0 13.5 6v2.25a2.25 2.25 0 0 0 2.25 2.25Z"
-										/>
-									</svg>
-								</div>
-							</a>
-						</Tooltip>
-					</div>
-				{/if}
-
-				<div class="">
-					<Tooltip content={$i18n.t('Projects')} placement="right">
-						<a
-							class=" cursor-pointer flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
-							href="/workspace/projects"
-							on:click={async (e) => {
-								e.stopImmediatePropagation();
-								e.preventDefault();
-
-								goto('/workspace/projects');
-								itemClickHandler();
-							}}
-							aria-label={$i18n.t('Projects')}
-							draggable="false"
-						>
-							<div class=" self-center flex items-center justify-center size-9">
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									fill="none"
-									viewBox="0 0 24 24"
-									stroke-width="1.5"
-									stroke="currentColor"
-									class="size-4.5"
-								>
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										d="M2.25 21h19.5m-18-18v14.25A2.25 2.25 0 0 0 5.25 19.5h13.5A2.25 2.25 0 0 0 21 17.25V6.75A2.25 2.25 0 0 0 18.75 4.5H12l-2.25-2.25H5.25A2.25 2.25 0 0 0 3 4.5v12m14.25-10.5h1.5M16.5 15h1.5m-1.5-3h1.5m-1.5-3h1.5m-1.5 6h1.5"
-									/>
-								</svg>
-							</div>
-						</a>
-					</Tooltip>
-				</div>
-			</div>
-		</button>
-
-		<div>
-			<div>
-				<div class=" py-2 flex justify-center items-center">
-					{#if $user !== undefined && $user !== null}
-						<UserMenu
-							role={$user?.role}
-							profile={$config?.features?.enable_user_status ?? true}
-							showActiveUsers={false}
-							on:show={(e) => {
-								if (e.detail === 'archived-chat') {
-									showArchivedChats.set(true);
-								}
-							}}
-						>
-							<div
-								class=" cursor-pointer flex rounded-xl hover:bg-gray-100 dark:hover:bg-gray-850 transition group"
-							>
-								<div class="self-center relative">
-									<img
-										src={`${WEBUI_API_BASE_URL}/users/${$user?.id}/profile/image`}
-										class=" size-7 object-cover rounded-full"
-										alt={$i18n.t('Open User Profile Menu')}
-										aria-label={$i18n.t('Open User Profile Menu')}
-									/>
-
-									{#if $config?.features?.enable_user_status}
-										<div class="absolute -bottom-0.5 -right-0.5">
-											<span class="relative flex size-2.5">
-												<span
-													class="relative inline-flex size-2.5 rounded-full {true
-														? 'bg-green-500'
-														: 'bg-gray-300 dark:bg-gray-700'} border-2 border-white dark:border-gray-900"
-												></span>
-											</span>
-										</div>
-									{/if}
-								</div>
-							</div>
-						</UserMenu>
-					{/if}
-				</div>
-			</div>
-		</div>
+	<div class="h-full z-10 transition-all" id="sidebar">
+		<SpacesColumn onSpaceSelect={(id) => { showSidebar.set(true); }} />
 	</div>
 {/if}
+
 
 <!-- {$i18n.t('New Folder')} -->
 <!-- {$i18n.t('Pinned')} -->
@@ -941,71 +732,73 @@
 		data-state={$showSidebar}
 	>
 		<div
-			class=" my-auto flex flex-col justify-between h-screen max-h-[100dvh] w-[var(--sidebar-width)] overflow-x-hidden scrollbar-hidden z-50 {$showSidebar
+			class="my-auto flex flex-row h-screen max-h-[100dvh] w-[var(--sidebar-width)] z-50 {$showSidebar
 				? ''
 				: 'invisible'}"
 		>
-			<div
-				class="sidebar px-[0.5625rem] pt-2 pb-1.5 flex justify-between space-x-1 text-gray-600 dark:text-gray-400 sticky top-0 z-10 -mb-3"
-			>
-				<a
-					class="flex items-center rounded-xl h-full px-1 hover:bg-gray-100/50 dark:hover:bg-gray-850/50 transition no-drag-region"
-					href="/"
-					draggable="false"
-					on:click={newChatHandler}
+			<SpacesColumn />
+			<div class="flex flex-col flex-1 min-w-0 overflow-x-hidden scrollbar-hidden bg-gray-50/50 dark:bg-gray-950/50">
+				<div
+					class="sidebar px-[0.5625rem] pt-2 pb-1.5 flex justify-between space-x-1 text-gray-600 dark:text-gray-400 sticky top-0 z-10 -mb-3"
 				>
-					<img
-						src="{WEBUI_BASE_URL}/static/vibehub_logo.svg"
-						class="h-6 w-auto invert dark:invert-0"
-						alt="VibeHub"
-					/>
-				</a>
-
-				<div class="flex-1"></div>
-				<Tooltip
-					content={$showSidebar ? $i18n.t('Close Sidebar') : $i18n.t('Open Sidebar')}
-					placement="bottom"
-				>
-					<button
-						class="flex rounded-xl size-8.5 justify-center items-center hover:bg-gray-100/50 dark:hover:bg-gray-850/50 transition {isWindows
-							? 'cursor-pointer'
-							: 'cursor-[w-resize]'}"
-						on:click={() => {
-							showSidebar.set(!$showSidebar);
-						}}
-						aria-label={$showSidebar ? $i18n.t('Close Sidebar') : $i18n.t('Open Sidebar')}
+					<a
+						class="flex items-center rounded-xl h-full px-1 hover:bg-gray-100/50 dark:hover:bg-gray-850/50 transition no-drag-region"
+						href="/"
+						draggable="false"
+						on:click={newChatHandler}
 					>
-						<div class=" self-center p-1.5">
-							<Sidebar />
-						</div>
-					</button>
-				</Tooltip>
+						<img
+							src="{WEBUI_BASE_URL}/static/vibehub_logo.svg"
+							class="h-6 w-auto invert dark:invert-0"
+							alt="VibeHub"
+						/>
+					</a>
+
+					<div class="flex-1"></div>
+					<Tooltip
+						content={$showSidebar ? $i18n.t('Close Sidebar') : $i18n.t('Open Sidebar')}
+						placement="bottom"
+					>
+						<button
+							class="flex rounded-xl size-8.5 justify-center items-center hover:bg-gray-100/50 dark:hover:bg-gray-850/50 transition {isWindows
+								? 'cursor-pointer'
+								: 'cursor-[w-resize]'}"
+							on:click={() => {
+								showSidebar.set(!$showSidebar);
+							}}
+							aria-label={$showSidebar ? $i18n.t('Close Sidebar') : $i18n.t('Open Sidebar')}
+						>
+							<div class=" self-center p-1.5">
+								<Sidebar />
+							</div>
+						</button>
+					</Tooltip>
+
+					<div
+						class="{scrollTop > 0
+							? 'visible'
+							: 'invisible'} sidebar-bg-gradient-to-b bg-linear-to-b from-gray-50 dark:from-gray-950 to-transparent from-50% pointer-events-none absolute inset-0 -z-10 -mb-6"
+					></div>
+				</div>
 
 				<div
-					class="{scrollTop > 0
-						? 'visible'
-						: 'invisible'} sidebar-bg-gradient-to-b bg-linear-to-b from-gray-50 dark:from-gray-950 to-transparent from-50% pointer-events-none absolute inset-0 -z-10 -mb-6"
-				></div>
-			</div>
-
-			<div
-				class="relative flex flex-col flex-1 overflow-y-auto scrollbar-hidden pt-3 pb-3"
-				on:scroll={(e) => {
-					if (e.target.scrollTop === 0) {
-						scrollTop = 0;
-					} else {
-						scrollTop = e.target.scrollTop;
-					}
-
-					// Infinite scroll: load more chats when near bottom
-					if ($scrollPaginationEnabled && !chatListLoading && !allChatsLoaded) {
-						const { scrollHeight, clientHeight } = e.target;
-						if (scrollHeight - scrollTop - clientHeight < 200) {
-							loadMoreChats();
+					class="relative flex flex-col flex-1 overflow-y-auto scrollbar-hidden pt-3 pb-3"
+					on:scroll={(e) => {
+						if (e.target.scrollTop === 0) {
+							scrollTop = 0;
+						} else {
+							scrollTop = e.target.scrollTop;
 						}
-					}
-				}}
-			>
+
+						// Infinite scroll: load more chats when near bottom
+						if ($scrollPaginationEnabled && !chatListLoading && !allChatsLoaded) {
+							const { scrollHeight, clientHeight } = e.target;
+							if (scrollHeight - scrollTop - clientHeight < 200) {
+								loadMoreChats();
+							}
+						}
+					}}
+				>
 				<div class="pb-1.5">
 					<div class="px-[0.4375rem] flex justify-center text-gray-800 dark:text-gray-200">
 						<a
@@ -1028,6 +821,7 @@
 						</a>
 					</div>
 
+					{#if !$selectedProjectId}
 					<div class="px-[0.4375rem] flex justify-center text-gray-800 dark:text-gray-200">
 						<button
 							id="sidebar-search-button"
@@ -1103,77 +897,10 @@
 							</a>
 						</div>
 					{/if}
-
-					<div class="px-[0.4375rem] flex justify-center text-gray-800 dark:text-gray-200">
-						<a
-							id="sidebar-projects-button"
-							class="grow flex items-center space-x-3 rounded-2xl px-2.5 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition"
-							href="/workspace/projects"
-							on:click={itemClickHandler}
-							draggable="false"
-							aria-label={$i18n.t('Projects')}
-						>
-							<div class="self-center">
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									fill="none"
-									viewBox="0 0 24 24"
-									stroke-width="2"
-									stroke="currentColor"
-									class="size-4.5"
-								>
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										d="M2.25 21h19.5m-18-18v14.25A2.25 2.25 0 0 0 5.25 19.5h13.5A2.25 2.25 0 0 0 21 17.25V6.75A2.25 2.25 0 0 0 18.75 4.5H12l-2.25-2.25H5.25A2.25 2.25 0 0 0 3 4.5v12m14.25-10.5h1.5M16.5 15h1.5m-1.5-3h1.5m-1.5-3h1.5m-1.5 6h1.5"
-									/>
-								</svg>
-							</div>
-
-							<div class="flex self-center translate-y-[0.5px]">
-								<div class=" self-center text-sm font-primary">{$i18n.t('Projects')}</div>
-							</div>
-						</a>
-					</div>
+					{/if}
 				</div>
 
-					<div class="px-2 mt-4 mb-2">
-						<div class="text-xs font-semibold text-gray-500 uppercase tracking-wider pl-2.5">
-							Мои пространства
-						</div>
-						<div class="mt-2 space-y-1">
-							<a
-								class="flex items-center space-x-3 rounded-2xl px-2.5 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-900 transition"
-								href="#"
-								draggable="false"
-							>
-								<div class="flex items-center justify-center size-5 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg text-white font-bold text-[10px]">
-									S
-								</div>
-								<div class="text-sm text-gray-700 dark:text-gray-300 font-medium">Проект Сбер</div>
-							</a>
-							<a
-								class="flex items-center space-x-3 rounded-2xl px-2.5 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-900 transition"
-								href="#"
-								draggable="false"
-							>
-								<div class="flex items-center justify-center size-5 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg text-white font-bold text-[10px]">
-									V
-								</div>
-								<div class="text-sm text-gray-700 dark:text-gray-300 font-medium">VibeHub Core</div>
-							</a>
-							<a
-								class="flex items-center space-x-3 rounded-2xl px-2.5 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-900 transition"
-								href="#"
-								draggable="false"
-							>
-								<div class="flex items-center justify-center size-5 bg-gradient-to-br from-rose-500 to-pink-600 rounded-lg text-white font-bold text-[10px]">
-									T
-								</div>
-								<div class="text-sm text-gray-700 dark:text-gray-300 font-medium">True Tech Hack : Команда 1</div>
-							</a>
-						</div>
-					</div>
+				{#if !$selectedProjectId}
 
 				{#if ($models ?? []).length > 0 && (($settings?.pinnedModels ?? []).length > 0 || $config?.default_pinned_models)}
 					<Folder
@@ -1277,59 +1004,45 @@
 					</Folder>
 				{/if}
 
-				{#if ($projects ?? []).length >= 0}
-					<Folder
-						id="sidebar-projects-hub"
-						className="px-2 mt-0.5"
-						name={$i18n.t('Projects')}
-						chevron={true}
-						open={true}
-						onAdd={() => {
-							goto('/workspace/projects');
-							if ($mobile) showSidebar.set(false);
-						}}
-						onAddLabel={$i18n.t('Manage Projects')}
-					>
-						<div class="flex-1 flex flex-col overflow-y-auto scrollbar-hidden">
-							<div class="pt-1.5">
-								{#if $projects && $projects.length > 0}
-									{#each $projects as project, idx (`project-${project?.id ?? idx}`)}
-										<div class="px-[0.4375rem] flex justify-center text-gray-800 dark:text-gray-200">
-											<a
-												class="group grow flex items-center space-x-3 rounded-2xl px-2.5 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition outline-none"
-												href={`/workspace/projects?id=${project.id}`}
-												on:click={itemClickHandler}
-											>
-												<div class="self-center">
-													<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4.5 text-blue-500">
-														<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5M9 11.25v1.5M12 9v3.75m3-6v6" />
-													</svg>
-												</div>
-
-												<div class="flex flex-1 self-center translate-y-[0.5px]">
-													<div class=" self-center text-sm font-primary">{project.title}</div>
-												</div>
-											</a>
-										</div>
-									{/each}
-								{:else}
-									<div class="w-full flex justify-center py-2 text-xs text-gray-500">
-										{$i18n.t('No projects found')}
-									</div>
-								{/if}
-							</div>
-						</div>
-					</Folder>
-				{/if}
-
 				<div class="px-2 mt-4 mb-2">
 					<div class="text-xs font-semibold text-gray-500 uppercase tracking-wider pl-2.5">
 						Предыдущие чаты
 					</div>
 				</div>
+
+				{:else}
+
+				<div class="px-2 mt-2 mb-2">
+					<div class="flex items-center gap-2 pl-2.5 pr-1">
+						<div class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse shrink-0"></div>
+						<div class="text-xs font-semibold text-gray-500 uppercase tracking-wider truncate flex-1">
+							{#each $projects as p}
+								{#if p.id === $selectedProjectId}
+									{p.title}
+								{/if}
+							{/each}
+						</div>
+						<button
+							class="p-0.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition text-gray-400 hover:text-gray-600"
+							on:click={() => selectedProjectId.set(null)}
+							title="Выйти из пространства"
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-3.5">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+							</svg>
+						</button>
+					</div>
+				</div>
+
+				<div class="px-2 mb-2">
+					<div class="text-xs font-semibold text-gray-500 uppercase tracking-wider pl-2.5">
+						Чаты пространства
+					</div>
+				</div>
+				{/if}
 				<div class="pt-1.5 pb-20">
 					{#if $chats !== null}
-						{#each $chats as chat, idx (`chat-${chat.id}`)}
+						{#each ($selectedProjectId ? $chats.filter(c => c.project_id === $selectedProjectId) : $chats) as chat, idx (`chat-${chat.id}`)}
 							<div class="px-[0.4375rem] flex justify-center text-gray-800 dark:text-gray-200">
 								<ChatItem
 									className="w-full"
@@ -1362,53 +1075,16 @@
 							<div class="h-10 w-full" />
 						{/if}
 					</div>
+					</div>
 				</div>
-			</div>
 
-			<div class="px-1.5 pt-1.5 pb-2 sticky bottom-0 z-10 -mt-3 sidebar">
-				<div
-					class=" sidebar-bg-gradient-to-t bg-linear-to-t from-gray-50 dark:from-gray-950 to-transparent from-50% pointer-events-none absolute inset-0 -z-10 -mt-6"
-				></div>
-				<div class="flex flex-col font-primary">
-					{#if $user !== undefined && $user !== null}
-						<UserMenu
-							role={$user?.role}
-							profile={$config?.features?.enable_user_status ?? true}
-							showActiveUsers={false}
-							className="w-[calc(var(--sidebar-width)-1rem)]"
-							on:show={(e) => {
-								if (e.detail === 'archived-chat') {
-									showArchivedChats.set(true);
-								}
-							}}
-						>
-							<div
-								class=" flex items-center rounded-2xl py-2 px-1.5 w-full hover:bg-gray-100/50 dark:hover:bg-gray-900/50 transition"
-							>
-								<div class=" self-center mr-3 relative">
-									<img
-										src={`${WEBUI_API_BASE_URL}/users/${$user?.id}/profile/image`}
-										class=" size-7 object-cover rounded-full"
-										alt={$i18n.t('Open User Profile Menu')}
-										aria-label={$i18n.t('Open User Profile Menu')}
-									/>
-
-									{#if $config?.features?.enable_user_status}
-										<div class="absolute -bottom-0.5 -right-0.5">
-											<span class="relative flex size-2.5">
-												<span
-													class="relative inline-flex size-2.5 rounded-full {true
-														? 'bg-green-500'
-														: 'bg-gray-300 dark:bg-gray-700'} border-2 border-white dark:border-gray-900"
-												></span>
-											</span>
-										</div>
-									{/if}
-								</div>
-								<div class=" self-center font-medium">{$user?.name}</div>
-							</div>
-						</UserMenu>
-					{/if}
+				<div class="px-1.5 pt-1.5 pb-2 sticky bottom-0 z-10 -mt-3 sidebar">
+					<div
+						class=" sidebar-bg-gradient-to-t bg-linear-to-t from-gray-50 dark:from-gray-950 to-transparent from-50% pointer-events-none absolute inset-0 -z-10 -mt-6"
+					></div>
+					<div class="flex flex-col font-primary">
+						<!-- User menu moved to SpacesColumn -->
+					</div>
 				</div>
 			</div>
 		</div>

@@ -135,9 +135,11 @@ def _get_mem0_client():
             '- Greetings or pleasantries\n\n'
             'Return each fact as a short, clear sentence about the user. '
             'If no user facts are found, return an empty list.\n'
-            "Example: \"User's name is Renat\" or \"User prefers dark theme\" or "
-            '"User is building a project called VibeHub".\n\n'
-            'IMPORTANT: Output ONLY the JSON list of facts. '
+            "Example JSON:\n"
+            "{\n"
+            '  "facts": ["The user is named Renat", "User prefers dark theme", "User is building a project called VibeHub"]\n'
+            "}\n\n"
+            'IMPORTANT: Output ONLY a JSON object containing a "facts" array. '
             'Do NOT use <think>...</think> blocks or any chain-of-thought reasoning.'
         ),
     }

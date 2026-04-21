@@ -10,14 +10,14 @@
 	const i18n = getContext('i18n');
 	const dispatch = createEventDispatcher();
 
-	export let mode: 'auto' | 'chat' | 'code' | 'research' | 'vision' = 'auto';
+	export let mode: 'auto' | 'chat' | 'code' | 'analysis' | 'product' = 'auto';
 
 	const modes = [
 		{ id: 'auto', label: 'Авто', icon: Sparkles },
 		{ id: 'chat', label: 'Чат', icon: ChatBubble },
 		{ id: 'code', label: 'Код', icon: CommandLine },
-		{ id: 'research', label: 'Поиск', icon: GlobeAlt },
-		{ id: 'vision', label: 'Фото', icon: Photo }
+		{ id: 'analysis', label: 'Данные', icon: GlobeAlt },
+		{ id: 'product', label: 'Продукт', icon: Photo }
 	];
 
 	function selectMode(newMode) {
