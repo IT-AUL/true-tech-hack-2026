@@ -73,28 +73,6 @@ services:
       - NEO4J_PASSWORD=${NEO4J_PASSWORD:-}
       # Redis
       - REDIS_URL=redis://redis:6379/0
-      # RAG
-      - RAG_OPENAI_API_BASE_URL=${RAG_OPENAI_API_BASE_URL}
-      - RAG_OPENAI_API_KEY=${RAG_OPENAI_API_KEY}
-      - RAG_EMBEDDING_ENGINE=${RAG_EMBEDDING_ENGINE:-openai}
-      - RAG_EMBEDDING_MODEL=${RAG_EMBEDDING_MODEL:-qwen3-embedding-8b}
-      # Router
-      - ROUTER_MODEL=${ROUTER_MODEL:-llama-3.1-8b-instruct}
-      - ROUTER_API_BASE_URL=${ROUTER_API_BASE_URL}
-      - ROUTER_API_KEY=${ROUTER_API_KEY}
-      - REKA_API_KEY=${REKA_API_KEY}
-      - REKA_API_URL=${REKA_API_URL}
-      - REKA_ROUTER_MODEL=${REKA_ROUTER_MODEL:-llama-3.1-8b-instruct}
-      - ROUTERAI_API_URL=${ROUTERAI_API_URL}
-      - ROUTERAI_API_KEY=${ROUTERAI_API_KEY}
-      # STT
-      - AUDIO_STT_ENGINE=${AUDIO_STT_ENGINE:-openai}
-      - AUDIO_STT_OPENAI_API_BASE_URL=${AUDIO_STT_OPENAI_API_BASE_URL}
-      - AUDIO_STT_OPENAI_API_KEY=${AUDIO_STT_OPENAI_API_KEY}
-      - AUDIO_STT_MODEL=${AUDIO_STT_MODEL:-whisper-turbo-local}
-      # CORS
-      - CORS_ALLOW_ORIGIN=${CORS_ALLOW_ORIGIN:-*}
-      - FORWARDED_ALLOW_IPS=${FORWARDED_ALLOW_IPS:-*}
     volumes:
       - gpthub-data:/app/backend/data
     networks:
