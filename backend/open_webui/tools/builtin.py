@@ -53,6 +53,9 @@ MAX_KNOWLEDGE_BASE_SEARCH_ITEMS = 10_000
 _DOCUMENT_MIME_TYPES = {
     'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'pdf': 'application/pdf',
+    'txt': 'text/plain',
+    'md': 'text/markdown',
 }
 
 
@@ -77,7 +80,7 @@ def _build_document_file_payload(file_item) -> dict:
     return {
         'type': 'file',
         'id': file_item.id,
-        'url': file_item.id,
+        'url': f'/api/v1/files/{file_item.id}/content',
         'name': file_item.filename,
         'content_type': meta.get('content_type'),
         'size': meta.get('size'),
@@ -486,10 +489,10 @@ async def create_document(
     __message_id__: str = None,
 ) -> str:
     """
-    Create a DOCX or XLSX document and attach it to the current assistant message.
+    Create a document (DOCX, XLSX, PDF, TXT, or MD) and attach it to the current assistant message.
 
-    :param format: Output format. Allowed: docx, xlsx
-    :param content: The document body in markdown/plain text. For XLSX, markdown tables are converted to sheets.
+    :param format: Output format. Allowed: docx, xlsx, pdf, txt, md
+    :param content: The document body in markdown/plain text.
     :param title: Document title used inside the generated file
     :param filename: Base filename without extension
     :return: JSON with generated file metadata
@@ -500,7 +503,9 @@ async def create_document(
     try:
         normalized_format = _normalize_document_format(format)
         if normalized_format not in _DOCUMENT_MIME_TYPES:
-            return json.dumps({'error': 'Unsupported format. Allowed formats: docx, xlsx'})
+            return json.dumps(
+                {'error': 'Unsupported format. Allowed formats: docx, xlsx, pdf, txt, md'}
+            )
 
         user = UserModel(**__user__) if __user__ else None
         if user is None:
@@ -566,11 +571,11 @@ async def update_document(
     __message_id__: str = None,
 ) -> str:
     """
-    Create a revised copy of an existing DOCX/XLSX document and attach it to the current assistant message.
+    Create a revised copy of an existing document (DOCX, XLSX, PDF, TXT, or MD) and attach it to the current assistant message.
 
     :param file_id: Source file ID to update
     :param content: New full document body
-    :param format: Optional format override (docx/xlsx). If empty, inferred from source filename
+    :param format: Optional format override (docx, xlsx, pdf, txt, md). If empty, inferred from source filename
     :param title: Document title used inside the generated file
     :param filename: Optional new base filename without extension
     :return: JSON with revised file metadata
