@@ -503,9 +503,7 @@ async def create_document(
     try:
         normalized_format = _normalize_document_format(format)
         if normalized_format not in _DOCUMENT_MIME_TYPES:
-            return json.dumps(
-                {'error': 'Unsupported format. Allowed formats: docx, xlsx, pdf, txt, md'}
-            )
+            return json.dumps({'error': 'Unsupported format. Allowed formats: docx, xlsx, pdf, txt, md'})
 
         user = UserModel(**__user__) if __user__ else None
         if user is None:

@@ -5,8 +5,8 @@ import re
 from datetime import datetime
 from typing import Optional
 
-from markdown import markdown
 from bs4 import BeautifulSoup
+from markdown import markdown
 
 log = logging.getLogger(__name__)
 
@@ -85,7 +85,7 @@ def _parse_markdown_tables(text: str) -> list[list[list[str]]]:
                 cells = [td.get_text(strip=True) for td in tr.find_all(['th', 'td'])]
                 if cells:
                     table_data.append(cells)
-        
+
         if table_data:
             tables.append(table_data)
     return tables
@@ -161,12 +161,12 @@ def safe_fpdf_text(text: str) -> str:
 
 def generate_txt(title: str, messages: list[MessageItem]) -> bytes:
     header = f'{title}\nЭкспорт: {datetime.now().strftime("%d.%m.%Y %H:%M")}\n{"=" * 60}\n\n'
-    
+
     parts = []
     for msg in messages:
         role_line = f'[{_role_label(msg.role).upper()}]'
         parts.append(f'{role_line}\n{msg.content}')
-    
+
     body = '\n\n'.join(parts)
     return (header + body).encode('utf-8')
 
@@ -194,27 +194,26 @@ def generate_md(title: str, messages: list[MessageItem]) -> bytes:
 def generate_pdf(title: str, messages: list[MessageItem]) -> bytes:
     try:
         from fpdf import FPDF
-        from fpdf.fonts import FontFace
 
         class ChatPDF(FPDF):
             def __init__(self, *args, **kwargs):
                 super().__init__(*args, **kwargs)
                 # Try to load NotoSans font for Unicode/Cyrillic support
-                font_path = "backend/open_webui/static/fonts/NotoSans-Regular.ttf"
-                font_bold_path = "backend/open_webui/static/fonts/NotoSans-Bold.ttf"
-                font_italic_path = "backend/open_webui/static/fonts/NotoSans-Italic.ttf"
-                
+                font_path = 'backend/open_webui/static/fonts/NotoSans-Regular.ttf'
+                font_bold_path = 'backend/open_webui/static/fonts/NotoSans-Bold.ttf'
+                font_italic_path = 'backend/open_webui/static/fonts/NotoSans-Italic.ttf'
+
                 if os.path.exists(font_path):
-                    self.add_font("NotoSans", "", font_path)
-                    self.font_name = "NotoSans"
+                    self.add_font('NotoSans', '', font_path)
+                    self.font_name = 'NotoSans'
                 else:
-                    self.font_name = "Helvetica"
-                
+                    self.font_name = 'Helvetica'
+
                 if os.path.exists(font_bold_path):
-                    self.add_font("NotoSans", "B", font_bold_path)
-                
+                    self.add_font('NotoSans', 'B', font_bold_path)
+
                 if os.path.exists(font_italic_path):
-                    self.add_font("NotoSans", "I", font_italic_path)
+                    self.add_font('NotoSans', 'I', font_italic_path)
 
             def header(self):
                 self.set_font(self.font_name, 'B', 10)
@@ -267,60 +266,60 @@ def generate_pdf(title: str, messages: list[MessageItem]) -> bytes:
             # Render content with tables
             pdf.set_font(pdf.font_name, '', 10)
             pdf.set_text_color(40, 40, 40)
-            
+
             # Split content by tables
             lines = msg.content.splitlines()
             current_text_block = []
-            
+
             j = 0
             while j < len(lines):
                 line = lines[j]
-                
+
                 # Header detection
                 header_match = re.match(r'^(#{1,6})\s+(.*)', line)
                 if header_match:
                     if current_text_block:
-                        pdf.multi_cell(0, 5, "\n".join(current_text_block), new_x='LMARGIN', new_y='NEXT')
+                        pdf.multi_cell(0, 5, '\n'.join(current_text_block), new_x='LMARGIN', new_y='NEXT')
                         current_text_block = []
                         pdf.ln(2)
-                    
+
                     level = len(header_match.group(1))
                     header_text = header_match.group(2)
                     # H1: 18, H2: 16, H3: 14, H4: 12, H5: 11, H6: 10
                     size = max(10, 20 - (level * 2))
                     pdf.set_font(pdf.font_name, 'B', size)
-                    pdf.multi_cell(0, size/2 + 2, header_text, new_x='LMARGIN', new_y='NEXT')
-                    pdf.set_font(pdf.font_name, '', 10) # Reset
+                    pdf.multi_cell(0, size / 2 + 2, header_text, new_x='LMARGIN', new_y='NEXT')
+                    pdf.set_font(pdf.font_name, '', 10)  # Reset
                     pdf.ln(1)
                     j += 1
                     continue
 
                 # Check for table start
-                if '|' in line and j + 1 < len(lines) and _is_table_separator(lines[j+1]):
+                if '|' in line and j + 1 < len(lines) and _is_table_separator(lines[j + 1]):
                     # Flush current text block
                     if current_text_block:
-                        pdf.multi_cell(0, 5, "\n".join(current_text_block), new_x='LMARGIN', new_y='NEXT')
+                        pdf.multi_cell(0, 5, '\n'.join(current_text_block), new_x='LMARGIN', new_y='NEXT')
                         current_text_block = []
                         pdf.ln(2)
-                    
+
                     # Extract this table
                     table_lines = []
                     table_lines.append(lines[j])
-                    table_lines.append(lines[j+1])
+                    table_lines.append(lines[j + 1])
                     j += 2
                     while j < len(lines) and '|' in lines[j]:
                         table_lines.append(lines[j])
                         j += 1
-                    
-                    tables = _parse_markdown_tables("\n".join(table_lines))
+
+                    tables = _parse_markdown_tables('\n'.join(table_lines))
                     if tables:
                         for table in tables:
                             with pdf.table(
-                                borders_layout="SINGLE_TOP_LINE",
+                                borders_layout='SINGLE_TOP_LINE',
                                 cell_fill_color=(245, 245, 245),
-                                cell_fill_mode="ROWS",
+                                cell_fill_mode='ROWS',
                                 line_height=6,
-                                text_align="LEFT",
+                                text_align='LEFT',
                             ) as t:
                                 for row in table:
                                     row_cells = t.row()
@@ -331,9 +330,9 @@ def generate_pdf(title: str, messages: list[MessageItem]) -> bytes:
                 else:
                     current_text_block.append(line)
                     j += 1
-            
+
             if current_text_block:
-                pdf.multi_cell(0, 5, "\n".join(current_text_block), new_x='LMARGIN', new_y='NEXT')
+                pdf.multi_cell(0, 5, '\n'.join(current_text_block), new_x='LMARGIN', new_y='NEXT')
 
             pdf.ln(3)
 
@@ -421,8 +420,9 @@ def generate_docx(title: str, messages: list[MessageItem], include_chat_metadata
 
 
 def _append_content_to_docx(doc, content: str):
-    from docx.shared import Pt
     import re
+
+    from docx.shared import Pt
 
     # Split content into blocks of text and tables
     lines = content.splitlines()
@@ -430,31 +430,34 @@ def _append_content_to_docx(doc, content: str):
     while j < len(lines):
         line = lines[j]
         # Table detection
-        if '|' in line and j + 1 < len(lines) and _is_table_separator(lines[j+1]):
+        if '|' in line and j + 1 < len(lines) and _is_table_separator(lines[j + 1]):
             table_lines = []
             table_lines.append(lines[j])
-            table_lines.append(lines[j+1])
+            table_lines.append(lines[j + 1])
             j += 2
             while j < len(lines) and '|' in lines[j]:
                 table_lines.append(lines[j])
                 j += 1
-                
-            tables_data = _parse_markdown_tables("\n".join(table_lines))
+
+            tables_data = _parse_markdown_tables('\n'.join(table_lines))
             for table_data in tables_data:
-                if not table_data: continue
+                if not table_data:
+                    continue
                 docx_table = doc.add_table(rows=len(table_data), cols=len(table_data[0]))
                 docx_table.style = 'Table Grid'
                 for r_idx, row_data in enumerate(table_data):
                     for c_idx, cell_val in enumerate(row_data):
                         docx_table.cell(r_idx, c_idx).text = cell_val
-            doc.add_paragraph() # Spacer
+            doc.add_paragraph()  # Spacer
         elif line.startswith('#'):
             # Header detection
             level = 0
             for char in line:
-                if char == '#': level += 1
-                else: break
-                
+                if char == '#':
+                    level += 1
+                else:
+                    break
+
             if 1 <= level <= 6:
                 header_text = line[level:].strip()
                 # Heading levels in docx are 0-indexed where 0 is Title, 1 is Heading 1...
@@ -470,7 +473,7 @@ def _append_content_to_docx(doc, content: str):
             p = doc.add_paragraph()
             p.paragraph_format.space_before = Pt(0)
             p.paragraph_format.space_after = Pt(1)
-            
+
             # Very simple MD parsing for bold/italic
             parts = re.split(r'(\*\*.*?\*\*|\*.*?\*)', line)
             for part in parts:
