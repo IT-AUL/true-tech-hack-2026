@@ -652,14 +652,14 @@ async def get_file_content_by_id(
                     headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded_filename}"
                     if content_type == 'application/pdf' or filename.lower().endswith('.pdf'):
                         content_type = 'application/pdf'
-                    
+
                     # Force attachment for office and text documents to ensure download
                     if content_type in [
                         'application/pdf',
                         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                         'text/plain',
-                        'text/markdown'
+                        'text/markdown',
                     ] or filename.lower().endswith(('.pdf', '.docx', '.xlsx', '.txt', '.md')):
                         headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded_filename}"
 
