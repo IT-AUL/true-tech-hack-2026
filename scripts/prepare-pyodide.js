@@ -95,12 +95,16 @@ async function downloadPackages() {
 
 		try {
 			for (const pkg of packages) {
-				console.log(`Installing package: ${pkg}`);
-				await micropip.install(pkg);
+				try {
+					console.log(`Installing package: ${pkg}`);
+					await micropip.install(pkg);
+				} catch (err) {
+					console.error(`Failed to install package ${pkg}:`, err.message || err);
+					console.warn(`Skipping ${pkg} and continuing...`);
+				}
 			}
 		} catch (err) {
-			console.error('Package installation failed:', err);
-			return;
+			console.error('Package installation loop failed:', err);
 		}
 
 		console.log('Pyodide packages downloaded, freezing into lock file');
@@ -141,53 +145,58 @@ async function downloadPyPIWheels() {
 
 	for (const pkg of pypiPackages) {
 		console.log(`Fetching PyPI metadata for: ${pkg}`);
-		const res = await fetch(`https://pypi.org/pypi/${pkg}/json`);
-		if (!res.ok) {
-			console.error(`Failed to fetch PyPI metadata for ${pkg}: ${res.status}`);
-			continue;
-		}
-		const meta = await res.json();
-		const version = meta.info.version;
-		const files = meta.urls || [];
-		// Find the pure-Python wheel (py3-none-any)
-		const wheel = files.find(
-			(f) => f.filename.endsWith('.whl') && f.filename.includes('py3-none-any')
-		);
-		if (!wheel) {
-			console.warn(`No pure-Python wheel found for ${pkg}==${version}, skipping`);
-			continue;
-		}
-		const dest = `static/pyodide/${wheel.filename}`;
-		// Download wheel if not already present
 		try {
-			await access(dest);
-			console.log(`  Already exists: ${wheel.filename}`);
-		} catch {
-			console.log(`  Downloading: ${wheel.filename}`);
-			const wheelRes = await fetch(wheel.url);
-			if (!wheelRes.ok) {
-				console.error(`  Failed to download ${wheel.filename}: ${wheelRes.status}`);
+			const res = await fetch(`https://pypi.org/pypi/${pkg}/json`);
+			if (!res.ok) {
+				console.error(`Failed to fetch PyPI metadata for ${pkg}: ${res.status}`);
 				continue;
 			}
-			const buffer = Buffer.from(await wheelRes.arrayBuffer());
-			await writeFile(dest, buffer);
-			console.log(`  Saved: ${dest} (${buffer.length} bytes)`);
-		}
+			const meta = await res.json();
+			const version = meta.info.version;
+			const files = meta.urls || [];
+			// Find the pure-Python wheel (py3-none-any)
+			const wheel = files.find(
+				(f) => f.filename.endsWith('.whl') && f.filename.includes('py3-none-any')
+			);
+			if (!wheel) {
+				console.warn(`No pure-Python wheel found for ${pkg}==${version}, skipping`);
+				continue;
+			}
+			const dest = `static/pyodide/${wheel.filename}`;
+			// Download wheel if not already present
+			try {
+				await access(dest);
+				console.log(`  Already exists: ${wheel.filename}`);
+			} catch {
+				console.log(`  Downloading: ${wheel.filename}`);
+				const wheelRes = await fetch(wheel.url);
+				if (!wheelRes.ok) {
+					console.error(`  Failed to download ${wheel.filename}: ${wheelRes.status}`);
+					continue;
+				}
+				const buffer = Buffer.from(await wheelRes.arrayBuffer());
+				await writeFile(dest, buffer);
+				console.log(`  Saved: ${dest} (${buffer.length} bytes)`);
+			}
 
-		// Inject into pyodide-lock.json so micropip resolves locally
-		const normalizedName = pkg.replace(/-/g, '_');
-		if (!lockData.packages[normalizedName]) {
-			lockData.packages[normalizedName] = {
-				name: normalizedName,
-				version: version,
-				file_name: wheel.filename,
-				install_dir: 'site',
-				sha256: wheel.digests?.sha256 || '',
-				package_type: 'package',
-				imports: [normalizedName],
-				depends: []
-			};
-			console.log(`  Added ${normalizedName}==${version} to pyodide-lock.json`);
+			// Inject into pyodide-lock.json so micropip resolves locally
+			const normalizedName = pkg.replace(/-/g, '_');
+			if (!lockData.packages[normalizedName]) {
+				lockData.packages[normalizedName] = {
+					name: normalizedName,
+					version: version,
+					file_name: wheel.filename,
+					install_dir: 'site',
+					sha256: wheel.digests?.sha256 || '',
+					package_type: 'package',
+					imports: [normalizedName],
+					depends: []
+				};
+				console.log(`  Added ${normalizedName}==${version} to pyodide-lock.json`);
+			}
+		} catch (err) {
+			console.error(`Error processing PyPI package ${pkg}:`, err.message || err);
+			console.warn(`Continuing without ${pkg}...`);
 		}
 	}
 

@@ -7,14 +7,18 @@ IMPORTANT: DO NOT IMPORT THIS MODULE DIRECTLY IN OTHER PARTS OF THE CODEBASE.
 """
 
 import asyncio
+import io
 import json
 import logging
+import os
 import time
 
 from fastapi import Request
+from fastapi import UploadFile
 
 from open_webui.models.channels import Channels
 from open_webui.models.chats import Chats
+from open_webui.models.files import Files
 from open_webui.models.groups import Groups
 from open_webui.models.memories import Memories
 from open_webui.models.messages import Messages
@@ -35,15 +39,77 @@ from open_webui.routers.memories import (
     query_memory,
     update_memory_by_id,
 )
+from open_webui.routers.files import upload_file_handler
 from open_webui.routers.memories import (
     add_memory as _add_memory,
 )
 from open_webui.routers.retrieval import search_web as _search_web
+from open_webui.utils.document_generator import MessageItem, generate_document_by_format
 from open_webui.utils.sanitize import sanitize_code
 
 log = logging.getLogger(__name__)
 
 MAX_KNOWLEDGE_BASE_SEARCH_ITEMS = 10_000
+
+_DOCUMENT_MIME_TYPES = {
+    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+}
+
+
+def _normalize_document_format(fmt: str) -> str:
+    normalized = (fmt or '').lower().strip().lstrip('.')
+    if normalized == 'xlxs':
+        normalized = 'xlsx'
+    return normalized
+
+
+def _sanitize_document_filename(name: str, fallback: str) -> str:
+    value = (name or '').strip()
+    if not value:
+        value = fallback
+    value = os.path.basename(value)
+    value = ''.join(c for c in value if c.isalnum() or c in (' ', '-', '_', '.')).strip()
+    return value or fallback
+
+
+def _build_document_file_payload(file_item) -> dict:
+    meta = file_item.meta or {}
+    return {
+        'type': 'file',
+        'id': file_item.id,
+        'url': file_item.id,
+        'name': file_item.filename,
+        'content_type': meta.get('content_type'),
+        'size': meta.get('size'),
+        'status': 'processed',
+    }
+
+
+async def _attach_and_emit_document_file(
+    file_payload: dict,
+    __event_emitter__: callable = None,
+    __chat_id__: str = None,
+    __message_id__: str = None,
+) -> list[dict]:
+    files = [file_payload]
+
+    if __chat_id__ and __message_id__:
+        db_files = Chats.add_message_files_by_id_and_message_id(__chat_id__, __message_id__, files)
+        if db_files is not None:
+            files = db_files
+
+    if __event_emitter__:
+        await __event_emitter__(
+            {
+                'type': 'chat:message:files',
+                'data': {
+                    'files': files,
+                },
+            }
+        )
+
+    return files
 
 # =============================================================================
 # TIME UTILITIES
@@ -406,6 +472,174 @@ async def deep_research(
 # =============================================================================
 # IMAGE GENERATION TOOLS
 # =============================================================================
+
+
+async def create_document(
+    format: str,
+    content: str,
+    title: str = 'Generated Document',
+    filename: str = 'generated-document',
+    __request__: Request = None,
+    __user__: dict = None,
+    __event_emitter__: callable = None,
+    __chat_id__: str = None,
+    __message_id__: str = None,
+) -> str:
+    """
+    Create a DOCX or XLSX document and attach it to the current assistant message.
+
+    :param format: Output format. Allowed: docx, xlsx
+    :param content: The document body in markdown/plain text. For XLSX, markdown tables are converted to sheets.
+    :param title: Document title used inside the generated file
+    :param filename: Base filename without extension
+    :return: JSON with generated file metadata
+    """
+    if __request__ is None:
+        return json.dumps({'error': 'Request context not available'})
+
+    try:
+        normalized_format = _normalize_document_format(format)
+        if normalized_format not in _DOCUMENT_MIME_TYPES:
+            return json.dumps({'error': 'Unsupported format. Allowed formats: docx, xlsx'})
+
+        user = UserModel(**__user__) if __user__ else None
+        if user is None:
+            return json.dumps({'error': 'User context not available'})
+
+        document_bytes = generate_document_by_format(
+            normalized_format,
+            title or 'Generated Document',
+            [MessageItem(role='assistant', content=content or '')],
+            include_chat_metadata=False,
+        )
+
+        sanitized_filename = _sanitize_document_filename(filename, 'generated-document')
+        upload_name = f'{sanitized_filename}.{normalized_format}'
+        upload_file = UploadFile(
+            file=io.BytesIO(document_bytes),
+            filename=upload_name,
+            headers={'content-type': _DOCUMENT_MIME_TYPES[normalized_format]},
+        )
+
+        file_item = upload_file_handler(
+            __request__,
+            file=upload_file,
+            metadata={'source': 'tool:create_document'},
+            process=False,
+            user=user,
+        )
+        if not file_item:
+            return json.dumps({'error': 'Failed to upload generated document'})
+
+        file_payload = _build_document_file_payload(file_item)
+        attached_files = await _attach_and_emit_document_file(
+            file_payload,
+            __event_emitter__=__event_emitter__,
+            __chat_id__=__chat_id__,
+            __message_id__=__message_id__,
+        )
+
+        return json.dumps(
+            {
+                'status': 'success',
+                'message': 'Document generated and attached to the chat message.',
+                'file': file_payload,
+                'files': attached_files,
+            },
+            ensure_ascii=False,
+        )
+    except Exception as e:
+        log.exception(f'create_document error: {e}')
+        return json.dumps({'error': str(e)})
+
+
+async def update_document(
+    file_id: str,
+    content: str,
+    format: str = '',
+    title: str = 'Updated Document',
+    filename: str = '',
+    __request__: Request = None,
+    __user__: dict = None,
+    __event_emitter__: callable = None,
+    __chat_id__: str = None,
+    __message_id__: str = None,
+) -> str:
+    """
+    Create a revised copy of an existing DOCX/XLSX document and attach it to the current assistant message.
+
+    :param file_id: Source file ID to update
+    :param content: New full document body
+    :param format: Optional format override (docx/xlsx). If empty, inferred from source filename
+    :param title: Document title used inside the generated file
+    :param filename: Optional new base filename without extension
+    :return: JSON with revised file metadata
+    """
+    if __request__ is None:
+        return json.dumps({'error': 'Request context not available'})
+
+    try:
+        user = UserModel(**__user__) if __user__ else None
+        if user is None:
+            return json.dumps({'error': 'User context not available'})
+
+        source_file = Files.get_file_by_id_and_user_id(file_id, user.id)
+        if source_file is None:
+            return json.dumps({'error': 'Source file not found or access denied'})
+
+        inferred_format = _normalize_document_format((source_file.filename or '').split('.')[-1])
+        normalized_format = _normalize_document_format(format) if format else inferred_format
+        if normalized_format not in _DOCUMENT_MIME_TYPES:
+            return json.dumps({'error': 'Unsupported format. Allowed formats: docx, xlsx'})
+
+        document_bytes = generate_document_by_format(
+            normalized_format,
+            title or 'Updated Document',
+            [MessageItem(role='assistant', content=content or '')],
+            include_chat_metadata=False,
+        )
+
+        source_basename = os.path.splitext(source_file.filename or 'document')[0]
+        default_name = f'{source_basename}-updated'
+        sanitized_filename = _sanitize_document_filename(filename, default_name)
+        upload_name = f'{sanitized_filename}.{normalized_format}'
+        upload_file = UploadFile(
+            file=io.BytesIO(document_bytes),
+            filename=upload_name,
+            headers={'content-type': _DOCUMENT_MIME_TYPES[normalized_format]},
+        )
+
+        file_item = upload_file_handler(
+            __request__,
+            file=upload_file,
+            metadata={'source': 'tool:update_document', 'source_file_id': file_id},
+            process=False,
+            user=user,
+        )
+        if not file_item:
+            return json.dumps({'error': 'Failed to upload updated document'})
+
+        file_payload = _build_document_file_payload(file_item)
+        attached_files = await _attach_and_emit_document_file(
+            file_payload,
+            __event_emitter__=__event_emitter__,
+            __chat_id__=__chat_id__,
+            __message_id__=__message_id__,
+        )
+
+        return json.dumps(
+            {
+                'status': 'success',
+                'message': 'Document updated and attached as a new revision.',
+                'source_file_id': file_id,
+                'file': file_payload,
+                'files': attached_files,
+            },
+            ensure_ascii=False,
+        )
+    except Exception as e:
+        log.exception(f'update_document error: {e}')
+        return json.dumps({'error': str(e)})
 
 
 async def generate_image(

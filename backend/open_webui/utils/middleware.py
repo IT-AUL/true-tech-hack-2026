@@ -1176,6 +1176,48 @@ async def terminal_event_handler(
 async def chat_completion_tools_handler(
     request: Request, body: dict, extra_params: dict, user: UserModel, models, tools
 ) -> tuple[dict, dict]:
+    def detect_document_format_from_prompt(user_message: str) -> str | None:
+        if not isinstance(user_message, str):
+            return None
+        text = user_message.lower()
+        if re.search(r'\bdocx\b|\.docx\b|\bword\b|\bворд\b', text):
+            return 'docx'
+        if re.search(r'\bxlsx\b|\.xlsx\b|\bxlxs\b|\bxlsm\b|\bxls\b|\bexcel\b|\bэксель\b', text):
+            return 'xlsx'
+        return None
+
+    def is_document_create_intent(user_message: str) -> bool:
+        if not isinstance(user_message, str):
+            return False
+        text = user_message.lower()
+        has_create_verb = re.search(
+            r'созда|сдела|сгенер|подготов|сформир|выгрузи|экспорт|create|generate|make|build|export',
+            text,
+        ) is not None
+        has_document_hint = re.search(
+            r'документ|файл|отчет|отч[её]т|таблиц|sheet|spreadsheet|excel|word|docx|xlsx|xls',
+            text,
+        ) is not None
+        return has_create_verb and (
+            has_document_hint or detect_document_format_from_prompt(text) is not None
+        )
+
+    def infer_document_format(user_message: str) -> str:
+        explicit = detect_document_format_from_prompt(user_message)
+        if explicit:
+            return explicit
+
+        text = (user_message or '').lower()
+        is_tabular = (
+            '|' in text
+            or 'таблиц' in text
+            or 'sheet' in text
+            or 'spreadsheet' in text
+            or 'excel' in text
+            or 'эксель' in text
+        )
+        return 'xlsx' if is_tabular else 'docx'
+
     async def get_content_from_response(response) -> str | None:
         content = None
         if hasattr(response, 'body_iterator'):
@@ -1218,6 +1260,13 @@ async def chat_completion_tools_handler(
     event_emitter = extra_params['__event_emitter__']
     metadata = extra_params['__metadata__']
 
+    log.warning(
+        '[TOOLS][fallback] available=%s chat_id=%s message_id=%s',
+        sorted(tools.keys()),
+        metadata.get('chat_id'),
+        metadata.get('message_id'),
+    )
+
     task_model_id = get_task_model_id(
         body['model'],
         request.app.state.config.TASK_MODEL,
@@ -1227,6 +1276,134 @@ async def chat_completion_tools_handler(
 
     skip_files = False
     sources = []
+
+    async def force_create_document_call(reason: str) -> bool:
+        nonlocal skip_files
+
+        if 'create_document' not in tools:
+            return False
+
+        last_user_message = get_last_user_message(body.get('messages', []))
+        if not is_document_create_intent(last_user_message):
+            return False
+
+        document_format = infer_document_format(last_user_message)
+        forced_tool_call = {
+            'name': 'create_document',
+            'parameters': {
+                'format': document_format,
+                'content': last_user_message,
+                'title': 'Generated Document',
+                'filename': 'generated-document',
+            },
+        }
+
+        tool_function_name = forced_tool_call['name']
+        tool_function_params = forced_tool_call['parameters']
+
+        log.warning(
+            '[TOOLS][fallback] forcing_create_document reason=%s format=%s',
+            reason,
+            document_format,
+        )
+
+        tool = tools[tool_function_name]
+        tool_type = tool.get('type', '')
+        direct_tool = tool.get('direct', False)
+
+        try:
+            spec = tool.get('spec', {})
+            allowed_params = spec.get('parameters', {}).get('properties', {}).keys()
+            tool_function_params = {k: v for k, v in tool_function_params.items() if k in allowed_params}
+
+            if direct_tool:
+                tool_result = await event_caller(
+                    {
+                        'type': 'execute:tool',
+                        'data': {
+                            'id': str(uuid4()),
+                            'name': tool_function_name,
+                            'params': tool_function_params,
+                            'server': tool.get('server', {}),
+                            'session_id': metadata.get('session_id', None),
+                        },
+                    }
+                )
+            else:
+                tool_function = tool['callable']
+                tool_result = await tool_function(**tool_function_params)
+        except Exception as e:
+            log.exception('[TOOLS][fallback] forcing_create_document_error')
+            tool_result = str(e)
+
+        tool_result, tool_result_files, tool_result_embeds = process_tool_result(
+            request,
+            tool_function_name,
+            tool_result,
+            tool_type,
+            direct_tool,
+            metadata,
+            user,
+        )
+
+        if event_emitter:
+            await terminal_event_handler(
+                tool_function_name,
+                tool_function_params,
+                tool_result,
+                event_emitter,
+            )
+
+            if tool_result_files:
+                await event_emitter(
+                    {
+                        'type': 'files',
+                        'data': {
+                            'files': tool_result_files,
+                        },
+                    }
+                )
+
+            if tool_result_embeds:
+                await event_emitter(
+                    {
+                        'type': 'embeds',
+                        'data': {
+                            'embeds': tool_result_embeds,
+                        },
+                    }
+                )
+
+        if tool_result:
+            tool_id = tool.get('tool_id', '')
+            tool_name = f'{tool_id}/{tool_function_name}' if tool_id else f'{tool_function_name}'
+
+            sources.append(
+                {
+                    'source': {
+                        'name': (f'{tool_name}'),
+                    },
+                    'document': [str(tool_result)],
+                    'metadata': [
+                        {
+                            'source': (f'{tool_name}'),
+                            'parameters': tool_function_params,
+                        }
+                    ],
+                    'tool_result': True,
+                }
+            )
+
+            if tool.get('metadata', {}).get('file_handler', False):
+                skip_files = True
+
+        log.warning(
+            '[TOOLS][fallback] forcing_create_document_done has_result=%s files=%s embeds=%s',
+            bool(tool_result),
+            len(tool_result_files),
+            len(tool_result_embeds),
+        )
+        return True
 
     specs = [tool['spec'] for tool in tools.values()]
     tools_specs = json.dumps(specs, ensure_ascii=False)
@@ -1246,6 +1423,9 @@ async def chat_completion_tools_handler(
         log.debug(f'{content=}')
 
         if not content:
+            forced = await force_create_document_call('planner_response_empty')
+            if forced:
+                return body, {'sources': sources}
             return body, {}
 
         try:
@@ -1262,6 +1442,11 @@ async def chat_completion_tools_handler(
 
                 tool_function_name = tool_call.get('name', None)
                 if tool_function_name not in tools:
+                    log.warning(
+                        '[TOOLS][fallback] requested_tool_not_available name=%s available=%s',
+                        tool_function_name,
+                        sorted(tools.keys()),
+                    )
                     return body, {}
 
                 tool_function_params = tool_call.get('parameters', {})
@@ -1274,6 +1459,12 @@ async def chat_completion_tools_handler(
                     tool = tools[tool_function_name]
                     tool_type = tool.get('type', '')
                     direct_tool = tool.get('direct', False)
+                    log.warning(
+                        '[TOOLS][fallback] execute_start name=%s direct=%s params=%s',
+                        tool_function_name,
+                        direct_tool,
+                        sorted(tool_function_params.keys()),
+                    )
 
                     spec = tool.get('spec', {})
                     allowed_params = spec.get('parameters', {}).get('properties', {}).keys()
@@ -1297,6 +1488,7 @@ async def chat_completion_tools_handler(
                         tool_result = await tool_function(**tool_function_params)
 
                 except Exception as e:
+                    log.exception('[TOOLS][fallback] execute_error name=%s', tool_function_name)
                     tool_result = str(e)
 
                 tool_result, tool_result_files, tool_result_embeds = process_tool_result(
@@ -1363,6 +1555,14 @@ async def chat_completion_tools_handler(
                     if tools[tool_function_name].get('metadata', {}).get('file_handler', False):
                         skip_files = True
 
+                log.warning(
+                    '[TOOLS][fallback] execute_done name=%s has_result=%s files=%s embeds=%s',
+                    tool_function_name,
+                    bool(tool_result),
+                    len(tool_result_files),
+                    len(tool_result_embeds),
+                )
+
             # check if "tool_calls" in result
             if result.get('tool_calls'):
                 for tool_call in result.get('tool_calls'):
@@ -1371,10 +1571,12 @@ async def chat_completion_tools_handler(
                 await tool_call_handler(result)
 
         except Exception as e:
-            log.debug(f'Error: {e}')
+            log.warning('[TOOLS][fallback] planner_parse_error error=%s', e)
+            await force_create_document_call('planner_parse_error')
             content = None
     except Exception as e:
-        log.debug(f'Error: {e}')
+        log.warning('[TOOLS][fallback] planner_request_error error=%s', e)
+        await force_create_document_call('planner_request_error')
         content = None
 
     log.debug(f'tool_contexts: {sources}')
@@ -2760,15 +2962,21 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         if mcp_clients:
             metadata['mcp_clients'] = mcp_clients
 
-        # Inject builtin tools for native function calling based on enabled features and model capability
+        # Inject builtin tools based on enabled features and model capability.
+        # Native mode gets full builtin set; default mode gets only document tools.
         # Check if builtin_tools capability is enabled for this model (defaults to True if not specified)
         builtin_tools_enabled = (model.get('info', {}).get('meta', {}).get('capabilities') or {}).get(
             'builtin_tools', True
         )
-        if metadata.get('params', {}).get('function_calling') == 'native' and builtin_tools_enabled:
-            # Add file context to user messages
-            chat_id = metadata.get('chat_id')
-            form_data['messages'] = add_file_context(form_data.get('messages', []), chat_id, user)
+        function_calling_mode = metadata.get('params', {}).get('function_calling')
+        log.warning(
+            '[TOOLS] builtin_capability=%s mode=%s chat_id=%s message_id=%s',
+            builtin_tools_enabled,
+            function_calling_mode,
+            metadata.get('chat_id'),
+            metadata.get('message_id'),
+        )
+        if builtin_tools_enabled:
             builtin_tools = get_builtin_tools(
                 request,
                 {
@@ -2779,9 +2987,28 @@ async def process_chat_payload(request, form_data, user, metadata, model):
                 features,
                 model,
             )
-            for name, tool_dict in builtin_tools.items():
-                if name not in tools_dict:
-                    tools_dict[name] = tool_dict
+
+            if function_calling_mode == 'native':
+                # Native mode keeps current behavior: full builtin set + file context.
+                chat_id = metadata.get('chat_id')
+                form_data['messages'] = add_file_context(form_data.get('messages', []), chat_id, user)
+
+                for name, tool_dict in builtin_tools.items():
+                    if name not in tools_dict:
+                        tools_dict[name] = tool_dict
+            else:
+                # Default mode: expose only document creation/update to avoid
+                # broad behavior changes for other builtin tools.
+                for name in ('create_document', 'update_document'):
+                    tool_dict = builtin_tools.get(name)
+                    if tool_dict and name not in tools_dict:
+                        tools_dict[name] = tool_dict
+
+        log.warning(
+            '[TOOLS] injected_tools_total=%s names=%s',
+            len(tools_dict),
+            sorted(tools_dict.keys()),
+        )
 
         if tools_dict:
             if metadata.get('params', {}).get('function_calling') == 'native':
@@ -4307,6 +4534,7 @@ async def streaming_chat_response_handler(response, ctx):
                         tool_call_id = tool_call.get('id', '')
                         tool_function_name = tool_call.get('function', {}).get('name', '')
                         tool_args = tool_call.get('function', {}).get('arguments', '{}')
+                        log.warning('[TOOLS][native] call_received id=%s name=%s', tool_call_id, tool_function_name)
 
                         tool_function_params = {}
                         if tool_args and tool_args.strip():
@@ -4351,6 +4579,13 @@ async def streaming_chat_response_handler(response, ctx):
                                     k: v for k, v in tool_function_params.items() if k in allowed_params
                                 }
 
+                                log.warning(
+                                    '[TOOLS][native] execute_start name=%s direct=%s params=%s',
+                                    tool_function_name,
+                                    direct_tool,
+                                    sorted(tool_function_params.keys()),
+                                )
+
                                 if direct_tool:
                                     tool_result = await event_caller(
                                         {
@@ -4377,7 +4612,14 @@ async def streaming_chat_response_handler(response, ctx):
                                     tool_result = await tool_function(**tool_function_params)
 
                             except Exception as e:
+                                log.exception('[TOOLS][native] execute_error name=%s', tool_function_name)
                                 tool_result = str(e)
+                        else:
+                            log.warning(
+                                '[TOOLS][native] requested_tool_not_available name=%s available=%s',
+                                tool_function_name,
+                                sorted(tools.keys()),
+                            )
 
                         tool_result, tool_result_files, tool_result_embeds = process_tool_result(
                             request,
@@ -4427,6 +4669,15 @@ async def streaming_chat_response_handler(response, ctx):
                                 **({'files': tool_result_files} if tool_result_files else {}),
                                 **({'embeds': tool_result_embeds} if tool_result_embeds else {}),
                             }
+                        )
+
+                        log.warning(
+                            '[TOOLS][native] execute_done id=%s name=%s has_result=%s files=%s embeds=%s',
+                            tool_call_id,
+                            tool_function_name,
+                            bool(tool_result),
+                            len(tool_result_files),
+                            len(tool_result_embeds),
                         )
 
                     # Update function_call statuses and append function_call_output items

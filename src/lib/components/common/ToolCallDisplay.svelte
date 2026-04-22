@@ -15,6 +15,7 @@
 	import WrenchSolid from '../icons/WrenchSolid.svelte';
 	import CheckCircle from '../icons/CheckCircle.svelte';
 	import Image from './Image.svelte';
+	import FileItem from './FileItem.svelte';
 	import FullHeightIframe from './FullHeightIframe.svelte';
 	import { settings } from '$lib/stores';
 
@@ -260,6 +261,15 @@
 				{:else if typeof file === 'object'}
 					{#if (file.type === 'image' || (file?.content_type ?? '').startsWith('image/')) && file.url}
 						<Image id={`${componentId}-tool-call-result-${idx}`} src={file.url} alt="Image" />
+					{:else if file.url}
+						<FileItem
+							item={file}
+							url={file.url}
+							name={file.name ?? file.filename ?? 'file'}
+							type={file.type ?? 'file'}
+							size={file?.size}
+							small={true}
+						/>
 					{/if}
 				{/if}
 			{/each}
