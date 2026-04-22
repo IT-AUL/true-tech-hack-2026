@@ -840,6 +840,36 @@ except ValueError:
     ROUTER_TEMPERATURE = 0.2
 
 
+# -------- Presentation pipeline (auto-routed category == 'presentation') --------
+ENABLE_PRESENTATION_PIPELINE = os.environ.get('ENABLE_PRESENTATION_PIPELINE', 'True').lower() in (
+    '1',
+    'true',
+    'yes',
+)
+
+try:
+    PRESENTATION_MAX_SLIDES = max(3, min(40, int(os.environ.get('PRESENTATION_MAX_SLIDES', '12'))))
+except ValueError:
+    PRESENTATION_MAX_SLIDES = 12
+
+PRESENTATION_ENABLE_IMAGES = os.environ.get('PRESENTATION_ENABLE_IMAGES', 'True').lower() in (
+    '1',
+    'true',
+    'yes',
+)
+
+try:
+    PRESENTATION_IMAGE_CONCURRENCY = max(1, min(8, int(os.environ.get('PRESENTATION_IMAGE_CONCURRENCY', '3'))))
+except ValueError:
+    PRESENTATION_IMAGE_CONCURRENCY = 3
+
+PRESENTATION_ENABLE_DETAIL_STEP = os.environ.get('PRESENTATION_ENABLE_DETAIL_STEP', 'True').lower() in (
+    '1',
+    'true',
+    'yes',
+)
+
+
 RAG_EMBEDDING_TIMEOUT = os.environ.get('RAG_EMBEDDING_TIMEOUT', '')
 
 if RAG_EMBEDDING_TIMEOUT == '':
@@ -1041,7 +1071,9 @@ MEM0_EMBEDDER_PROVIDER = os.environ.get('MEM0_EMBEDDER_PROVIDER', 'openai')
 MEM0_EMBEDDER_MODEL = os.environ.get('MEM0_EMBEDDER_MODEL', 'bge-m3')
 MEM0_EMBEDDER_BASE_URL = os.environ.get('MEM0_EMBEDDER_BASE_URL', MEM0_LLM_BASE_URL)
 MEM0_EMBEDDER_API_KEY = os.environ.get('MEM0_EMBEDDER_API_KEY', MEM0_LLM_API_KEY)
-MEM0_EMBEDDING_DIMS = int(os.environ.get('MEM0_EMBEDDING_DIMS', '4096'))  # qwen3-embedding-8b=4096, bge-m3=1024, text-embedding-3-small=1536
+MEM0_EMBEDDING_DIMS = int(
+    os.environ.get('MEM0_EMBEDDING_DIMS', '4096')
+)  # qwen3-embedding-8b=4096, bge-m3=1024, text-embedding-3-small=1536
 
 # Vector store used by Mem0 (qdrant | chroma | …).
 # Defaults to qdrant running at localhost. Adjust if you run your own Qdrant.

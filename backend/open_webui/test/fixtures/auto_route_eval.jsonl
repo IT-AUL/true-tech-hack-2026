@@ -207,3 +207,13 @@
 {"id": "document_analyze_file", "expected_category": "document", "messages": [{"role": "user", "content": "проанализируй файл и выдели основные тезисы"}]}
 {"id": "code_python_explicit", "expected_category": "code", "messages": [{"role": "user", "content": "python скрипт для скачивания файлов"}]}
 {"id": "research_poisk", "expected_category": "research", "messages": [{"role": "user", "content": "поиск информации о новых технологиях в медицине"}]}
+{"id": "presentation_ru_sdelaj_pro_ai", "expected_category": "presentation", "messages": [{"role": "user", "content": "сделай презентацию про искусственный интеллект"}]}
+{"id": "presentation_ru_sozdaj_slides_diplom", "expected_category": "presentation", "messages": [{"role": "user", "content": "создай слайды для защиты диплома на тему машинного обучения"}]}
+{"id": "presentation_ru_nuzhen_pptx", "expected_category": "presentation", "messages": [{"role": "user", "content": "нужен pptx по квартальным метрикам продаж"}]}
+{"id": "presentation_ru_podgotov_slides", "expected_category": "presentation", "messages": [{"role": "user", "content": "подготовь слайды на тему маркетинга в b2b"}]}
+{"id": "presentation_ru_soberi_deck", "expected_category": "presentation", "messages": [{"role": "user", "content": "собери pitch deck для стартапа, 10 слайдов"}]}
+{"id": "presentation_ru_powerpoint", "expected_category": "presentation", "messages": [{"role": "user", "content": "сделай powerpoint по истории компьютеров"}]}
+{"id": "presentation_en_make_deck", "expected_category": "presentation", "messages": [{"role": "user", "content": "make a slide deck about machine learning fundamentals"}]}
+{"id": "presentation_en_create_pres", "expected_category": "presentation", "messages": [{"role": "user", "content": "create a presentation on climate change for high school students"}]}
+{"id": "presentation_en_build_pptx", "expected_category": "presentation", "messages": [{"role": "user", "content": "build pptx for the quarterly business review"}]}
+{"id": "presentation_en_prepare_slides", "expected_category": "presentation", "messages": [{"role": "user", "content": "prepare slides for my thesis defense on neural networks"}]}

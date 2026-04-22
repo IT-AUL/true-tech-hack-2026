@@ -341,6 +341,209 @@ async def _auto_routed_image_generation_attempt(
     return _build_auto_routed_image_generation_response(model_id, images), 'terminal'
 
 
+def _presentation_pipeline_enabled() -> bool:
+    try:
+        from open_webui.env import ENABLE_PRESENTATION_PIPELINE
+
+        return bool(ENABLE_PRESENTATION_PIPELINE)
+    except Exception:
+        return True
+
+
+def _safe_pptx_filename(title: str) -> str:
+    """Build a filesystem-safe .pptx filename from a presentation title."""
+    base = (title or 'presentation').strip()
+    base = re.sub(r'[^\w\s\-а-яА-ЯёЁ]+', '', base, flags=re.UNICODE)
+    base = re.sub(r'\s+', '_', base).strip('_')
+    if not base:
+        base = 'presentation'
+    if len(base) > 80:
+        base = base[:80]
+    return f'{base}.pptx'
+
+
+PPTX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+
+
+def _build_auto_routed_presentation_response(
+    model_id: str,
+    url: str,
+    filename: str,
+    slide_count: int,
+    file_id: str,
+) -> JSONResponse:
+    content = f'Презентация готова: {slide_count} слайдов. Файл прикреплён к сообщению.'
+    file_descriptor = {
+        'type': 'file',
+        'id': file_id,
+        'url': url,
+        'name': filename,
+        'content_type': PPTX_CONTENT_TYPE,
+    }
+    # NOTE: we inject `files` INTO choices[0].message so that the non-stream chat
+    # response middleware (utils/middleware.py :: non_streaming_chat_response_handler)
+    # picks it up the same way it does for `images` and does not wipe the attachment
+    # we have already linked via Chats.insert_chat_files.
+    return JSONResponse(
+        content={
+            'id': f'chatcmpl-presentation-{int(time.time() * 1000)}',
+            'object': 'chat.completion',
+            'created': int(time.time()),
+            'model': model_id,
+            'choices': [
+                {
+                    'index': 0,
+                    'message': {
+                        'role': 'assistant',
+                        'content': content,
+                        'files': [file_descriptor],
+                    },
+                    'finish_reason': 'stop',
+                }
+            ],
+            'files': [file_descriptor],
+        },
+        headers={'x-selected-model': model_id},
+    )
+
+
+async def _auto_routed_presentation_attempt(
+    request: Request,
+    payload: dict,
+    model_id: str,
+    metadata: dict | None,
+    user: UserModel,
+    *,
+    allow_failover: bool,
+):
+    """Backend orchestrator for category == 'presentation' — builds a .pptx and attaches it to the chat."""
+    import io as _io
+    import uuid as _uuid
+
+    from fastapi import UploadFile
+    from open_webui.env import (
+        PRESENTATION_ENABLE_DETAIL_STEP,
+        PRESENTATION_ENABLE_IMAGES,
+        PRESENTATION_IMAGE_CONCURRENCY,
+        PRESENTATION_MAX_SLIDES,
+    )
+    from open_webui.models.chats import Chats
+    from open_webui.routers.files import upload_file_handler
+    from open_webui.socket.main import get_event_emitter
+    from open_webui.utils.presentation import run_presentation_pipeline
+
+    prompt = _extract_last_user_text(payload.get('messages', []))
+    if not prompt:
+        raise HTTPException(status_code=400, detail='Open WebUI: Missing presentation prompt')
+
+    event_emitter = None
+    if metadata and metadata.get('chat_id') and metadata.get('message_id'):
+        try:
+            event_emitter = get_event_emitter(
+                {
+                    'user_id': user.id,
+                    'chat_id': metadata['chat_id'],
+                    'message_id': metadata['message_id'],
+                    'session_id': metadata.get('session_id'),
+                }
+            )
+        except Exception as exc:
+            log.warning('Failed to build presentation event_emitter: %s', exc)
+            event_emitter = None
+
+    try:
+        spec, pptx_bytes = await run_presentation_pipeline(
+            request,
+            user,
+            user_prompt=prompt,
+            writer_model_id=model_id,
+            max_slides=PRESENTATION_MAX_SLIDES,
+            enable_images=PRESENTATION_ENABLE_IMAGES,
+            enable_detail_step=PRESENTATION_ENABLE_DETAIL_STEP,
+            image_concurrency=PRESENTATION_IMAGE_CONCURRENCY,
+            event_emitter=event_emitter,
+        )
+    except HTTPException as exc:
+        if allow_failover and exc.status_code in AUTO_ROUTE_FAILOVER_HTTP_STATUSES:
+            log.warning('auto-route presentation failover: upstream %s on model %s', exc.status_code, model_id)
+            return None, 'failover'
+        raise
+    except Exception as exc:
+        if allow_failover:
+            log.warning('auto-route presentation failover: build error on model %s: %s', model_id, exc)
+            return None, 'failover'
+        raise HTTPException(status_code=500, detail=f'Presentation pipeline error: {exc}') from exc
+
+    # Upload the .pptx bytes as a regular user file.
+    filename = _safe_pptx_filename(spec.title)
+    upload = UploadFile(
+        file=_io.BytesIO(pptx_bytes),
+        filename=filename,
+        headers={'content-type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation'},
+    )
+
+    try:
+        file_item = upload_file_handler(
+            request,
+            file=upload,
+            metadata={'source': 'presentation_pipeline', 'request_id': str(_uuid.uuid4())},
+            process=False,
+            process_in_background=False,
+            user=user,
+        )
+    except Exception as exc:
+        log.exception('Failed to upload generated .pptx: %s', exc)
+        raise HTTPException(status_code=500, detail='Failed to store generated presentation') from exc
+
+    if not file_item or not file_item.id:
+        raise HTTPException(status_code=500, detail='Failed to persist generated presentation')
+
+    # Link file to the chat message so the UI shows it as an attachment.
+    if metadata and metadata.get('chat_id') and metadata.get('message_id'):
+        try:
+            Chats.insert_chat_files(
+                chat_id=metadata['chat_id'],
+                message_id=metadata['message_id'],
+                file_ids=[file_item.id],
+                user_id=user.id,
+            )
+        except Exception as exc:
+            log.warning('Failed to link generated pptx to chat message: %s', exc)
+
+    file_url = request.app.url_path_for('get_file_content_by_id', id=file_item.id)
+
+    if event_emitter is not None:
+        try:
+            await event_emitter(
+                {
+                    'type': 'files',
+                    'data': {
+                        'files': [
+                            {
+                                'type': 'file',
+                                'url': file_url,
+                                'name': filename,
+                                'id': file_item.id,
+                            }
+                        ]
+                    },
+                }
+            )
+        except Exception as exc:
+            log.warning('Failed to emit presentation files event: %s', exc)
+
+    return (
+        _build_auto_routed_presentation_response(
+            model_id,
+            file_url,
+            filename,
+            len(spec.slides),
+            file_item.id,
+        ),
+        'terminal',
+    )
+
+
 ##########################################
 #
 # API routes
@@ -808,7 +1011,7 @@ async def verify_connection(
                         response_data = await r.text()
 
                     if r.status != 200:
-                        if isinstance(response_data, (dict, list)):
+                        if isinstance(response_data, dict | list):
                             return JSONResponse(status_code=r.status, content=response_data)
                         else:
                             return PlainTextResponse(status_code=r.status, content=response_data)
@@ -834,7 +1037,7 @@ async def verify_connection(
                         response_data = await r.text()
 
                     if r.status != 200:
-                        if isinstance(response_data, (dict, list)):
+                        if isinstance(response_data, dict | list):
                             return JSONResponse(status_code=r.status, content=response_data)
                         else:
                             return PlainTextResponse(status_code=r.status, content=response_data)
@@ -1535,7 +1738,7 @@ async def _openai_upstream_chat_completion_attempt(
                     r.status >= 400
                     and allow_failover
                     and _upstream_error_should_trigger_auto_failover(
-                        r.status, sse_data if isinstance(sse_data, (dict, str)) else {}
+                        r.status, sse_data if isinstance(sse_data, dict | str) else {}
                     )
                 ):
                     return None, 'failover'
@@ -1607,7 +1810,7 @@ async def _openai_upstream_chat_completion_attempt(
                         str(response)[:500],
                     )
                     return None, 'failover'
-                if isinstance(response, (dict, list)):
+                if isinstance(response, dict | list):
                     return JSONResponse(status_code=r.status, content=response), 'terminal'
                 else:
                     return PlainTextResponse(status_code=r.status, content=response), 'terminal'
@@ -1711,6 +1914,7 @@ async def generate_chat_completion(
             'analytics': 'Анализ данных',
             'creative': 'Креативное письмо',
             'document': 'Работа с документом',
+            'presentation': 'Генерация презентации',
             'fallback': 'Текстовый ответ',
         }
 
@@ -1793,12 +1997,14 @@ async def generate_chat_completion(
         memory_status = metadata.get('__memory_status__') if metadata else None
         if memory_status and metadata.get('chat_id') and metadata.get('message_id'):
             try:
-                mem_emitter = get_event_emitter({
-                    'user_id': user.id,
-                    'chat_id': metadata['chat_id'],
-                    'message_id': metadata['message_id'],
-                    'session_id': metadata.get('session_id'),
-                })
+                mem_emitter = get_event_emitter(
+                    {
+                        'user_id': user.id,
+                        'chat_id': metadata['chat_id'],
+                        'message_id': metadata['message_id'],
+                        'session_id': metadata.get('session_id'),
+                    }
+                )
                 await mem_emitter(memory_status)
             except Exception:
                 pass  # non-fatal
@@ -1856,6 +2062,15 @@ async def generate_chat_completion(
         try:
             if auto_routed and routing_decision.category == 'image_gen':
                 response, outcome = await _auto_routed_image_generation_attempt(
+                    request,
+                    attempt_payload,
+                    try_model_id,
+                    metadata,
+                    user,
+                    allow_failover=allow_failover,
+                )
+            elif auto_routed and routing_decision.category == 'presentation' and _presentation_pipeline_enabled():
+                response, outcome = await _auto_routed_presentation_attempt(
                     request,
                     attempt_payload,
                     try_model_id,
@@ -1955,7 +2170,7 @@ async def embeddings(request: Request, form_data: dict, user):
                 response_data = await r.text()
 
             if r.status >= 400:
-                if isinstance(response_data, (dict, list)):
+                if isinstance(response_data, dict | list):
                     return JSONResponse(status_code=r.status, content=response_data)
                 else:
                     return PlainTextResponse(status_code=r.status, content=response_data)
@@ -2073,7 +2288,7 @@ async def responses(
                 response_data = await r.text()
 
             if r.status >= 400:
-                if isinstance(response_data, (dict, list)):
+                if isinstance(response_data, dict | list):
                     return JSONResponse(status_code=r.status, content=response_data)
                 else:
                     return PlainTextResponse(status_code=r.status, content=response_data)
@@ -2179,7 +2394,7 @@ async def proxy(path: str, request: Request, user=Depends(get_verified_user)):
                 response_data = await r.text()
 
             if r.status >= 400:
-                if isinstance(response_data, (dict, list)):
+                if isinstance(response_data, dict | list):
                     return JSONResponse(status_code=r.status, content=response_data)
                 else:
                     return PlainTextResponse(status_code=r.status, content=response_data)
