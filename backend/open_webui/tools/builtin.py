@@ -13,8 +13,7 @@ import logging
 import os
 import time
 
-from fastapi import Request
-from fastapi import UploadFile
+from fastapi import Request, UploadFile
 
 from open_webui.models.channels import Channels
 from open_webui.models.chats import Chats
@@ -26,6 +25,7 @@ from open_webui.models.notes import Notes
 from open_webui.models.users import UserModel
 from open_webui.retrieval.utils import get_content_from_url
 from open_webui.retrieval.vector.factory import VECTOR_DB_CLIENT
+from open_webui.routers.files import upload_file_handler
 from open_webui.routers.images import (
     CreateImageForm,
     EditImageForm,
@@ -39,7 +39,6 @@ from open_webui.routers.memories import (
     query_memory,
     update_memory_by_id,
 )
-from open_webui.routers.files import upload_file_handler
 from open_webui.routers.memories import (
     add_memory as _add_memory,
 )
@@ -110,6 +109,7 @@ async def _attach_and_emit_document_file(
         )
 
     return files
+
 
 # =============================================================================
 # TIME UTILITIES

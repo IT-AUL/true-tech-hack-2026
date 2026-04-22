@@ -1,7 +1,6 @@
 import io
 
 import pytest
-
 from open_webui.utils.document_generator import MessageItem, generate_document_by_format
 
 
@@ -46,5 +45,3 @@ def test_generate_xlsx_without_chat_metadata_sheet():
 def test_generate_document_invalid_format():
     with pytest.raises(ValueError):
         generate_document_by_format('zipx', 'Nope', _sample_messages())
-
-

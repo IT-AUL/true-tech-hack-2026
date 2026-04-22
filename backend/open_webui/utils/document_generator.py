@@ -2,7 +2,7 @@ import io
 import logging
 import re
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional
 
 log = logging.getLogger(__name__)
 
@@ -10,11 +10,13 @@ log = logging.getLogger(__name__)
 # Pydantic models (Local copies for internal use)
 # ──────────────────────────────────────────────
 
+
 class MessageItem:
     def __init__(self, role: str, content: str, timestamp: Optional[int] = None):
         self.role = role
         self.content = content
         self.timestamp = timestamp
+
 
 # ──────────────────────────────────────────────
 # Helpers
@@ -36,13 +38,13 @@ def _safe_filename(name: str) -> str:
     return re.sub(r'[^\w\s\-.]', '', name).strip() or 'document'
 
 
-def _parse_markdown_tables(text: str) -> List[List[List[str]]]:
+def _parse_markdown_tables(text: str) -> list[list[list[str]]]:
     """
     Extract all markdown tables from *text*.
     Returns a list of tables; each table is a list of rows;
     each row is a list of cell strings.
     """
-    tables: List[List[List[str]]] = []
+    tables: list[list[list[str]]] = []
     lines = text.splitlines()
     i = 0
     while i < len(lines):
@@ -52,7 +54,7 @@ def _parse_markdown_tables(text: str) -> List[List[List[str]]]:
             sep_line = lines[i + 1].strip()
             if re.match(r'^[\|\-:\s]+$', sep_line) and '|' in sep_line:
                 # Found a table header + separator
-                table: List[List[str]] = []
+                table: list[list[str]] = []
                 # Header
                 cells = [c.strip() for c in line.strip('|').split('|')]
                 table.append(cells)
@@ -71,7 +73,7 @@ def _parse_markdown_tables(text: str) -> List[List[List[str]]]:
     return tables
 
 
-def _messages_to_plain(messages: List[MessageItem]) -> str:
+def _messages_to_plain(messages: list[MessageItem]) -> str:
     parts = []
     for msg in messages:
         parts.append(f'{_role_label(msg.role).upper()}:\n{msg.content}')
@@ -85,11 +87,39 @@ def safe_fpdf_text(text: str) -> str:
     except (UnicodeEncodeError, UnicodeDecodeError):
         # Transliterate Cyrillic
         cyr_map = {
-            'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
-            'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
-            'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
-            'ф': 'f', 'х': 'kh', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'shch',
-            'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+            'а': 'a',
+            'б': 'b',
+            'в': 'v',
+            'г': 'g',
+            'д': 'd',
+            'е': 'e',
+            'ё': 'yo',
+            'ж': 'zh',
+            'з': 'z',
+            'и': 'i',
+            'й': 'y',
+            'к': 'k',
+            'л': 'l',
+            'м': 'm',
+            'н': 'n',
+            'о': 'o',
+            'п': 'p',
+            'р': 'r',
+            'с': 's',
+            'т': 't',
+            'у': 'u',
+            'ф': 'f',
+            'х': 'kh',
+            'ц': 'ts',
+            'ч': 'ch',
+            'ш': 'sh',
+            'щ': 'shch',
+            'ъ': '',
+            'ы': 'y',
+            'ь': '',
+            'э': 'e',
+            'ю': 'yu',
+            'я': 'ya',
         }
         result = []
         for ch in text:
@@ -110,13 +140,14 @@ def safe_fpdf_text(text: str) -> str:
 # Core Generation Functions
 # ──────────────────────────────────────────────
 
-def generate_txt(title: str, messages: List[MessageItem]) -> bytes:
+
+def generate_txt(title: str, messages: list[MessageItem]) -> bytes:
     header = f'{title}\nЭкспорт: {datetime.now().strftime("%d.%m.%Y %H:%M")}\n{"=" * 60}\n\n'
     body = _messages_to_plain(messages)
     return (header + body).encode('utf-8')
 
 
-def generate_md(title: str, messages: List[MessageItem]) -> bytes:
+def generate_md(title: str, messages: list[MessageItem]) -> bytes:
     lines = [
         f'# {title}',
         '',
@@ -136,7 +167,7 @@ def generate_md(title: str, messages: List[MessageItem]) -> bytes:
     return '\n'.join(lines).encode('utf-8')
 
 
-def generate_pdf(title: str, messages: List[MessageItem]) -> bytes:
+def generate_pdf(title: str, messages: list[MessageItem]) -> bytes:
     try:
         from fpdf import FPDF
 
@@ -166,9 +197,12 @@ def generate_pdf(title: str, messages: List[MessageItem]) -> bytes:
         pdf.set_font('Helvetica', '', 9)
         pdf.set_text_color(120, 120, 120)
         pdf.cell(
-            0, 6,
+            0,
+            6,
             safe_fpdf_text(f'Дата экспорта: {datetime.now().strftime("%d.%m.%Y %H:%M")}'),
-            align='C', new_x='LMARGIN', new_y='NEXT',
+            align='C',
+            new_x='LMARGIN',
+            new_y='NEXT',
         )
         pdf.ln(6)
 
@@ -202,13 +236,13 @@ def generate_pdf(title: str, messages: List[MessageItem]) -> bytes:
         raise
 
 
-def generate_docx(title: str, messages: List[MessageItem], include_chat_metadata: bool = True) -> bytes:
+def generate_docx(title: str, messages: list[MessageItem], include_chat_metadata: bool = True) -> bytes:
     try:
         from docx import Document
+        from docx.enum.text import WD_ALIGN_PARAGRAPH
         from docx.oxml import OxmlElement
         from docx.oxml.ns import qn
         from docx.shared import Pt, RGBColor
-        from docx.enum.text import WD_ALIGN_PARAGRAPH
 
         doc = Document()
         for section in doc.sections:
@@ -279,7 +313,7 @@ def generate_docx(title: str, messages: List[MessageItem], include_chat_metadata
         raise
 
 
-def generate_xlsx(title: str, messages: List[MessageItem], include_chat_metadata: bool = True) -> bytes:
+def generate_xlsx(title: str, messages: list[MessageItem], include_chat_metadata: bool = True) -> bytes:
     try:
         from openpyxl import Workbook
         from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -317,7 +351,8 @@ def generate_xlsx(title: str, messages: List[MessageItem], include_chat_metadata
                 table_idx += 1
                 sheet_name = f'Таблица {table_idx}'
                 ws = wb.create_sheet(title=sheet_name)
-                if not table: continue
+                if not table:
+                    continue
                 header_row = table[0]
                 data_rows = table[1:]
                 for col_idx, cell_val in enumerate(header_row, start=1):
@@ -331,7 +366,8 @@ def generate_xlsx(title: str, messages: List[MessageItem], include_chat_metadata
                     for col_idx, cell_val in enumerate(row, start=1):
                         cell = ws.cell(row=row_idx, column=col_idx, value=cell_val)
                         cell.font, cell.alignment, cell.border = data_font, wrap_align, border
-                        if fill: cell.fill = fill
+                        if fill:
+                            cell.fill = fill
                 auto_col_widths(ws)
                 ws.freeze_panes = 'A2'
 
@@ -387,7 +423,7 @@ def generate_xlsx(title: str, messages: List[MessageItem], include_chat_metadata
 def generate_document_by_format(
     fmt: str,
     title: str,
-    messages: List[MessageItem],
+    messages: list[MessageItem],
     include_chat_metadata: bool = True,
 ) -> bytes:
     """Entry point for all generation logic."""

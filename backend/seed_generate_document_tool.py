@@ -5,9 +5,8 @@ Run this INSIDE the gpthub Docker container:
   docker exec -it gpthub python /app/backend/seed_generate_document_tool.py
 """
 
-import sys
 import os
-import time
+import sys
 
 # Ensure the backend is on the path
 sys.path.insert(0, '/app/backend')
@@ -139,36 +138,36 @@ class Tools:
 
 TOOL_SPECS = [
     {
-        "name": "generate_document",
-        "description": (
-            "Generate and save a document (DOCX, XLSX, PDF, TXT or MD). "
-            "Use this whenever the user asks to create, save, or export a file."
+        'name': 'generate_document',
+        'description': (
+            'Generate and save a document (DOCX, XLSX, PDF, TXT or MD). '
+            'Use this whenever the user asks to create, save, or export a file.'
         ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "content": {
-                    "type": "string",
-                    "description": "The full text/markdown content for the document.",
+        'parameters': {
+            'type': 'object',
+            'properties': {
+                'content': {
+                    'type': 'string',
+                    'description': 'The full text/markdown content for the document.',
                 },
-                "filename": {
-                    "type": "string",
-                    "description": "Desired file name WITHOUT extension (e.g. 'report').",
+                'filename': {
+                    'type': 'string',
+                    'description': "Desired file name WITHOUT extension (e.g. 'report').",
                 },
-                "format": {
-                    "type": "string",
-                    "enum": ["docx", "xlsx", "pdf", "txt", "md"],
-                    "description": "File format.",
+                'format': {
+                    'type': 'string',
+                    'enum': ['docx', 'xlsx', 'pdf', 'txt', 'md'],
+                    'description': 'File format.',
                 },
             },
-            "required": ["content", "filename", "format"],
+            'required': ['content', 'filename', 'format'],
         },
     }
 ]
 
 
 def main():
-    from open_webui.models.tools import Tools, ToolForm, ToolMeta
+    from open_webui.models.tools import ToolForm, ToolMeta, Tools
     from open_webui.models.users import Users
 
     # Find the first admin user
@@ -183,10 +182,10 @@ def main():
             break
 
     if not admin_user:
-        print("❌ No admin user found. Create an admin account first.")
+        print('❌ No admin user found. Create an admin account first.')
         sys.exit(1)
 
-    print(f"✅ Using admin user: {admin_user.email} ({admin_user.id})")
+    print(f'✅ Using admin user: {admin_user.email} ({admin_user.id})')
 
     # Check if tool already exists
     existing = Tools.get_tool_by_id(TOOL_ID)
@@ -195,10 +194,10 @@ def main():
         Tools.update_tool_by_id(
             TOOL_ID,
             {
-                "name": TOOL_NAME,
-                "content": TOOL_CODE,
-                "specs": TOOL_SPECS,
-                "meta": {"description": "Генерирует DOCX, XLSX, PDF, TXT, MD документы."},
+                'name': TOOL_NAME,
+                'content': TOOL_CODE,
+                'specs': TOOL_SPECS,
+                'meta': {'description': 'Генерирует DOCX, XLSX, PDF, TXT, MD документы.'},
             },
         )
         print(f"✅ Tool '{TOOL_ID}' updated successfully!")
@@ -207,17 +206,17 @@ def main():
             id=TOOL_ID,
             name=TOOL_NAME,
             content=TOOL_CODE,
-            meta=ToolMeta(description="Генерирует DOCX, XLSX, PDF, TXT, MD документы."),
+            meta=ToolMeta(description='Генерирует DOCX, XLSX, PDF, TXT, MD документы.'),
         )
         result = Tools.insert_new_tool(admin_user.id, form, TOOL_SPECS)
         if result:
             print(f"✅ Tool '{TOOL_ID}' registered successfully!")
-            print(f"   → Go to Workspace → Tools in Open WebUI to see it.")
-            print(f"   → Attach it to a model or enable it in a chat to use it.")
+            print('   → Go to Workspace → Tools in Open WebUI to see it.')
+            print('   → Attach it to a model or enable it in a chat to use it.')
         else:
             print(f"❌ Failed to register tool '{TOOL_ID}'.")
             sys.exit(1)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

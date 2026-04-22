@@ -34,10 +34,6 @@ from open_webui.env import (
     GLOBAL_LOG_LEVEL,
     RAG_SYSTEM_CONTEXT,
 )
-from open_webui.memory.mem0_manager import (
-    add_messages_to_project_memory,
-    search_project_memory,
-)
 from open_webui.models.chats import Chats
 from open_webui.models.folders import Folders
 from open_webui.models.functions import Functions
@@ -49,7 +45,6 @@ from open_webui.routers.images import (
     image_edits,
     image_generations,
 )
-from open_webui.routers.memories import QueryMemoryForm, query_memory
 from open_webui.routers.pipelines import (
     process_pipeline_inlet_filter,
 )
@@ -1190,17 +1185,21 @@ async def chat_completion_tools_handler(
         if not isinstance(user_message, str):
             return False
         text = user_message.lower()
-        has_create_verb = re.search(
-            r'созда|сдела|сгенер|подготов|сформир|выгрузи|экспорт|create|generate|make|build|export',
-            text,
-        ) is not None
-        has_document_hint = re.search(
-            r'документ|файл|отчет|отч[её]т|таблиц|sheet|spreadsheet|excel|word|docx|xlsx|xls',
-            text,
-        ) is not None
-        return has_create_verb and (
-            has_document_hint or detect_document_format_from_prompt(text) is not None
+        has_create_verb = (
+            re.search(
+                r'созда|сдела|сгенер|подготов|сформир|выгрузи|экспорт|create|generate|make|build|export',
+                text,
+            )
+            is not None
         )
+        has_document_hint = (
+            re.search(
+                r'документ|файл|отчет|отч[её]т|таблиц|sheet|spreadsheet|excel|word|docx|xlsx|xls',
+                text,
+            )
+            is not None
+        )
+        return has_create_verb and (has_document_hint or detect_document_format_from_prompt(text) is not None)
 
     def infer_document_format(user_message: str) -> str:
         explicit = detect_document_format_from_prompt(user_message)
@@ -1594,7 +1593,7 @@ async def chat_memory_handler(request: Request, form_data: dict, extra_params: d
 
         thread_id = form_data.get('id') or extra_params.get('__chat_id__') or 'unknown-thread'
         messages = form_data.get('messages', [])
-        
+
         resolved = await resolve_context(
             user_id=user.id,
             project_id=project_id,
@@ -1616,9 +1615,9 @@ async def chat_memory_handler(request: Request, form_data: dict, extra_params: d
         )
 
         total_facts = (
-            len(bundle.get("user_preferences", []))
-            + len(bundle.get("project_facts", []))
-            + len(bundle.get("prior_decisions", []))
+            len(bundle.get('user_preferences', []))
+            + len(bundle.get('project_facts', []))
+            + len(bundle.get('prior_decisions', []))
         )
 
         # Store deferred memory status in metadata so openai.py can emit it
@@ -1638,7 +1637,9 @@ async def chat_memory_handler(request: Request, form_data: dict, extra_params: d
                     },
                 },
             }
-        log.info(f'[MEMORY] Bundle: {total_facts} facts (user_prefs={len(bundle.get("user_preferences", []))}, project={len(bundle.get("project_facts", []))})')
+        log.info(
+            f'[MEMORY] Bundle: {total_facts} facts (user_prefs={len(bundle.get("user_preferences", []))}, project={len(bundle.get("project_facts", []))})'
+        )
 
         # Store resolved context for background write after response
         metadata['__memory_resolved__'] = resolved
@@ -1646,18 +1647,16 @@ async def chat_memory_handler(request: Request, form_data: dict, extra_params: d
 
         # Assemble Prompt Slots
         from open_webui.memory_v2.prompt_assembler import assemble_memory_prompt
+
         system_injection = assemble_memory_prompt(bundle, resolved)
 
         if system_injection:
-            form_data['messages'] = add_or_update_system_message(
-                system_injection, form_data['messages'], append=True
-            )
+            form_data['messages'] = add_or_update_system_message(system_injection, form_data['messages'], append=True)
 
     except Exception as e:
-        log.exception(f"chat_memory_handler v2 error: {e}")
+        log.exception(f'chat_memory_handler v2 error: {e}')
 
     return form_data
-
 
 
 async def chat_web_search_handler(request: Request, form_data: dict, extra_params: dict, user):
@@ -3509,13 +3508,15 @@ async def non_streaming_chat_response_handler(response, ctx):
                     # Project Long-Term Memory – fire-and-forget extraction
                     # -------------------------------------------------------
                     try:
-                        from open_webui.models.chats import Chats as _ChatsModel
                         from open_webui.memory_v2.write_policy import write_memory_candidates
+                        from open_webui.models.chats import Chats as _ChatsModel
 
                         _chat_rec = _ChatsModel.get_chat_by_id(metadata['chat_id'])
                         if _chat_rec and _chat_rec.project_id:
-                            _hist_messages = list((_chat_rec.chat or {}).get('history', {}).get('messages', {}).values())
-                            
+                            _hist_messages = list(
+                                (_chat_rec.chat or {}).get('history', {}).get('messages', {}).values()
+                            )
+
                             asyncio.ensure_future(
                                 write_memory_candidates(
                                     user_id=user.id,
@@ -3523,7 +3524,7 @@ async def non_streaming_chat_response_handler(response, ctx):
                                     thread_id=metadata['chat_id'],
                                     messages=_hist_messages,
                                     response_text=content,
-                                    resolved={}
+                                    resolved={},
                                 )
                             )
                     except Exception as _mem_exc:
@@ -5116,8 +5117,11 @@ async def streaming_chat_response_handler(response, ctx):
                         # For streaming, 'content' is the accumulated assistant response
                         if content:
                             from open_webui.memory_v2.write_policy import write_memory_candidates
-                            _hist_messages = list((_chat_rec.chat or {}).get('history', {}).get('messages', {}).values())
-                            
+
+                            _hist_messages = list(
+                                (_chat_rec.chat or {}).get('history', {}).get('messages', {}).values()
+                            )
+
                             asyncio.ensure_future(
                                 write_memory_candidates(
                                     user_id=user.id,
@@ -5125,7 +5129,7 @@ async def streaming_chat_response_handler(response, ctx):
                                     thread_id=metadata['chat_id'],
                                     messages=_hist_messages,
                                     response_text=content,
-                                    resolved={}
+                                    resolved={},
                                 )
                             )
                 except Exception as _mem_exc:
