@@ -199,9 +199,13 @@ def generate_pdf(title: str, messages: list[MessageItem]) -> bytes:
             def __init__(self, *args, **kwargs):
                 super().__init__(*args, **kwargs)
                 # Try to load NotoSans font for Unicode/Cyrillic support
-                font_path = 'backend/open_webui/static/fonts/NotoSans-Regular.ttf'
-                font_bold_path = 'backend/open_webui/static/fonts/NotoSans-Bold.ttf'
-                font_italic_path = 'backend/open_webui/static/fonts/NotoSans-Italic.ttf'
+                # Support both local dev and Docker environments
+                base_path = os.path.dirname(os.path.dirname(__file__))
+                font_dir = os.path.join(base_path, 'static', 'fonts')
+
+                font_path = os.path.join(font_dir, 'NotoSans-Regular.ttf')
+                font_bold_path = os.path.join(font_dir, 'NotoSans-Bold.ttf')
+                font_italic_path = os.path.join(font_dir, 'NotoSans-Italic.ttf')
 
                 if os.path.exists(font_path):
                     self.add_font('NotoSans', '', font_path)

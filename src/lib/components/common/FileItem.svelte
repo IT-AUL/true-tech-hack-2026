@@ -57,7 +57,7 @@
 		: 'rounded-2xl'} text-left"
 	type="button"
 	on:click={async () => {
-		if (item?.file?.data?.content || item?.type === 'file' || item?.content || modal) {
+		if (item?.file?.data?.content || item?.content || modal) {
 			showModal = !showModal;
 		} else {
 			if (url) {

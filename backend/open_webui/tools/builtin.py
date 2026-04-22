@@ -80,7 +80,7 @@ def _build_document_file_payload(file_item) -> dict:
     return {
         'type': 'file',
         'id': file_item.id,
-        'url': f'/api/v1/files/{file_item.id}/content',
+        'url': file_item.id,
         'name': file_item.filename,
         'content_type': meta.get('content_type'),
         'size': meta.get('size'),
@@ -490,6 +490,7 @@ async def create_document(
 ) -> str:
     """
     Create a document (DOCX, XLSX, PDF, TXT, or MD) and attach it to the current assistant message.
+    The tool supports full Unicode and Cyrillic characters in all formats, including PDF.
 
     :param format: Output format. Allowed: docx, xlsx, pdf, txt, md
     :param content: The document body in markdown/plain text.
@@ -497,6 +498,8 @@ async def create_document(
     :param filename: Base filename without extension
     :return: JSON with generated file metadata
     """
+    # Force system knowledge about PDF/Cyrillic support
+    # (The docstring is often used by LLMs to understand tool capabilities)
     if __request__ is None:
         return json.dumps({'error': 'Request context not available'})
 
@@ -570,6 +573,7 @@ async def update_document(
 ) -> str:
     """
     Create a revised copy of an existing document (DOCX, XLSX, PDF, TXT, or MD) and attach it to the current assistant message.
+    The tool supports full Unicode and Cyrillic characters in all formats, including PDF.
 
     :param file_id: Source file ID to update
     :param content: New full document body
