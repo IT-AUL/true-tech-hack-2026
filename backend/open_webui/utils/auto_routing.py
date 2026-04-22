@@ -46,6 +46,7 @@ VALID_CATEGORIES = frozenset(
         'analytics',
         'creative',
         'document',
+        'presentation',
         'fallback',
     }
 )
@@ -170,6 +171,22 @@ PATTERNS = {
         r'\bрезюме\b|\bконтракт\w*|\bдоговор\w*|\bскан\w*|\bтекст\s+ниже|\bdocument\b'
         r')'
     ),
+    'presentation': re.compile(
+        r'(?i)(?:'
+        # Russian: презентация, слайды, доклад, pptx
+        r'\b(?:сдела\w*|созда\w*|собер\w*|подготов\w*|сгенер\w*|нужн\w*|хочу|нариса\w*|'
+        r'запили|построй|набросай|оформ\w*)\s+(?:\w+\s+){0,4}?(?:презентаци\w*|слайд\w*|pptx|powerpoint|'
+        r'доклад\w*|питч|pitch\s+deck|slide\s+deck)|'
+        r'\bпрезентаци\w*\s+(?:про|о|об|на\s+тем\w*|для|по)\b|'
+        r'\bслайд\w*\s+(?:про|о|об|на\s+тем\w*|для|по)\b|'
+        r'\bpowerpoint\b|\bpptx\b|'
+        # English
+        r'\b(?:make|create|build|generate|prepare|draft)\s+(?:a\s+|an\s+|the\s+)?'
+        r'(?:slide\s*deck|slides|presentation|pptx|powerpoint|pitch\s+deck)\b|'
+        r'\bslide\s*deck\s+(?:about|on|for)\b|'
+        r'\bpresentation\s+(?:about|on|for)\b'
+        r')'
+    ),
 }
 
 _CODE_BLOCK_RE = re.compile(
@@ -238,6 +255,20 @@ ROUTE_MODEL_PREFERENCES = {
     'analytics': ('qwen3-235b', 'deepseek', 'gpt-5', 'qwen3-next-80b', 'claude', 'qwen', 'hermes'),
     'creative': ('claude-opus', 'gpt-5', 'qwen3-235b', 'hermes', 'claude', 'gpt', 'qwen'),
     'document': ('qwen3-235b', 'gpt-5', 'claude', 'qwen3-next-80b', 'deepseek', 'qwen', 'hermes'),
+    'presentation': (
+        'qwen3-235b',
+        'qwen3-max',
+        'gpt-5',
+        'claude-opus',
+        'claude-4-6',
+        'claude-4-5',
+        'qwen3-next-80b',
+        'deepseek',
+        'claude',
+        'qwen',
+        'gpt',
+        'hermes',
+    ),
     'fallback': ('qwen', 'gpt', 'claude', 'llama', 'mistral', 'gemini', 'hermes', 'deepseek'),
 }
 
@@ -787,6 +818,7 @@ _SEMANTIC_ROUTE_THRESHOLDS: dict[str, float] = {
     'analytics': 0.69,
     'creative': 0.67,
     'document': 0.69,
+    'presentation': 0.70,
     'fallback': 0.64,
 }
 
@@ -906,6 +938,18 @@ _SEMANTIC_ROUTE_EXAMPLES: dict[str, list[str]] = {
         'проанализируй текст файла',
         'сделай краткое резюме отчета',
     ],
+    'presentation': [
+        'сделай презентацию про нейросети',
+        'создай слайды для защиты диплома',
+        'нужен pptx по квартальным метрикам',
+        'собери презентацию про историю компании',
+        'подготовь слайды на тему маркетинга',
+        'сделай pitch deck для стартапа',
+        'make a slide deck about machine learning',
+        'create a presentation on climate change',
+        'build pptx for the quarterly review',
+        'prepare slides for my thesis defense',
+    ],
     'fallback': [
         'привет',
         'как дела',
@@ -1006,6 +1050,13 @@ def _user_requests_image_generation(text: str) -> bool:
     return bool(PATTERNS['image_gen'].search(text.strip()))
 
 
+def _user_requests_presentation(text: str) -> bool:
+    """True when the last message asks to build a slide deck / pptx (even if a file is attached)."""
+    if not (text and text.strip()):
+        return False
+    return bool(PATTERNS['presentation'].search(text.strip()))
+
+
 def route_with_guardrails(features: RequestFeatures) -> RoutingDecision | None:
     if not features.text and not (features.has_image or features.has_audio or features.has_files):
         return RoutingDecision(
@@ -1062,6 +1113,16 @@ def route_with_guardrails(features: RequestFeatures) -> RoutingDecision | None:
                 confidence=0.95,
                 reasoning='Запрос на генерацию изображения — вложенный файл не определяет сценарий текущего сообщения',
                 trace={'stage': 'guardrail', 'guardrail': 'image_generation_intent_despite_file'},
+            )
+        if _user_requests_presentation(features.text):
+            # "Сделай презентацию из этого pdf" — artifact type is a slide deck, not a file summary.
+            return RoutingDecision(
+                'presentation',
+                'high' if features.text_len > 200 else 'medium',
+                method='guardrail',
+                confidence=0.95,
+                reasoning='Запрос на создание презентации — вложенный файл используется как источник, но артефакт — слайды',
+                trace={'stage': 'guardrail', 'guardrail': 'presentation_intent_despite_file'},
             )
         return RoutingDecision(
             'document',
@@ -1258,6 +1319,14 @@ def _classify_with_rules(features: RequestFeatures) -> RoutingDecision | None:
     if PATTERNS['audio_gen'].search(pattern_text):
         return RoutingDecision(
             'audio_gen', 'low', method='rules', reasoning='Обнаружен запрос на генерацию аудио/музыки'
+        )
+
+    if PATTERNS['presentation'].search(pattern_text):
+        return RoutingDecision(
+            'presentation',
+            _estimate_complexity(features.text_len),
+            method='rules',
+            reasoning='Обнаружен запрос на создание презентации / слайдов',
         )
 
     if features.has_code_block:
@@ -1460,16 +1529,22 @@ _ROUTER_SYSTEM_PROMPT = """\
 - Не дублируйте дословно understanding и reasoning; вместе они должны читаться как короткое объяснение для человека.
 
 Категории:
-- image_gen  : генерация или редактирование изображения / иллюстрации
-- audio_gen  : генерация музыки / звука / аудио
-- vision     : анализ или описание прикреплённого изображения
-- code       : программирование, отладка, API, тесты, рефакторинг
-- math_logic : математика, вычисления, логика, алгоритмы
-- research   : исследование, обзор, сравнение, сбор фактов из сети/источников
-- analytics  : данные, таблицы, CSV, метрики, графики
-- creative   : маркетинговый или творческий текст, идеи
-- document   : документы и файлы, summary, extract, review
-- fallback   : общий разговор, простые вопросы без узкой модальности
+- image_gen    : генерация или редактирование изображения / иллюстрации
+- audio_gen    : генерация музыки / звука / аудио
+- vision       : анализ или описание прикреплённого изображения
+- code         : программирование, отладка, API, тесты, рефакторинг
+- math_logic   : математика, вычисления, логика, алгоритмы
+- research     : исследование, обзор, сравнение, сбор фактов из сети/источников
+- analytics    : данные, таблицы, CSV, метрики, графики
+- creative     : маркетинговый или творческий текст, идеи
+- document     : документы и файлы, summary, extract, review
+- presentation : создание презентации / слайдов / pptx / pitch deck (многослайдовый артефакт)
+- fallback     : общий разговор, простые вопросы без узкой модальности
+
+Важно для presentation:
+- Это запрос собрать именно многослайдовый артефакт (PPTX / slide deck), а не текстовый ответ/эссе.
+- Сигналы: «сделай презентацию», «создай слайды», «нужен pptx», «pitch deck», «powerpoint», «slide deck», «подготовь слайды к защите».
+- Если пользователь прикрепил документ и просит «сделать презентацию на его основе» — это presentation, не document.
 
 Сложность: low | medium | high
 
@@ -1695,6 +1770,9 @@ def _classify_with_regex(text: str, has_image: bool, has_url: bool = False) -> R
         cat = 'audio_gen'
     elif has_image and (not _soft_image_attachment() or _vision_analysis_intent_in_text(text)):
         cat = 'vision'
+    elif PATTERNS['presentation'].search(text):
+        # Presentation wins over document: attaching a file and asking for slides is still presentation.
+        cat = 'presentation'
     elif len(text) > 10000 or PATTERNS['document'].search(text):
         cat = 'document'
     elif PATTERNS['code'].search(text):

@@ -42,6 +42,7 @@
 	import ProfileImage from './ProfileImage.svelte';
 	import Skeleton from './Skeleton.svelte';
 	import ImageSkeleton from './ImageSkeleton.svelte';
+	import PresentationSkeleton from './PresentationSkeleton.svelte';
 	import Image from '$lib/components/common/Image.svelte';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import RateComment from './RateComment.svelte';
@@ -698,7 +699,7 @@
 							<StatusHistory statusHistory={message?.statusHistory} />
 						{/if}
 
-						{#if message?.files && message.files?.filter((f) => f.type === 'image').length > 0}
+						{#if message?.files && message.files.length > 0}
 							<div
 								class="my-1 w-full flex overflow-x-auto gap-2 flex-wrap"
 								dir={$settings?.chatDirection ?? 'auto'}
@@ -832,6 +833,10 @@
 								{:else if (message?.statusHistory ?? []).some((s) => s?.routing?.category === 'image_gen')}
 									{#if !(message?.files ?? []).some((f) => f?.type === 'image')}
 										<ImageSkeleton />
+									{/if}
+								{:else if (message?.statusHistory ?? []).some((s) => s?.routing?.category === 'presentation')}
+									{#if !(message?.files ?? []).some((f) => f?.name?.toLowerCase?.().endsWith('.pptx'))}
+										<PresentationSkeleton />
 									{/if}
 								{:else if !hasVisibleStatus}
 									<Skeleton />

@@ -1648,6 +1648,16 @@
 				}
 			}
 
+			// Non-image attachments produced by auto-routed pipelines (e.g. presentation → .pptx).
+			// The backend attaches them via Chats.insert_chat_files and ships a descriptor here,
+			// so we don't rely solely on the `chat:message:files` socket event.
+			const generatedFiles = (assistantMessage?.files ?? []).filter(
+				(f) => f && f.url && !(message.files ?? []).some((existing) => existing?.id && existing.id === f.id)
+			);
+			if (generatedFiles.length > 0) {
+				message.files = [...(message.files ?? []), ...generatedFiles];
+			}
+
 			if (assistantMessage?.content) {
 				// Non-stream response
 				message.content += assistantMessage.content;

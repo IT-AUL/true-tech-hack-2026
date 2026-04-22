@@ -34,10 +34,6 @@ from open_webui.env import (
     GLOBAL_LOG_LEVEL,
     RAG_SYSTEM_CONTEXT,
 )
-from open_webui.memory.mem0_manager import (
-    add_messages_to_project_memory,
-    search_project_memory,
-)
 from open_webui.models.chats import Chats
 from open_webui.models.folders import Folders
 from open_webui.models.functions import Functions
@@ -49,7 +45,6 @@ from open_webui.routers.images import (
     image_edits,
     image_generations,
 )
-from open_webui.routers.memories import QueryMemoryForm, query_memory
 from open_webui.routers.pipelines import (
     process_pipeline_inlet_filter,
 )
@@ -957,7 +952,7 @@ def process_tool_result(
             tool_result_embeds.append(content)
 
             if 200 <= tool_result.status_code < 300:
-                if result_context is not None and isinstance(result_context, (str, dict, list)):
+                if result_context is not None and isinstance(result_context, str | dict | list):
                     tool_result = result_context
                 else:
                     tool_result = {
@@ -1018,12 +1013,12 @@ def process_tool_result(
                     # Support (html_content, result_context) nested tuple
                     result_context = None
                     html_content = tool_result
-                    if isinstance(tool_result, (tuple, list)) and len(tool_result) == 2:
+                    if isinstance(tool_result, tuple | list) and len(tool_result) == 2:
                         html_content, result_context = tool_result
 
                     # Display as iframe embed
                     tool_result_embeds.append(html_content)
-                    if result_context is not None and isinstance(result_context, (str, dict, list)):
+                    if result_context is not None and isinstance(result_context, str | dict | list):
                         tool_result = result_context
                     else:
                         tool_result = {
@@ -1034,11 +1029,11 @@ def process_tool_result(
                 elif location:
                     # Support (html_content, result_context) nested tuple for location embeds
                     result_context = None
-                    if isinstance(tool_result, (tuple, list)) and len(tool_result) == 2:
+                    if isinstance(tool_result, tuple | list) and len(tool_result) == 2:
                         _, result_context = tool_result
 
                     tool_result_embeds.append(location)
-                    if result_context is not None and isinstance(result_context, (str, dict, list)):
+                    if result_context is not None and isinstance(result_context, str | dict | list):
                         tool_result = result_context
                     else:
                         tool_result = {
@@ -1392,7 +1387,7 @@ async def chat_memory_handler(request: Request, form_data: dict, extra_params: d
 
         thread_id = form_data.get('id') or extra_params.get('__chat_id__') or 'unknown-thread'
         messages = form_data.get('messages', [])
-        
+
         resolved = await resolve_context(
             user_id=user.id,
             project_id=project_id,
@@ -1414,9 +1409,9 @@ async def chat_memory_handler(request: Request, form_data: dict, extra_params: d
         )
 
         total_facts = (
-            len(bundle.get("user_preferences", []))
-            + len(bundle.get("project_facts", []))
-            + len(bundle.get("prior_decisions", []))
+            len(bundle.get('user_preferences', []))
+            + len(bundle.get('project_facts', []))
+            + len(bundle.get('prior_decisions', []))
         )
 
         # Store deferred memory status in metadata so openai.py can emit it
@@ -1436,7 +1431,9 @@ async def chat_memory_handler(request: Request, form_data: dict, extra_params: d
                     },
                 },
             }
-        log.info(f'[MEMORY] Bundle: {total_facts} facts (user_prefs={len(bundle.get("user_preferences", []))}, project={len(bundle.get("project_facts", []))})')
+        log.info(
+            f'[MEMORY] Bundle: {total_facts} facts (user_prefs={len(bundle.get("user_preferences", []))}, project={len(bundle.get("project_facts", []))})'
+        )
 
         # Store resolved context for background write after response
         metadata['__memory_resolved__'] = resolved
@@ -1444,18 +1441,16 @@ async def chat_memory_handler(request: Request, form_data: dict, extra_params: d
 
         # Assemble Prompt Slots
         from open_webui.memory_v2.prompt_assembler import assemble_memory_prompt
+
         system_injection = assemble_memory_prompt(bundle, resolved)
 
         if system_injection:
-            form_data['messages'] = add_or_update_system_message(
-                system_injection, form_data['messages'], append=True
-            )
+            form_data['messages'] = add_or_update_system_message(system_injection, form_data['messages'], append=True)
 
     except Exception as e:
-        log.exception(f"chat_memory_handler v2 error: {e}")
+        log.exception(f'chat_memory_handler v2 error: {e}')
 
     return form_data
-
 
 
 async def chat_web_search_handler(request: Request, form_data: dict, extra_params: dict, user):
@@ -3282,13 +3277,15 @@ async def non_streaming_chat_response_handler(response, ctx):
                     # Project Long-Term Memory – fire-and-forget extraction
                     # -------------------------------------------------------
                     try:
-                        from open_webui.models.chats import Chats as _ChatsModel
                         from open_webui.memory_v2.write_policy import write_memory_candidates
+                        from open_webui.models.chats import Chats as _ChatsModel
 
                         _chat_rec = _ChatsModel.get_chat_by_id(metadata['chat_id'])
                         if _chat_rec and _chat_rec.project_id:
-                            _hist_messages = list((_chat_rec.chat or {}).get('history', {}).get('messages', {}).values())
-                            
+                            _hist_messages = list(
+                                (_chat_rec.chat or {}).get('history', {}).get('messages', {}).values()
+                            )
+
                             asyncio.ensure_future(
                                 write_memory_candidates(
                                     user_id=user.id,
@@ -3296,7 +3293,7 @@ async def non_streaming_chat_response_handler(response, ctx):
                                     thread_id=metadata['chat_id'],
                                     messages=_hist_messages,
                                     response_text=content,
-                                    resolved={}
+                                    resolved={},
                                 )
                             )
                     except Exception as _mem_exc:
@@ -3322,6 +3319,17 @@ async def non_streaming_chat_response_handler(response, ctx):
                             'name': f'generated-image-{idx + 1}',
                         }
                     )
+
+                # Auto-routed non-image attachments (e.g. presentation pipeline produces a .pptx)
+                # ship their descriptor in choices[0].message.files. Preserve them so that the
+                # final upsert below does not overwrite what was already linked via
+                # Chats.insert_chat_files inside the attempt handler.
+                for extra_file in choices[0]['message'].get('files') or []:
+                    if not isinstance(extra_file, dict):
+                        continue
+                    if not extra_file.get('url'):
+                        continue
+                    generated_files.append(extra_file)
 
                 if generated_files:
                     await event_emitter(
@@ -4865,8 +4873,11 @@ async def streaming_chat_response_handler(response, ctx):
                         # For streaming, 'content' is the accumulated assistant response
                         if content:
                             from open_webui.memory_v2.write_policy import write_memory_candidates
-                            _hist_messages = list((_chat_rec.chat or {}).get('history', {}).get('messages', {}).values())
-                            
+
+                            _hist_messages = list(
+                                (_chat_rec.chat or {}).get('history', {}).get('messages', {}).values()
+                            )
+
                             asyncio.ensure_future(
                                 write_memory_candidates(
                                     user_id=user.id,
@@ -4874,7 +4885,7 @@ async def streaming_chat_response_handler(response, ctx):
                                     thread_id=metadata['chat_id'],
                                     messages=_hist_messages,
                                     response_text=content,
-                                    resolved={}
+                                    resolved={},
                                 )
                             )
                 except Exception as _mem_exc:
