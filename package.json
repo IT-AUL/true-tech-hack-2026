@@ -1,6 +1,6 @@
 {
 	"name": "open-webui",
-	"version": "0.8.12-gpthub.29",
+	"version": "0.8.12-gpthub.30",
 	"private": true,
 	"gpthub": {
 		"forkName": "GPTHub",
@@ -110,6 +110,7 @@
 		"eventsource-parser": "^1.1.2",
 		"file-saver": "^2.0.5",
 		"focus-trap": "^7.6.4",
+		"force-graph": "^1.51.4",
 		"fuse.js": "^7.0.0",
 		"heic2any": "^0.0.4",
 		"highlight.js": "^11.9.0",
