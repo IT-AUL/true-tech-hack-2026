@@ -818,14 +818,16 @@
 							{#if message.content === '' && !message.done && !message.error}
 								{#if message.autoRoutePending && message.model === 'auto' && !hasVisibleStatus}
 									<div
-										class="my-2 max-w-2xl rounded-2xl border border-gray-100/80 dark:border-gray-700/50 bg-gray-50/90 dark:bg-gray-850/50 px-3 py-2.5 flex items-center gap-2.5 shimmer"
+										class="my-2 max-w-2xl w-fit rounded-[14px] border border-gray-200/50 dark:border-white/[0.04] bg-white/50 dark:bg-[#141414] px-4 py-2.5 flex items-center gap-3 shadow-sm"
 										aria-busy="true"
 									>
-										<div
-											class="size-5 rounded-full bg-gray-200/80 dark:bg-gray-600/50 animate-pulse shrink-0"
-										></div>
+										<div class="flex items-center gap-1">
+											<div class="size-1.5 rounded-full bg-violet-500/80 dark:bg-violet-400/90 animate-bounce" style="animation-duration: 1s;"></div>
+											<div class="size-1.5 rounded-full bg-sky-500/80 dark:bg-sky-400/90 animate-bounce" style="animation-delay: 0.15s; animation-duration: 1s;"></div>
+											<div class="size-1.5 rounded-full bg-cyan-500/80 dark:bg-cyan-400/90 animate-bounce" style="animation-delay: 0.3s; animation-duration: 1s;"></div>
+										</div>
 										<span
-											class="text-xs text-gray-500 dark:text-gray-400 font-medium tracking-wide"
+											class="text-[13px] text-gray-600 dark:text-gray-300 font-medium tracking-wide"
 										>
 											{$i18n.t('Choosing a route...')}
 										</span>

@@ -672,7 +672,10 @@ export const generateTitle = async (
 
 	try {
 		// Step 1: Safely extract the response string
-		const response = res?.choices[0]?.message?.content ?? '';
+		let response = res?.choices[0]?.message?.content ?? '';
+		// Strip <think>...</think> reasoning blocks (DeepSeek R1, Qwen QWQ)
+		response = response.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+		response = response.replace(/<think>[\s\S]*$/gi, '').trim();
 
 		// Step 2: Attempt to fix common JSON format issues like single quotes
 		const sanitizedResponse = response.replace(/['‘’`]/g, '"'); // Convert single quotes to double quotes for valid JSON

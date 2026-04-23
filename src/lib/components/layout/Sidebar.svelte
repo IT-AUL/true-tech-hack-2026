@@ -448,7 +448,16 @@
 
 		document.documentElement.style.setProperty('--sidebar-width', `${$sidebarWidth}px`);
 		sidebarWidth.subscribe((w) => {
-			document.documentElement.style.setProperty('--sidebar-width', `${w}px`);
+			if (!$selectedProjectId) {
+				document.documentElement.style.setProperty('--sidebar-width', `${w}px`);
+			}
+		});
+		selectedProjectId.subscribe((active) => {
+			if (active) {
+				document.documentElement.style.setProperty('--sidebar-width', `68px`);
+			} else {
+				document.documentElement.style.setProperty('--sidebar-width', `${$sidebarWidth}px`);
+			}
 		});
 
 		showSidebar.set(!$mobile ? localStorage.sidebar === 'true' : false);
@@ -732,57 +741,32 @@
 		data-state={$showSidebar}
 	>
 		<div
-			class="my-auto flex flex-row h-screen max-h-[100dvh] w-[var(--sidebar-width)] z-50 {$showSidebar
+			class="my-auto flex flex-row h-screen max-h-[100dvh] {$selectedProjectId ? 'w-[72px]' : 'w-[var(--sidebar-width)]'} z-50 {$showSidebar
 				? ''
 				: 'invisible'}"
 		>
 			<SpacesColumn />
+			{#if !$selectedProjectId}
 			<div class="flex flex-col flex-1 min-w-0 overflow-x-hidden scrollbar-hidden bg-gray-50/50 dark:bg-gray-950/50">
-				<div
-					class="sidebar px-[0.5625rem] pt-2 pb-1.5 flex justify-between space-x-1 text-gray-600 dark:text-gray-400 sticky top-0 z-10 -mb-3"
-				>
-					<a
-						class="flex items-center rounded-xl h-full px-1 hover:bg-gray-100/50 dark:hover:bg-gray-850/50 transition no-drag-region"
-						href="/"
-						draggable="false"
-						on:click={newChatHandler}
-					>
-						<img
-							src="{WEBUI_BASE_URL}/static/vibehub_logo.svg"
-							class="h-6 w-auto invert dark:invert-0"
-							alt="VibeHub"
-						/>
-					</a>
-
-					<div class="flex-1"></div>
-					<Tooltip
-						content={$showSidebar ? $i18n.t('Close Sidebar') : $i18n.t('Open Sidebar')}
-						placement="bottom"
-					>
+				<div class="sidebar px-3 pt-3 pb-2 flex justify-between items-center sticky top-0 z-10">
+					<!-- Sidebar Toggle Button (moved to top left since logo is gone) -->
+					<Tooltip content={$showSidebar ? $i18n.t('Close Sidebar') : $i18n.t('Open Sidebar')} placement="bottom">
 						<button
-							class="flex rounded-xl size-8.5 justify-center items-center hover:bg-gray-100/50 dark:hover:bg-gray-850/50 transition {isWindows
-								? 'cursor-pointer'
-								: 'cursor-[w-resize]'}"
-							on:click={() => {
-								showSidebar.set(!$showSidebar);
-							}}
+							class="flex rounded-xl size-9 justify-center items-center bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition {isWindows ? 'cursor-pointer' : 'cursor-[w-resize]'}"
+							on:click={() => { showSidebar.set(!$showSidebar); }}
 							aria-label={$showSidebar ? $i18n.t('Close Sidebar') : $i18n.t('Open Sidebar')}
 						>
-							<div class=" self-center p-1.5">
-								<Sidebar />
-							</div>
+							<Sidebar className="size-4" />
 						</button>
 					</Tooltip>
 
 					<div
-						class="{scrollTop > 0
-							? 'visible'
-							: 'invisible'} sidebar-bg-gradient-to-b bg-linear-to-b from-gray-50 dark:from-gray-950 to-transparent from-50% pointer-events-none absolute inset-0 -z-10 -mb-6"
+						class="{scrollTop > 0 ? 'visible' : 'invisible'} sidebar-bg-gradient-to-b bg-linear-to-b from-gray-50 dark:from-gray-950 to-transparent from-50% pointer-events-none absolute inset-0 -z-10 -mb-6"
 					></div>
 				</div>
 
 				<div
-					class="relative flex flex-col flex-1 overflow-y-auto scrollbar-hidden pt-3 pb-3"
+					class="relative flex flex-col flex-1 overflow-y-auto scrollbar-hidden pt-1 pb-3"
 					on:scroll={(e) => {
 						if (e.target.scrollTop === 0) {
 							scrollTop = 0;
@@ -799,105 +783,64 @@
 						}
 					}}
 				>
-				<div class="pb-1.5">
-					<div class="px-[0.4375rem] flex justify-center text-gray-800 dark:text-gray-200">
-						<a
-							id="sidebar-new-chat-button"
-							class="group grow flex items-center space-x-3 rounded-2xl px-2.5 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition outline-none"
-							href="/"
-							draggable="false"
-							on:click={newChatHandler}
-							aria-label={$i18n.t('New Chat')}
-						>
-							<div class="self-center">
-								<PencilSquare className=" size-4.5" strokeWidth="2" />
-							</div>
+				<div class="pb-1.5 px-2 flex flex-col gap-1">
+					<a
+						id="sidebar-new-chat-button"
+						class="group flex items-center gap-3 rounded-xl px-3 py-2.5 bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:brightness-110 transition shadow-sm outline-none"
+						href="/"
+						draggable="false"
+						on:click={newChatHandler}
+						aria-label={$i18n.t('New Chat')}
+					>
+						<PencilSquare className="size-4.5" strokeWidth="2" />
+						<span class="text-sm font-semibold">Новый чат</span>
+						<HotkeyHint name="newChat" className="ml-auto group-hover:visible invisible opacity-50" />
+					</a>
 
-							<div class="flex flex-1 self-center translate-y-[0.5px]">
-								<div class=" self-center text-sm font-primary">{$i18n.t('New Chat')}</div>
-							</div>
-
-							<HotkeyHint name="newChat" className=" group-hover:visible invisible" />
-						</a>
-					</div>
-
-					{#if !$selectedProjectId}
-					<div class="px-[0.4375rem] flex justify-center text-gray-800 dark:text-gray-200">
-						<button
-							id="sidebar-search-button"
-							class="group grow flex items-center space-x-3 rounded-2xl px-2.5 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition outline-none"
-							on:click={() => {
-								showSearch.set(true);
-							}}
-							draggable="false"
-							aria-label={$i18n.t('Search')}
-						>
-							<div class="self-center">
-								<Search strokeWidth="2" className="size-4.5" />
-							</div>
-
-							<div class="flex flex-1 self-center translate-y-[0.5px]">
-								<div class=" self-center text-sm font-primary">{$i18n.t('Search')}</div>
-							</div>
-							<HotkeyHint name="search" className=" group-hover:visible invisible" />
-						</button>
-					</div>
+					<button
+						id="sidebar-search-button"
+						class="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-900 border border-transparent hover:border-gray-200 dark:hover:border-gray-800 transition outline-none"
+						on:click={() => { showSearch.set(true); }}
+						draggable="false"
+					>
+						<Search strokeWidth="2" className="size-4.5" />
+						<span class="text-sm font-medium">Поиск</span>
+						<HotkeyHint name="search" className="ml-auto group-hover:visible invisible opacity-50" />
+					</button>
 
 					{#if ($config?.features?.enable_notes ?? false) && ($user?.role === 'admin' || ($user?.permissions?.features?.notes ?? true))}
-						<div class="px-[0.4375rem] flex justify-center text-gray-800 dark:text-gray-200">
-							<a
-								id="sidebar-notes-button"
-								class="grow flex items-center space-x-3 rounded-2xl px-2.5 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition"
-								href="/notes"
-								on:click={itemClickHandler}
-								draggable="false"
-								aria-label={$i18n.t('Notes')}
-							>
-								<div class="self-center">
-									<Note className="size-4.5" strokeWidth="2" />
-								</div>
-
-								<div class="flex self-center translate-y-[0.5px]">
-									<div class=" self-center text-sm font-primary">{$i18n.t('Notes')}</div>
-								</div>
-							</a>
-						</div>
+						<a
+							id="sidebar-notes-button"
+							class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-900 border border-transparent hover:border-gray-200 dark:hover:border-gray-800 transition outline-none"
+							href="/notes"
+							on:click={itemClickHandler}
+							draggable="false"
+						>
+							<Note className="size-4.5" strokeWidth="2" />
+							<span class="text-sm font-medium">Заметки</span>
+						</a>
 					{/if}
 
 					{#if $user?.role === 'admin' || $user?.permissions?.workspace?.models || $user?.permissions?.workspace?.knowledge || $user?.permissions?.workspace?.prompts || $user?.permissions?.workspace?.tools}
-						<div class="px-[0.4375rem] flex justify-center text-gray-800 dark:text-gray-200">
-							<a
-								id="sidebar-workspace-button"
-								class="grow flex items-center space-x-3 rounded-2xl px-2.5 py-2 hover:bg-gray-100 dark:hover:bg-gray-900 transition"
-								href="/workspace"
-								on:click={itemClickHandler}
-								draggable="false"
-								aria-label={$i18n.t('Workspace')}
-							>
-								<div class="self-center">
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										fill="none"
-										viewBox="0 0 24 24"
-										stroke-width="2"
-										stroke="currentColor"
-										class="size-4.5"
-									>
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											d="M13.5 16.875h3.375m0 0h3.375m-3.375 0V13.5m0 3.375v3.375M6 10.5h2.25a2.25 2.25 0 0 0 2.25-2.25V6a2.25 2.25 0 0 0-2.25-2.25H6A2.25 2.25 0 0 0 3.75 6v2.25A2.25 2.25 0 0 0 6 10.5Zm0 9.75h2.25A2.25 2.25 0 0 0 10.5 18v-2.25a2.25 2.25 0 0 0-2.25-2.25H6a2.25 2.25 0 0 0-2.25 2.25V18A2.25 2.25 0 0 0 6 20.25Zm9.75-9.75H18a2.25 2.25 0 0 0 2.25-2.25V6A2.25 2.25 0 0 0 18 3.75h-2.25A2.25 2.25 0 0 0 13.5 6v2.25a2.25 2.25 0 0 0 2.25 2.25Z"
-										/>
-									</svg>
-								</div>
+						<a
+							id="sidebar-workspace-button"
+							class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-900 border border-transparent hover:border-gray-200 dark:hover:border-gray-800 transition outline-none"
+							href="/workspace"
+							on:click={itemClickHandler}
+							draggable="false"
+						>
+							<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-4.5">
+								<path stroke-linecap="round" stroke-linejoin="round" d="M13.5 16.875h3.375m0 0h3.375m-3.375 0V13.5m0 3.375v3.375M6 10.5h2.25a2.25 2.25 0 0 0 2.25-2.25V6a2.25 2.25 0 0 0-2.25-2.25H6A2.25 2.25 0 0 0 3.75 6v2.25A2.25 2.25 0 0 0 6 10.5Zm0 9.75h2.25A2.25 2.25 0 0 0 10.5 18v-2.25a2.25 2.25 0 0 0-2.25-2.25H6a2.25 2.25 0 0 0-2.25 2.25V18A2.25 2.25 0 0 0 6 20.25Zm9.75-9.75H18a2.25 2.25 0 0 0 2.25-2.25V6A2.25 2.25 0 0 0 18 3.75h-2.25A2.25 2.25 0 0 0 13.5 6v2.25a2.25 2.25 0 0 0 2.25 2.25Z" />
+							</svg>
+							<span class="text-sm font-medium">Настройки ИИ</span>
+						</a>
+					{/if}
 
-								<div class="flex self-center translate-y-[0.5px]">
-									<div class=" self-center text-sm font-primary">{$i18n.t('Workspace')}</div>
-								</div>
-							</a>
+					<div class="mt-4 mb-2 px-3">
+						<div class="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
+							Предыдущие чаты
 						</div>
-					{/if}
-					{/if}
+					</div>
 				</div>
 
 				{#if !$selectedProjectId}
@@ -1012,32 +955,44 @@
 
 				{:else}
 
-				<div class="px-2 mt-2 mb-2">
-					<div class="flex items-center gap-2 pl-2.5 pr-1">
-						<div class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse shrink-0"></div>
-						<div class="text-xs font-semibold text-gray-500 uppercase tracking-wider truncate flex-1">
-							{#each $projects as p}
-								{#if p.id === $selectedProjectId}
-									{p.title}
-								{/if}
-							{/each}
+				<div class="px-2.5 mt-1 mb-1.5">
+					<button
+						class="w-full flex items-center gap-2.5 p-2 rounded-xl bg-gradient-to-r from-indigo-500/10 to-purple-500/10 dark:from-indigo-500/15 dark:to-purple-500/15 border border-indigo-200/30 dark:border-indigo-800/30 hover:from-indigo-500/15 hover:to-purple-500/15 dark:hover:from-indigo-500/20 dark:hover:to-purple-500/20 transition-all group"
+						on:click={() => goto('/')}
+						title="Дашборд пространства"
+					>
+						{#each $projects as p}
+							{#if p.id === $selectedProjectId}
+								{@const desc = p.description || ''}
+								{@const metaMatch = desc.match(/<!--space-meta:(.+?)-->/)}
+								{@const meta = metaMatch ? (() => { try { return JSON.parse(metaMatch[1]); } catch { return {}; } })() : {}}
+								<div class="size-7 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-sm shrink-0 shadow-sm">
+									{meta.emoji || p.title[0]?.toUpperCase() || '🚀'}
+								</div>
+								<div class="flex-1 min-w-0 text-left">
+									<div class="text-xs font-semibold text-gray-900 dark:text-white truncate">{p.title}</div>
+									<div class="text-[9px] text-indigo-500 dark:text-indigo-400 flex items-center gap-1">
+										<span class="size-1 rounded-full bg-green-500 inline-block"></span>
+										Mem0 активна
+									</div>
+								</div>
+							{/if}
+						{/each}
+						<div class="flex gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition">
+							<span
+								class="p-1 hover:bg-white/50 dark:hover:bg-gray-800/50 rounded-md text-gray-400 hover:text-red-500 transition"
+								role="button"
+								tabindex="0"
+								on:click|stopPropagation={() => selectedProjectId.set(null)}
+								on:keydown={(e) => { if (e.key === 'Enter') selectedProjectId.set(null); }}
+								title="Выйти"
+							>
+								<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-3">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+								</svg>
+							</span>
 						</div>
-						<button
-							class="p-0.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition text-gray-400 hover:text-gray-600"
-							on:click={() => selectedProjectId.set(null)}
-							title="Выйти из пространства"
-						>
-							<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-3.5">
-								<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-							</svg>
-						</button>
-					</div>
-				</div>
-
-				<div class="px-2 mb-2">
-					<div class="text-xs font-semibold text-gray-500 uppercase tracking-wider pl-2.5">
-						Чаты пространства
-					</div>
+					</button>
 				</div>
 				{/if}
 				<div class="pt-1.5 pb-20">
@@ -1087,10 +1042,11 @@
 					</div>
 				</div>
 			</div>
+			{/if}
 		</div>
 	</div>
 
-	{#if !$mobile}
+	{#if !$mobile && !$selectedProjectId}
 		<div
 			class="relative flex items-center justify-center group border-l border-gray-50 dark:border-gray-850/30 hover:border-gray-200 dark:hover:border-gray-800 transition z-20"
 			id="sidebar-resizer"

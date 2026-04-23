@@ -405,6 +405,40 @@ export const generateInitialsImage = (name) => {
 	return canvas.toDataURL();
 };
 
+const kwEmoji: [string[], string][] = [
+	[['код','code','dev','разработ','програм','api','backend','frontend','web'], '💻'],
+	[['дизайн','design','ui','ux','стиль','макет','figma'], '🎨'],
+	[['исследов','research','анализ','analyt','data','данн'], '🔬'],
+	[['маркет','market','продвиж','seo','бренд','реклам'], '📣'],
+	[['продукт','product','mvp','запуск','launch','стартап'], '🚀'],
+	[['бизнес','business','финанс','бюджет','plan'], '📊'],
+	[['обучен','learn','курс','образ','study','учеб'], '📚'],
+	[['пис','write','текст','контент','статья','блог'], '✍️'],
+	[['бот','bot','чат','chat','assist','ai','нейро','gpt','llm'], '🤖'],
+	[['игр','game','unity','геймд'], '🎮'],
+	[['музык','music','звук','audio'], '🎵'],
+	[['видео','video','youtube','монтаж'], '🎬'],
+	[['фото','photo','image','изображ'], '📷'],
+	[['здоров','health','спорт','фитнес'], '💪'],
+	[['путеш','travel','тур'], '✈️'],
+	[['дом','home','ремонт','интерьер'], '🏠'],
+	[['еда','food','рецепт','кухн'], '🍳'],
+	[['наук','science','физик','матем','хими'], '⚛️'],
+	[['юрид','legal','право','закон','договор'], '⚖️'],
+	[['hr','кадр','найм','собесед','команд','team'], '👥'],
+];
+const fallbackEmoji = ['🧠', '💡', '🔮', '⭐', '🎯', '🌐', '💎', '🔥', '🌈', '⚡', '🏗️', '📌'];
+
+export function getSpaceEmoji(title: string): string {
+	const lower = (title || '').toLowerCase();
+	for (const [keywords, emoji] of kwEmoji) {
+		if (keywords.some(kw => lower.includes(kw))) return emoji;
+	}
+	let hash = 0;
+	for (let i = 0; i < lower.length; i++) hash = ((hash << 5) - hash) + lower.charCodeAt(i);
+	return fallbackEmoji[Math.abs(hash) % fallbackEmoji.length];
+}
+
 export const formatDate = (inputDate) => {
 	const date = dayjs(inputDate);
 

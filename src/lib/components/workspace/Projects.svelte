@@ -15,11 +15,17 @@
 	import Tooltip from '../common/Tooltip.svelte';
 	import XMark from '../icons/XMark.svelte';
 	import ProjectDetails from './Projects/ProjectDetails.svelte';
+	import Modal from '../common/Modal.svelte';
 
 	let loaded = false;
 	let showDeleteConfirm = false;
 	let selectedProject = null;
 	let showDetails = false;
+
+	let showCreateModal = false;
+	let newProjectTitle = '';
+	let newProjectDescription = '';
+	let isCreating = false;
 
 	let query = '';
 
@@ -39,18 +45,27 @@
 		loaded = true;
 	};
 
-	const createHandler = async () => {
-		const title = prompt($i18n.t('Enter project title:'));
-		if (!title) return;
+	const openCreateModal = () => {
+		newProjectTitle = '';
+		newProjectDescription = '';
+		showCreateModal = true;
+	};
 
-		const description = prompt($i18n.t('Enter project description (optional):')) || '';
+	const submitCreateProject = async () => {
+		if (!newProjectTitle.trim()) {
+			toast.error($i18n.t('Enter project title'));
+			return;
+		}
 
-		const res = await createNewProject(localStorage.token, title, description).catch((e) => {
+		isCreating = true;
+		const res = await createNewProject(localStorage.token, newProjectTitle.trim(), newProjectDescription.trim()).catch((e) => {
 			toast.error(`${e}`);
 		});
+		isCreating = false;
 
 		if (res) {
 			toast.success($i18n.t('Project created successfully.'));
+			showCreateModal = false;
 			init();
 		}
 	};
@@ -85,6 +100,77 @@
 		}}
 	/>
 
+	<Modal size="sm" bind:show={showCreateModal}>
+		<div class="px-5 py-5 sm:p-6 bg-white dark:bg-gray-900 rounded-[24px]">
+			<div class="flex justify-between items-center mb-6">
+				<h3 class="text-xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+					<div class="size-8 rounded-full bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center text-indigo-500">
+						<Plus className="size-4" strokeWidth="2.5" />
+					</div>
+					Новое пространство
+				</h3>
+				<button 
+					type="button" 
+					class="p-1 rounded-full text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+					on:click={() => showCreateModal = false}
+				>
+					<XMark className="size-4" strokeWidth="2.5" />
+				</button>
+			</div>
+
+			<form on:submit|preventDefault={submitCreateProject} class="space-y-4">
+				<div>
+					<label for="project-title" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+						Название
+					</label>
+					<input
+						id="project-title"
+						type="text"
+						bind:value={newProjectTitle}
+						placeholder="Например: Маркетинг Q3"
+						class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all placeholder:text-gray-400 text-sm"
+						autofocus
+					/>
+				</div>
+
+				<div>
+					<label for="project-desc" class="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1.5">
+						Описание <span class="text-gray-400 font-normal">(опционально)</span>
+					</label>
+					<textarea
+						id="project-desc"
+						bind:value={newProjectDescription}
+						placeholder="Кратко опишите цель этого пространства..."
+						rows="3"
+						class="w-full px-3 py-2 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all placeholder:text-gray-400 text-sm resize-none"
+					></textarea>
+				</div>
+
+				<div class="pt-4 flex justify-end gap-2">
+					<button
+						type="button"
+						class="px-4 py-2 font-medium text-sm text-gray-600 hover:text-gray-900 bg-transparent hover:bg-gray-100 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-800 rounded-xl transition"
+						on:click={() => showCreateModal = false}
+					>
+						Отмена
+					</button>
+					<button
+						type="submit"
+						disabled={!newProjectTitle.trim() || isCreating}
+						class="px-5 py-2 font-medium text-sm text-white bg-black hover:bg-gray-800 dark:bg-white dark:text-black dark:hover:bg-gray-200 rounded-xl transition shadow-sm active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+					>
+						{#if isCreating}
+							<Spinner className="size-4" />
+							Создание...
+						{:else}
+							Создать
+						{/if}
+					</button>
+				</div>
+			</form>
+		</div>
+	</Modal>
+
 	{#if showDetails && selectedProject}
 		<ProjectDetails
 			project={selectedProject}
@@ -110,7 +196,7 @@
 				<div class="flex w-full justify-end gap-1.5">
 					<button
 						class=" px-2 py-1.5 rounded-xl bg-black text-white dark:bg-white dark:text-black transition font-medium text-sm flex items-center"
-						on:click={createHandler}
+						on:click={openCreateModal}
 					>
 						<Plus className="size-3" strokeWidth="2.5" />
 						<div class=" hidden md:block md:ml-1 text-xs">{$i18n.t('New Project')}</div>

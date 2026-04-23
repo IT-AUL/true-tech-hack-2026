@@ -65,54 +65,56 @@
 	}
 </style>
 
-<div class="flex items-start gap-2.5 px-3 py-2 bg-gray-50 dark:bg-gray-850 rounded-xl border border-gray-100/80 dark:border-gray-800 w-fit max-w-full transition-all duration-300 shadow-sm text-sm mb-1.5 focus-within:ring-1 focus-within:ring-gray-200">
-	<div class="shrink-0 flex items-center justify-center mt-0.5 {iconColor} {!isDone ? 'step-pulse' : ''}" aria-hidden="true">
-		{#if cat === 'image_gen'}
-			<Photo className="w-4 h-4" />
-		{:else if cat === 'code'}
-			<CommandLine className="w-4 h-4" />
-		{:else if cat === 'vision'}
-			<Eye className="w-4 h-4" />
-		{:else if cat === 'audio_gen'}
-			<Mic className="w-4 h-4" />
-		{:else if cat === 'math_logic'}
-			<ChartBar className="w-4 h-4" />
-		{:else if cat === 'research'}
-			<GlobeAlt className="w-4 h-4" />
-		{:else if cat === 'analytics'}
-			<ChartBar className="w-4 h-4" />
-		{:else if cat === 'creative'}
-			<PencilSquare className="w-4 h-4" />
-		{:else if cat === 'document'}
-			<Document className="w-4 h-4" />
-		{:else if cat === 'presentation'}
-			<!-- film-like glyph for presentation pill: 🎞️ -->
-			<span class="text-[13px] leading-none" aria-hidden="true">🎞️</span>
-		{:else if cat === 'memory'}
-			<Database className="w-4 h-4" />
-		{:else if cat === 'fallback'}
-			<Bolt className="w-4 h-4" />
-		{:else}
-			<Sparkles className="w-4 h-4" />
-		{/if}
-	</div>
+<div class="flex flex-col gap-1.5 px-3.5 py-3 bg-white/50 dark:bg-[#141414] rounded-[14px] border border-gray-200/50 dark:border-white/[0.04] w-fit max-w-full shadow-sm text-sm mb-2 relative group overflow-hidden">
+	{#if !isDone}
+		<!-- Animated subtle glow for active tasks -->
+		<div class="absolute inset-0 bg-gradient-to-r {gradient} opacity-20 step-pulse pointer-events-none"></div>
+	{/if}
 
-	<div class="flex flex-col min-w-0 pr-2">
-		<div class="font-medium text-gray-800 dark:text-gray-200 leading-snug line-clamp-1 truncate" title={primary}>
-			{primary || $i18n.t('Processing...')}
+	<div class="flex items-center gap-2.5 relative z-10 w-full justify-between">
+		<div class="flex items-center gap-2 min-w-0">
+			<!-- Icon -->
+			<div class="shrink-0 flex items-center justify-center p-1.5 rounded-md bg-white/50 dark:bg-white/5 border border-gray-100 dark:border-white/5 {iconColor}" aria-hidden="true">
+				{#if cat === 'image_gen'}<Photo className="w-3.5 h-3.5" />
+				{:else if cat === 'code'}<CommandLine className="w-3.5 h-3.5" />
+				{:else if cat === 'vision'}<Eye className="w-3.5 h-3.5" />
+				{:else if cat === 'audio_gen'}<Mic className="w-3.5 h-3.5" />
+				{:else if cat === 'math_logic'}<ChartBar className="w-3.5 h-3.5" />
+				{:else if cat === 'research'}<GlobeAlt className="w-3.5 h-3.5" />
+				{:else if cat === 'analytics'}<ChartBar className="w-3.5 h-3.5" />
+				{:else if cat === 'creative'}<PencilSquare className="w-3.5 h-3.5" />
+				{:else if cat === 'document'}<Document className="w-3.5 h-3.5" />
+				{:else if cat === 'presentation'}<span class="text-[13px] leading-none" aria-hidden="true">🎞️</span>
+				{:else if cat === 'memory'}<Database className="w-3.5 h-3.5" />
+				{:else if cat === 'fallback'}<Bolt className="w-3.5 h-3.5" />
+				{:else}<Sparkles className="w-3.5 h-3.5" />
+				{/if}
+			</div>
+
+			<!-- Title -->
+			<div class="font-medium text-[13px] text-gray-800 dark:text-gray-200 leading-snug line-clamp-1 truncate tracking-wide" title={primary}>
+				{primary || $i18n.t('Processing...')}
+			</div>
 		</div>
-		{#if status?.routing?.reasoning}
-			<p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 leading-relaxed line-clamp-2">
-				{status.routing.reasoning}
-			</p>
-		{/if}
+
+		<!-- Status Indicator -->
+		<div class="shrink-0 pl-3 flex items-center justify-center">
+			{#if isDone}
+				<svg class="w-4 h-4 text-emerald-500/80 drop-shadow-[0_0_8px_rgba(16,185,129,0.3)]" viewBox="0 0 20 20" fill="currentColor">
+					<path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" />
+				</svg>
+			{:else}
+				<div class="size-3.5 rounded-full border-2 border-gray-200 dark:border-gray-700 border-t-gray-500 dark:border-t-gray-300 animate-spin"></div>
+			{/if}
+		</div>
 	</div>
 
-	{#if isDone}
-		<div class="ml-1 mt-0.5 shrink-0 bg-green-500/10 text-green-600 dark:text-green-400 rounded-full p-0.5" title={$i18n.t('Done')}>
-			<svg class="w-2.5 h-2.5" viewBox="0 0 20 20" fill="currentColor">
-				<path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" />
-			</svg>
+	<!-- Reasoning / Description below -->
+	{#if status?.routing?.reasoning || status?.description}
+		<div class="relative z-10 w-full">
+			<div class="text-[12px] text-gray-500 dark:text-gray-400 mt-1.5 leading-relaxed whitespace-pre-wrap font-mono text-opacity-90">
+				{status?.routing?.reasoning || status?.description}
+			</div>
 		</div>
 	{/if}
 </div>

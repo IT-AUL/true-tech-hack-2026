@@ -1724,24 +1724,19 @@ TITLE_GENERATION_PROMPT_TEMPLATE = PersistentConfig(
 )
 
 DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE = """### Task:
-Generate a concise, 3-5 word title with an emoji summarizing the chat history.
-### Guidelines:
-- The title should clearly represent the main theme or subject of the conversation.
-- Use emojis that enhance understanding of the topic, but avoid quotation marks or special formatting.
-- Write the title in the chat's primary language; default to English if multilingual.
-- Prioritize accuracy over excessive creativity; keep it clear and simple.
-- Your entire response must consist solely of the JSON object, without any introductory or concluding text.
-- The output must be a single, raw JSON object, without any markdown code fences or other encapsulating text.
-- Ensure no conversational text, affirmations, or explanations precede or follow the raw JSON output, as this will cause direct parsing failure.
-### Output:
-JSON format: { "title": "your concise title here" }
-### Examples:
-- { "title": "📉 Stock Market Trends" },
-- { "title": "🍪 Perfect Chocolate Chip Recipe" },
-- { "title": "Evolution of Music Streaming" },
-- { "title": "Remote Work Productivity Tips" },
-- { "title": "Artificial Intelligence in Healthcare" },
-- { "title": "🎮 Video Game Development Insights" }
+Generate 1 short title (2-5 words) with 1 emoji for this chat.
+
+### STRICT RULES:
+- DO NOT use <think>, <reasoning>, or any XML/markdown tags.
+- DO NOT include any explanation, commentary, or metadata.
+- DO NOT output anything except the JSON object below.
+- The title must be 2-5 words maximum.
+- Write the title in the same language as the chat.
+- Include exactly 1 relevant emoji at the start of the title.
+
+### Output format (ONLY this, nothing else):
+{"title": "🔥 Short Title Here"}
+
 ### Chat History:
 <chat_history>
 {{MESSAGES:END:2}}

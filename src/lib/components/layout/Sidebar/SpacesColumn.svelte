@@ -1,93 +1,63 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { getContext } from 'svelte';
-	import { projects, selectedProjectId, user, mobile, showSidebar, showSearch } from '$lib/stores';
+	import { projects, selectedProjectId, user, mobile, showSidebar, showSearch, chats, chatId } from '$lib/stores';
 	import Tooltip from '../../common/Tooltip.svelte';
-	import { WEBUI_API_BASE_URL } from '$lib/constants';
+	import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '$lib/constants';
 	import UserMenu from '../Sidebar/UserMenu.svelte';
-	import PencilSquare from '../../icons/PencilSquare.svelte';
-	import Search from '../../icons/Search.svelte';
 
 	const i18n = getContext('i18n');
 
 	export let onSpaceSelect: (id: string) => void = () => {};
 
-	const colors = [
-		'from-indigo-500 to-purple-600',
-		'from-emerald-500 to-teal-600',
-		'from-rose-500 to-pink-600',
-		'from-amber-500 to-orange-600',
-		'from-blue-500 to-cyan-600',
-		'from-fuchsia-500 to-rose-600',
-		'from-cyan-500 to-blue-600',
-		'from-lime-500 to-green-600'
-	];
+	$: spaceChats = $selectedProjectId && $chats
+		? $chats.filter(c => c.project_id === $selectedProjectId).slice(0, 10)
+		: [];
+
+	import { getSpaceEmoji } from '$lib/utils';
 </script>
 
-<div class="w-[72px] h-full flex flex-col items-center py-3 bg-gray-100/80 dark:bg-gray-900/80 border-r border-gray-200/50 dark:border-gray-800/50 shrink-0 z-50">
-	<!-- Home / Logo -->
-	<Tooltip content={$i18n.t('Home')} placement="right">
-		<button
-			class="size-11 rounded-2xl flex items-center justify-center bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-750 transition-all shadow-xs border border-gray-200/50 dark:border-gray-700/50 mb-1 {!$selectedProjectId ? 'ring-2 ring-indigo-500 ring-offset-2 ring-offset-gray-100 dark:ring-offset-gray-900' : ''}"
-			on:click={() => {
-				selectedProjectId.set(null);
-				goto('/');
-				if ($mobile) showSidebar.set(false);
-			}}
-		>
-			<img src="/static/vibehub_v_icon.svg" class="size-5 invert dark:invert-0" alt="VibeHub" />
-		</button>
-	</Tooltip>
+<div class="w-[68px] h-full flex flex-col items-center py-2.5 bg-white/50 dark:bg-gray-950/50 backdrop-blur-sm border-r border-gray-200/40 dark:border-gray-800/40 shrink-0 z-50">
 
-	<!-- Quick Actions -->
-	<div class="flex flex-col items-center gap-1 mb-2">
-		<Tooltip content={$i18n.t('New Chat')} placement="right">
-			<button
-				class="size-9 rounded-xl flex items-center justify-center text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-800 transition"
-				on:click={() => {
-					selectedProjectId.set(null);
-					goto('/');
-					if ($mobile) showSidebar.set(false);
-				}}
-			>
-				<PencilSquare className="size-4" />
-			</button>
-		</Tooltip>
-		<Tooltip content={$i18n.t('Search')} placement="right">
-			<button
-				class="size-9 rounded-xl flex items-center justify-center text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-800 transition"
-				on:click={() => showSearch.set(true)}
-			>
-				<Search className="size-4" />
-			</button>
-		</Tooltip>
-	</div>
+	<!-- Logo / Home -->
+	<button
+		class="size-10 rounded-[13px] flex items-center justify-center shrink-0 transition-all duration-200
+			{!$selectedProjectId ? 'bg-gray-900 dark:bg-white shadow-md' : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'}"
+		on:click={() => { selectedProjectId.set(null); goto('/'); }}
+	>
+		<img
+			src="{WEBUI_BASE_URL}/static/vibehub_logo_short.svg"
+			class="size-5"
+			style="filter: {$selectedProjectId ? 'brightness(0)' : 'none'};"
+			alt="VibeHub"
+		/>
+	</button>
 
-	<div class="h-px w-8 bg-gray-300/60 dark:bg-gray-700/60 rounded-full mb-3"></div>
+	<div class="w-6 h-px bg-gray-200 dark:bg-gray-800 rounded-full my-2.5 shrink-0"></div>
 
-	<!-- Spaces List -->
-	<div class="flex-1 overflow-y-auto scrollbar-hidden flex flex-col items-center gap-2 w-full px-2">
+	<!-- Spaces -->
+	<div class="flex-1 overflow-y-auto scrollbar-hidden flex flex-col items-center gap-1.5 w-full px-2 pt-0.5">
 		{#if $projects && $projects.length > 0}
 			{#each $projects as project, idx}
 				{@const active = $selectedProjectId === project.id}
 				<div class="relative group w-full flex justify-center">
-					<!-- Active Indicator Pill -->
 					<div
-						class="absolute left-0 top-1/2 -translate-y-1/2 w-1 transition-all duration-300 rounded-r-full bg-gray-900 dark:bg-white
-						{active ? 'h-7' : 'h-0 group-hover:h-4'}"
+						class="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] rounded-r-full transition-all duration-300
+						{active ? 'h-5 bg-gray-900 dark:bg-white' : 'h-0 group-hover:h-3 bg-gray-400 dark:bg-gray-500'}"
 					></div>
 
 					<Tooltip content={project.title} placement="right">
 						<button
-							class="size-11 rounded-2xl flex items-center justify-center text-white font-bold text-base shadow-xs transition-all duration-200
-							{active ? 'rounded-[14px] scale-105 shadow-md' : 'opacity-75 hover:opacity-100 hover:rounded-[14px]'}
-							bg-gradient-to-br {colors[idx % colors.length]}"
+							class="size-10 rounded-[13px] flex items-center justify-center transition-all duration-200 text-lg
+							bg-gray-100 dark:bg-gray-800/80
+							{active ? 'shadow-md ring-2 ring-violet-500/30 dark:ring-violet-400/30 scale-[1.05]' : 'opacity-60 hover:opacity-100 hover:scale-[1.02] hover:bg-gray-200 dark:hover:bg-gray-700'}"
 							on:click={() => {
 								selectedProjectId.set(project.id);
 								onSpaceSelect(project.id);
+								goto('/');
 							}}
 						>
-							{(project.title || 'P')[0].toUpperCase()}
+							{getSpaceEmoji(project.title)}
 						</button>
 					</Tooltip>
 				</div>
@@ -97,50 +67,70 @@
 		<!-- Add Space -->
 		<Tooltip content="Новое пространство" placement="right">
 			<button
-				class="size-11 rounded-2xl flex items-center justify-center bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-750 text-green-500 hover:text-green-600 transition-all shadow-xs border border-dashed border-gray-300 dark:border-gray-700"
-				on:click={() => {
-					goto('/workspace/projects');
-					if ($mobile) showSidebar.set(false);
-				}}
+				class="size-10 rounded-[13px] flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800/60 border border-dashed border-gray-300/60 dark:border-gray-700/60 transition-all"
+				on:click={() => { goto('/workspace/onboarding'); }}
 			>
-				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="size-5">
+				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4">
 					<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
 				</svg>
 			</button>
 		</Tooltip>
 	</div>
 
-	<!-- Expand Sidebar Toggle -->
-	<div class="mt-2 mb-1">
-		<Tooltip content={$showSidebar ? "Свернуть" : "Развернуть"} placement="right">
+	<!-- Space chats mini-nav -->
+	{#if $selectedProjectId && spaceChats.length > 0}
+		<div class="w-6 h-px bg-gray-200 dark:bg-gray-800 rounded-full my-1.5"></div>
+		<div class="flex flex-col items-center gap-1 max-h-[160px] overflow-y-auto scrollbar-hidden px-2 w-full">
+			<Tooltip content="Дашборд" placement="right">
+				<button
+					class="size-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800/60 transition"
+					on:click={() => goto('/')}
+				>
+					<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="size-3.5">
+						<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+					</svg>
+				</button>
+			</Tooltip>
+			{#each spaceChats as chat}
+				<Tooltip content={chat.title} placement="right">
+					<button
+						class="size-7 rounded-lg flex items-center justify-center text-[9px] font-semibold transition-all
+							{$chatId === chat.id
+								? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900'
+								: 'bg-gray-100 dark:bg-gray-800/60 text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 hover:text-gray-600 dark:hover:text-gray-200'}"
+						on:click={() => goto(`/c/${chat.id}`)}
+					>
+						{(chat.title || '?')[0].toUpperCase()}
+					</button>
+				</Tooltip>
+			{/each}
+		</div>
+	{/if}
+
+	<!-- Sidebar toggle (only when no space selected) -->
+	{#if !$selectedProjectId}
+		<div class="my-1">
 			<button
-				class="size-9 rounded-xl flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-800 transition"
+				class="size-8 rounded-lg flex items-center justify-center text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400 transition"
 				on:click={() => showSidebar.set(!$showSidebar)}
 			>
-				{#if $showSidebar}
-					<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-4">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5" />
-					</svg>
-				{:else}
-					<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-4">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M11.25 4.5l7.5 7.5-7.5 7.5m-6-15l7.5 7.5-7.5 7.5" />
-					</svg>
-				{/if}
+				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-3.5">
+					{#if $showSidebar}
+						<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+					{:else}
+						<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+					{/if}
+				</svg>
 			</button>
-		</Tooltip>
-	</div>
+		</div>
+	{/if}
 
-	<!-- User Profile -->
-	<div class="pb-1">
-		{#if $user !== undefined && $user !== null}
+	<!-- User -->
+	<div class="mt-auto pb-0.5">
+		{#if $user}
 			<UserMenu role={$user?.role} profile={true} showActiveUsers={false}>
-				<button class="relative size-10 rounded-full border-2 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:scale-105 transition overflow-hidden">
-					<img
-						src={`${WEBUI_API_BASE_URL}/users/${$user?.id}/profile/image`}
-						class="w-full h-full object-cover"
-						alt="User"
-					/>
-					<div class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-gray-100 dark:border-gray-900 rounded-full"></div>
+				<button class="relative size-9 rounded-full border border-gray-200 dark:border-gray-800 hover:scale-105 transition overflow-hidden">
+					<img src={`${WEBUI_API_BASE_URL}/users/${$user?.id}/profile/image`} class="w-full h-full object-cover" alt="" />
 				</button>
 			</UserMenu>
 		{/if}

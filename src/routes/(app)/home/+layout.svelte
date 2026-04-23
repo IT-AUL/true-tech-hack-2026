@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, getContext } from 'svelte';
-	import { WEBUI_NAME, showSidebar, functions, mobile } from '$lib/stores';
+	import { WEBUI_NAME, showSidebar, functions, mobile, selectedProjectId } from '$lib/stores';
 	import { page } from '$app/stores';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Sidebar from '$lib/components/icons/Sidebar.svelte';

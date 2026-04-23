@@ -1,133 +1,243 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { getContext } from 'svelte';
+	import { getContext, onMount } from 'svelte';
+	import { fly, fade } from 'svelte/transition';
 	import { createNewProject, getProjects } from '$lib/apis/projects';
-	import { projects, selectedProjectId } from '$lib/stores';
+	import { getSpaceEmoji } from '$lib/utils';
+	import { projects, selectedProjectId, models as _models } from '$lib/stores';
 	import { toast } from 'svelte-sonner';
 
 	const i18n = getContext('i18n');
 
+	let step = 0;
+	let submitting = false;
 	let title = '';
 	let description = '';
-	let role = '';
-	let isSubmitting = false;
+	let selectedRole = '';
+	let autoMemory = true;
+	let selectedModel = '';
 
 	const roles = [
-		{ id: 'dev', name: 'Разработчик', desc: 'Код, архитектура, дебаг', icon: 'M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5' },
-		{ id: 'product', name: 'Продакт', desc: 'PRD, Аналитика, Метрики', icon: 'M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z' },
-		{ id: 'design', name: 'Дизайнер', desc: 'UI/UX, Брендбук, Ассеты', icon: 'M9.53 16.122a3 3 0 00-5.78 1.128 2.25 2.25 0 01-2.4 2.245 4.5 4.5 0 008.4-2.245c0-.399-.078-.78-.22-1.128zm0 0a15.998 15.998 0 003.388-1.62m-5.043-.025a15.994 15.994 0 011.622-3.395m3.42 3.42a15.995 15.995 0 004.764-4.648l3.876-5.814a1.151 1.151 0 00-1.597-1.597L14.146 6.32a15.996 15.996 0 00-4.649 4.763m3.42 3.42a6.776 6.776 0 00-3.42-3.42' }
+		{ id: 'dev', label: 'Разработка', sub: 'Код ・ Архитектура', icon: '💻', color: 'text-sky-400', bg: 'bg-sky-500/10' },
+		{ id: 'product', label: 'Продакт', sub: 'Метрики ・ Roadmap', icon: '🚀', color: 'text-amber-400', bg: 'bg-amber-500/10' },
+		{ id: 'design', label: 'Дизайн', sub: 'UI/UX ・ Визуал', icon: '🎨', color: 'text-fuchsia-400', bg: 'bg-fuchsia-500/10' },
+		{ id: 'research', label: 'Аналитика', sub: 'Данные ・ A/B тесты', icon: '🔬', color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+		{ id: 'marketing', label: 'Маркетинг', sub: 'Контент ・ SMM', icon: '📣', color: 'text-rose-400', bg: 'bg-rose-500/10' },
+		{ id: 'custom', label: 'Другое', sub: 'Свой тип задачи', icon: '🧩', color: 'text-violet-400', bg: 'bg-violet-500/10' },
 	];
 
-	const handleSubmit = async () => {
-		if (!title.trim()) {
-			toast.error('Введите название пространства');
-			return;
-		}
-		isSubmitting = true;
 
-		const roleText = roles.find(r => r.id === role)?.name || '';
-		const fullDescription = roleText ? `Роль: ${roleText}. ${description}` : description;
+	$: canNext = step === 0 ? title.trim().length > 0 : true;
+	$: progress = ((step + 1) / 4) * 100;
 
-		const res = await createNewProject(localStorage.token, title, fullDescription).catch((e) => {
+	function next() {
+		if (step < 3) { step += 1; if (step === 3) submit(); }
+	}
+	function back() { if (step > 0) step -= 1; }
+
+	async function submit() {
+		submitting = true;
+		const meta = JSON.stringify({ role: selectedRole, autoMemory, defaultModel: selectedModel });
+		const desc = `${description}\n<!--space-meta:${meta}-->`;
+
+		const res = await createNewProject(localStorage.token, title, desc).catch(e => {
 			toast.error(`${e}`);
-			isSubmitting = false;
+			submitting = false;
+			step = 2;
 			return null;
 		});
 
 		if (res) {
-			const loadedProjects = await getProjects(localStorage.token);
-			projects.set(loadedProjects);
+			projects.set(await getProjects(localStorage.token));
 			selectedProjectId.set(res.id);
-			toast.success('Пространство создано!');
-			goto('/');
+			submitting = false;
 		}
-	};
+	}
+
+	onMount(() => {
+		if ($_models.length > 0) selectedModel = $_models[0].id;
+	});
 </script>
 
-<div class="w-full h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 p-4">
-	<div class="max-w-xl w-full bg-white dark:bg-gray-900 rounded-3xl shadow-xl border border-gray-100 dark:border-gray-800 p-8 overflow-hidden relative">
+<svelte:head><title>Новое пространство</title></svelte:head>
 
-		<!-- Decorative Background -->
-		<div class="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 bg-indigo-500 rounded-full mix-blend-multiply filter blur-3xl opacity-10 dark:opacity-20"></div>
-		<div class="absolute bottom-0 left-0 -ml-20 -mb-20 w-64 h-64 bg-emerald-500 rounded-full mix-blend-multiply filter blur-3xl opacity-10 dark:opacity-20"></div>
+<div class="w-full min-h-screen flex items-center justify-center p-6 bg-[#0f0f0f] dark:bg-[#0a0a0a]">
+	<div class="w-full max-w-md">
 
-		<div class="relative z-10">
-			<div class="text-center mb-8">
-				<div class="inline-flex items-center justify-center size-14 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-lg mb-4">
-					<img src="/static/vibehub_v_icon.svg" class="size-7 invert" alt="VibeHub" />
+		<!-- Progress -->
+		<div class="mb-8 flex items-center gap-3">
+			{#each [0, 1, 2, 3] as s}
+				<div class="flex-1 h-0.5 rounded-full transition-colors duration-500 {s <= step ? 'bg-gray-900 dark:bg-white' : 'bg-gray-200 dark:bg-gray-800'}"></div>
+			{/each}
+		</div>
+
+		{#key step}
+		<div in:fly={{ x: 40, duration: 250, delay: 30 }} out:fly={{ x: -40, duration: 180 }}>
+
+			<!-- Step 0: Name -->
+			{#if step === 0}
+				<div class="space-y-6">
+					<div>
+						<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Назовите пространство</h1>
+						<p class="text-xs text-gray-400 mt-1">Это будет контекст для всех чатов внутри</p>
+					</div>
+
+					<div class="space-y-4 pt-2">
+						<div>
+							<label class="block text-xs font-medium text-white/60 mb-2 ml-1 cursor-pointer">Название проекта</label>
+							<div class="relative flex items-center">
+								<div class="absolute left-3.5 text-white/30 text-base">✏️</div>
+								<input
+									type="text"
+									bind:value={title}
+									class="w-full pl-10 pr-3.5 py-3 rounded-xl bg-white/5 text-white border border-white/10 text-sm outline-none focus:bg-white/10 focus:border-white/30 transition-all shadow-sm placeholder:text-white/20"
+									placeholder="Океан v2.0"
+									autofocus
+								/>
+							</div>
+						</div>
+						<div>
+							<label class="block text-xs font-medium text-white/60 mb-2 ml-1 cursor-pointer">ТЗ или фокус (опционально)</label>
+							<div class="relative">
+								<div class="absolute left-3.5 top-3 text-white/30 text-base">🎯</div>
+								<textarea
+									bind:value={description}
+									class="w-full pl-10 pr-3.5 py-3 rounded-xl bg-white/5 text-white border border-white/10 text-sm outline-none focus:bg-white/10 focus:border-white/30 transition-all resize-none h-20 shadow-sm placeholder:text-white/20"
+									placeholder="Опишите главные задачи пространства..."
+								></textarea>
+							</div>
+						</div>
+					</div>
+
+					<!-- Live preview -->
+					{#if title.trim()}
+						<div class="flex items-center gap-3 p-3 rounded-xl bg-white/5 dark:bg-white/5 border border-white/10" in:fade={{ duration: 150 }}>
+							<div class="size-10 rounded-xl bg-gray-800 flex items-center justify-center text-xl shadow-sm leading-none shrink-0 border border-white/5">
+								{getSpaceEmoji(title)}
+							</div>
+							<div class="min-w-0">
+								<div class="text-xs font-medium text-white truncate">{title}</div>
+								<div class="text-[10px] text-white/50 truncate mt-0.5">{description || 'Без описания'}</div>
+							</div>
+						</div>
+					{/if}
 				</div>
-				<h1 class="text-2xl font-bold text-gray-900 dark:text-white mb-1">Создайте первое Пространство</h1>
-				<p class="text-gray-500 dark:text-gray-400 text-sm">ИИ будет накапливать контекст внутри пространства, создавая долгосрочную память.</p>
-			</div>
 
-			<form on:submit|preventDefault={handleSubmit} class="space-y-5">
-				<!-- Role Selection -->
-				<div>
-					<label class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Ваша роль (опционально)</label>
-					<div class="grid grid-cols-3 gap-2">
+			<!-- Step 1: Role -->
+			{:else if step === 1}
+				<div class="space-y-5">
+					<div>
+						<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Тип задачи</h1>
+						<p class="text-xs text-gray-400 mt-1">Влияет на поведение ИИ в пространстве</p>
+					</div>
+
+					<div class="grid grid-cols-2 gap-3 pt-2">
 						{#each roles as r}
 							<button
-								type="button"
-								class="flex flex-col items-center p-3 rounded-xl border-2 transition-all {role === r.id ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20' : 'border-gray-100 dark:border-gray-800 hover:border-gray-200 dark:hover:border-gray-700'}"
-								on:click={() => role = role === r.id ? '' : r.id}
+								class="flex items-start gap-3 p-3 rounded-xl border transition-all text-left overflow-hidden group
+									{selectedRole === r.id
+										? 'border-white/30 bg-white/10 text-white shadow-lg shadow-white/5'
+										: 'border-white/5 hover:border-white/15 bg-[#141414] hover:bg-white/[0.04] text-white/80 shadow-xs'}"
+								on:click={() => selectedRole = selectedRole === r.id ? '' : r.id}
 							>
-								<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6 mb-1.5 {role === r.id ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400'}">
-									<path stroke-linecap="round" stroke-linejoin="round" d={r.icon} />
-								</svg>
-								<span class="font-medium text-xs text-gray-900 dark:text-white">{r.name}</span>
-								<span class="text-[9px] text-gray-400 text-center mt-0.5">{r.desc}</span>
+								<div class="size-8 rounded-lg {r.bg} {r.color} flex items-center justify-center text-lg shrink-0 group-hover:scale-110 transition-transform duration-300">
+									{r.icon}
+								</div>
+								<div class="flex flex-col min-w-0">
+									<span class="text-xs font-medium tracking-wide mt-0.5">{r.label}</span>
+									<span class="text-[9px] mt-0.5 leading-tight truncate w-full {selectedRole === r.id ? 'text-white/70' : 'text-white/40'}">{r.sub}</span>
+								</div>
 							</button>
 						{/each}
 					</div>
+
+					<p class="text-[10px] text-white/30 text-center uppercase tracking-widest font-medium">Можно пропустить</p>
 				</div>
 
-				<!-- Workspace Info -->
-				<div class="space-y-3">
+			<!-- Step 2: Settings -->
+			{:else if step === 2}
+				<div class="space-y-5">
 					<div>
-						<label for="title" class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">Название</label>
-						<input
-							type="text"
-							id="title"
-							bind:value={title}
-							class="w-full px-4 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition text-sm"
-							placeholder="Frontend Релиз v2.0"
-							required
-						/>
+						<h1 class="text-xl font-semibold text-gray-900 dark:text-white">Настройка</h1>
+						<p class="text-xs text-gray-400 mt-1">Тонкая настройка пространства</p>
 					</div>
 
-					<div>
-						<label for="desc" class="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">Описание (опционально)</label>
-						<textarea
-							id="desc"
-							bind:value={description}
-							class="w-full px-4 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition resize-none h-20 text-sm"
-							placeholder="Опишите задачи и контекст проекта..."
-						></textarea>
+					<!-- Auto Memory -->
+					<div class="flex items-center justify-between p-3.5 rounded-xl border border-white/10 bg-white/5 shadow-sm">
+						<div>
+							<div class="text-xs font-medium text-white">Автосбор фактов</div>
+							<div class="text-[10px] text-white/50 mt-0.5">Mem0 извлекает факты из чатов</div>
+						</div>
+						<button
+							class="w-9 h-5 rounded-full transition-colors duration-200 relative {autoMemory ? 'bg-white' : 'bg-white/10 border border-white/10'}"
+							on:click={() => autoMemory = !autoMemory}
+						>
+							<div class="absolute top-0.5 size-4 rounded-full shadow-sm transition-all duration-200 {autoMemory ? 'left-[18px] bg-black' : 'left-0.5 bg-white/60'}"></div>
+						</button>
+					</div>
+
+					<!-- Model -->
+					<div class="p-3.5 rounded-xl border border-white/10 bg-white/5 shadow-sm">
+						<div class="text-xs font-medium text-white mb-2">Модель по умолчанию</div>
+						<select
+							bind:value={selectedModel}
+							class="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/10 text-white/90 text-xs outline-none"
+						>
+							<option value="">Авто</option>
+							{#each $_models as model}
+								<option value={model.id}>{model.name || model.id}</option>
+							{/each}
+						</select>
 					</div>
 				</div>
 
-				<button
-					type="submit"
-					disabled={isSubmitting || !title.trim()}
-					class="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-xl font-semibold transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2 text-sm"
-				>
-					{#if isSubmitting}
-						<div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-						Создаем...
+			<!-- Step 3: Done -->
+			{:else if step === 3}
+				<div class="text-center py-8 space-y-4">
+					{#if submitting}
+						<div class="inline-flex size-10 border-2 border-white/10 border-t-white rounded-full animate-spin"></div>
+						<p class="text-sm text-white/50">Создаём...</p>
 					{:else}
-						<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-4">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-						</svg>
-						Создать пространство
+						<div class="inline-flex size-14 rounded-xl bg-gray-800 items-center justify-center text-3xl shadow-lg border border-white/5 animate-pop">
+							{spaceEmoji(title)}
+						</div>
+						<div>
+							<h2 class="text-lg font-semibold text-white">{title}</h2>
+							<p class="text-xs text-white/50 mt-1">Пространство создано. Память подключена.</p>
+						</div>
+						<button
+							class="mt-4 px-5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-medium border border-white/10 transition"
+							on:click={() => goto('/')}
+						>
+							Начать работу →
+						</button>
 					{/if}
-				</button>
-			</form>
+				</div>
+			{/if}
+		</div>
+		{/key}
 
-			<div class="mt-4 text-center">
-				<button class="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition" on:click={() => goto('/')}>
-					Пропустить →
+		<!-- Nav -->
+		{#if step < 3}
+			<div class="flex justify-between items-center mt-8">
+				{#if step > 0}
+					<button class="text-xs text-white/40 hover:text-white/80 transition" on:click={back}>← Назад</button>
+				{:else}
+					<button class="text-xs text-white/40 hover:text-white/80 transition" on:click={() => goto('/')}>Отмена</button>
+				{/if}
+				<button
+					class="px-5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-medium border border-white/10 transition disabled:opacity-30 flex items-center gap-2"
+					disabled={!canNext}
+					on:click={next}
+				>
+					{step === 2 ? 'Создать' : 'Далее →'}
 				</button>
 			</div>
-		</div>
+		{/if}
 	</div>
 </div>
+
+<style>
+	@keyframes pop { 0% { transform: scale(0); } 60% { transform: scale(1.1); } 100% { transform: scale(1); } }
+	.animate-pop { animation: pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+</style>

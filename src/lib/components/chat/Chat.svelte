@@ -2918,13 +2918,11 @@
 								{#if $selectedProjectId}
 									{#each $projects as project}
 										{#if project.id === $selectedProjectId}
-											<div class="flex items-center justify-center mb-2 animate-fade-in relative z-20">
-												<div class="px-3 py-1.5 bg-indigo-50/80 dark:bg-indigo-900/20 backdrop-blur-md rounded-2xl border border-indigo-100/50 dark:border-indigo-800/30 flex items-center gap-2 shadow-xs">
-													<div class="w-2 h-2 rounded-full bg-indigo-500 animate-pulse hidden md:block"></div>
-													<div class="text-xs font-medium text-indigo-700 dark:text-indigo-300">
-														Вы в Пространстве «{project.title}»
-													</div>
-													<span class="text-[10px] text-indigo-500/70 border border-indigo-500/20 px-1.5 rounded bg-white dark:bg-black/20 font-bold ml-1 mt-0.5">ПАМЯТЬ АКТИВНА</span>
+											<div class="flex items-center justify-center mb-1.5">
+												<div class="px-2.5 py-1 bg-gray-50 dark:bg-gray-900/60 rounded-full border border-gray-100/50 dark:border-gray-800/30 flex items-center gap-1.5">
+													<div class="size-1.5 rounded-full bg-emerald-400 animate-pulse"></div>
+													<span class="text-[10px] font-medium text-gray-500 dark:text-gray-400">{project.title}</span>
+													<span class="text-[9px] text-gray-300 dark:text-gray-600 font-semibold">ПАМЯТЬ</span>
 												</div>
 											</div>
 										{/if}

@@ -1,187 +1,411 @@
 <script lang="ts">
-	import { getContext, onMount } from 'svelte';
-	import { getProjectMemory, deleteProjectById } from '$lib/apis/projects';
+	import { getContext, onMount, onDestroy } from 'svelte';
+	import { fly, fade } from 'svelte/transition';
+	import { getProjectMemory, getProjectChats, wipeProjectMemory, deleteProjectMemoryById } from '$lib/apis/projects';
 	import { goto } from '$app/navigation';
-	import { selectedProjectId, projects, showSettings } from '$lib/stores';
+	import { selectedProjectId, projects, showSidebar, mobile } from '$lib/stores';
 	import { toast } from 'svelte-sonner';
+	import ChatGraph from './ChatGraph.svelte';
+	import Sidebar from '../icons/Sidebar.svelte';
 
 	export let project = null;
 
 	const i18n = getContext('i18n');
 
 	let memory = [];
-	let loadingMemory = false;
+	let projectChats = [];
+	let loading = true;
+	let memorySearch = '';
+	
+	let memCount = 0;
+	let chatCount = 0;
+	
+	let showGraphFullscreen = false;
+	let newFactText = '';
 
+	import { getSpaceEmoji } from '$lib/utils';
+
+
+	// Graph modal controls
+	let graphSearch = '';
+	let graphShowChats = true;
+	let graphShowMemory = true;
+	let graphColorRecency = true;
+
+	// Portal: render modal outside component tree so it's not clipped by parent overflow/z-index
+	let portalTarget: HTMLDivElement | null = null;
+	function createPortal() {
+		if (portalTarget) return;
+		portalTarget = document.createElement('div');
+		portalTarget.id = 'graph-modal-portal';
+		document.body.appendChild(portalTarget);
+	}
+	function destroyPortal() {
+		if (portalTarget) { portalTarget.remove(); portalTarget = null; }
+	}
+	function portal(node: HTMLElement) {
+		createPortal();
+		portalTarget!.appendChild(node);
+		return {
+			destroy() { node.remove(); destroyPortal(); }
+		};
+	}
+	onDestroy(destroyPortal);
+
+	// Close graph modal when switching spaces
 	$: if (project) {
-		loadMemory();
+		showGraphFullscreen = false;
+		loadAll();
 	}
 
-	const loadMemory = async () => {
-		if (!project) return;
-		loadingMemory = true;
-		const res = await getProjectMemory(localStorage.token, project.id).catch((e) => {
-			console.error(e);
-			return null;
+	async function loadAll() {
+		loading = true;
+		const [memRes, chatRes] = await Promise.all([
+			getProjectMemory(localStorage.token, project.id).catch(() => null),
+			getProjectChats(localStorage.token, project.id).catch(() => []),
+		]);
+		memory = Array.isArray(memRes?.memories) ? memRes.memories : Array.isArray(memRes) ? memRes : [];
+		projectChats = Array.isArray(chatRes) ? chatRes : [];
+		loading = false;
+		
+		memCount = memory.length;
+		chatCount = projectChats.length;
+	}
+
+	$: filteredMemory = memory.filter(m => {
+		if (!memorySearch) return true;
+		return ((m.text || m.memory || '') as string).toLowerCase().includes(memorySearch.toLowerCase());
+	});
+
+	async function wipeMemory() {
+		if (!confirm('Вы уверены, что хотите полностью стереть базу знаний пространства? Отменить нельзя.')) return;
+		await wipeProjectMemory(localStorage.token, project.id).catch(e => toast.error(`${e}`));
+		toast.success('База знаний пространства очищена');
+		loadAll();
+	}
+
+	async function deleteFact(id: string) {
+		await deleteProjectMemoryById(localStorage.token, project.id, id).catch(e => toast.error(`${e}`));
+		memory = memory.filter(m => m.id !== id);
+	}
+
+	async function handleAddFact(e) {
+		if (e.key === 'Enter' && newFactText.trim()) {
+			toast.success('Mock: Факт добавлен в память (Backend API в разработке)');
+			memory = [{ id: Math.random().toString(), text: newFactText, updated_at: Date.now()/1000 }, ...memory];
+			newFactText = '';
+		}
+	}
+
+	function getLastActivityStr(chats) {
+		if (!chats || chats.length === 0) return 'Активности нет';
+		const dates = chats.map(c => safeDate(c.updated_at)).filter(Boolean) as Date[];
+		if (dates.length === 0) return 'Активности нет';
+		const latest = Math.max(...dates.map(d => d.getTime()));
+		const diffHours = Math.round((Date.now() - latest) / 3600000);
+		if (diffHours < 1) return `только что`;
+		if (diffHours < 24) return `${diffHours}ч назад`;
+		return `${Math.round(diffHours/24)}д назад`;
+	}
+
+	// CRITICAL FIX: Reactivity relies on parameters
+	function getGroupedChats(chats) {
+		const groups = { today: [], week: [], older: [] };
+		if (!chats) return groups;
+		const now = Date.now() / 1000;
+		chats.forEach(chat => {
+			const d = safeDate(chat.updated_at);
+			const diff = d ? (Date.now() - d.getTime()) / 1000 : 999999;
+			if (diff < 86400) groups.today.push(chat);
+			else if (diff < 86400 * 7) groups.week.push(chat);
+			else groups.older.push(chat);
 		});
-		if (res) {
-			memory = res.data || res || [];
+		return groups;
+	}
+
+	$: groupedChats = getGroupedChats(projectChats);
+	$: lastActiveStr = getLastActivityStr(projectChats);
+
+	function isStale(timestamp) {
+		const d = safeDate(timestamp);
+		if (!d) return false;
+		const thirtyDays = 30 * 24 * 3600 * 1000;
+		return (Date.now() - d.getTime()) > thirtyDays;
+	}
+
+	function safeDate(val: any): Date | null {
+		if (!val) return null;
+		// Try as unix seconds (number < 2e10)
+		if (typeof val === 'number' && val < 2e10) {
+			const d = new Date(val * 1000);
+			return isNaN(d.getTime()) ? null : d;
 		}
-		loadingMemory = false;
-	};
-
-	const removeProject = async () => {
-		if (confirm('Вы уверены, что хотите удалить это пространство? Все привязанные данные памяти будут потеряны.')) {
-			await deleteProjectById(localStorage.token, project.id);
-			selectedProjectId.set(null);
-			$projects = $projects.filter(p => p.id !== project.id);
-			toast.success('Пространство удалено');
-			goto('/');
+		// Try as unix milliseconds
+		if (typeof val === 'number') {
+			const d = new Date(val);
+			return isNaN(d.getTime()) ? null : d;
 		}
-	};
+		// Try as ISO string
+		const d = new Date(val);
+		return isNaN(d.getTime()) ? null : d;
+	}
 
-	const deselectSpace = () => {
-		selectedProjectId.set(null);
-	};
+	function formatDate(val: any): string {
+		const d = safeDate(val);
+		if (!d) return '—';
+		return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+	}
 
-	const openSettings = () => {
-		goto('/workspace/projects');
-	};
 </script>
 
 {#if project}
-	<div class="w-full max-w-4xl mx-auto h-full px-6 py-8 flex flex-col overflow-y-auto scrollbar-hidden">
-		<!-- Header -->
-		<div class="mb-8">
-			<div class="flex items-center gap-3 mb-4">
-				<div class="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-xl text-xs font-semibold border border-indigo-100 dark:border-indigo-800/30">
-					<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-3.5">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M9.348 14.652a3.75 3.75 0 010-5.304m5.304 0a3.75 3.75 0 010 5.304m-7.425 2.121a6.75 6.75 0 010-9.546m9.546 0a6.75 6.75 0 010 9.546M5.106 18.894c-3.808-3.807-3.808-9.98 0-13.788m13.788 0c3.808 3.808 3.808 9.981 0 13.789M12 12h.008v.008H12V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-					</svg>
-					<span>Активное Пространство</span>
-				</div>
+<div class="relative w-full flex-1 flex flex-col bg-slate-50 dark:bg-[#080808] text-gray-900 dark:text-white overflow-hidden font-sans transition-colors duration-300" in:fade={{ duration: 150 }}>
+	
+	<!-- Premium Subtle Background Effects -->
+	<div class="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+		<!-- Light soft blobs -->
+		<div class="absolute top-[-10%] right-[-5%] w-[40vw] h-[40vw] rounded-full bg-violet-400/20 dark:bg-violet-600/10 blur-[100px]"></div>
+		<div class="absolute bottom-[-20%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-sky-400/20 dark:bg-sky-600/10 blur-[120px]"></div>
+	</div>
+
+	<!-- Header -->
+	<div class="relative z-10 w-full px-8 py-5 border-b border-gray-200/50 dark:border-white/[0.04] flex items-center justify-between bg-white/40 dark:bg-black/20 backdrop-blur-3xl transition-colors">
+		<div class="flex items-center gap-4">
+			{#if $mobile && !$showSidebar}
+				<button class="text-gray-500 hover:text-gray-900 dark:text-white/60 dark:hover:text-white transition" on:click={() => showSidebar.set(!$showSidebar)}>
+					<Sidebar className="size-5" />
+				</button>
+			{/if}
+			
+			<div class="size-11 rounded-xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-2xl shadow-sm">
+				{getSpaceEmoji(project.title)}
 			</div>
-
-			<div class="flex justify-between items-start">
-				<div>
-					<h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-1">{project.title}</h1>
-					{#if project.description}
-						<p class="text-gray-500 dark:text-gray-400 text-sm max-w-xl">{project.description}</p>
-					{/if}
-				</div>
-
-				<div class="flex gap-2 shrink-0">
-					<button
-						class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition"
-						on:click={openSettings}
-						title="Настройки пространства"
-					>
-						<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28z" />
-							<path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-						</svg>
-					</button>
-					<button
-						class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition"
-						on:click={deselectSpace}
-						title="Выйти из пространства"
-					>
-						<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-						</svg>
-					</button>
-					<button
-						class="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition"
-						on:click={removeProject}
-						title="Удалить пространство"
-					>
-						<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-						</svg>
-					</button>
+			
+			<div>
+				<h1 class="text-xl font-bold tracking-tight text-gray-900 dark:text-white/95">{project.title}</h1>
+				<div class="flex items-center gap-3 mt-0.5">
+					<span class="text-[11px] text-gray-400 dark:text-white/30 font-medium">{chatCount} чатов · {memCount} фактов · обновлено {lastActiveStr}</span>
 				</div>
 			</div>
 		</div>
 
-		<!-- Stats Cards -->
-		<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-			<!-- Memory Stats -->
-			<div class="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl p-5 shadow-xs">
-				<div class="flex items-center gap-3 mb-3">
-					<div class="p-2 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 rounded-xl">
-						<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-5">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
-						</svg>
-					</div>
-					<span class="text-sm font-medium text-gray-500 dark:text-gray-400">Память (Mem0)</span>
-				</div>
-				<div class="text-3xl font-bold text-gray-900 dark:text-white">{Array.isArray(memory) ? memory.length : 0}</div>
-				<p class="text-xs text-gray-400 mt-1">фактов запомнено</p>
-			</div>
+		<button class="flex items-center gap-2 px-4 py-2 font-medium text-xs text-white bg-gray-900 hover:bg-gray-800 dark:bg-white/[0.06] dark:hover:bg-white/[0.1] dark:text-white/80 rounded-xl border border-gray-800 dark:border-white/[0.08] transition-all shadow-sm" on:click={() => showGraphFullscreen = true}>
+			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6a7.5 7.5 0 107.5 7.5h-7.5V6zM13.5 10.5H21a7.5 7.5 0 00-7.5-7.5v7.5z" /></svg>
+			Карта знаний
+		</button>
+	</div>
 
-			<!-- Chats Count -->
-			<div class="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl p-5 shadow-xs">
-				<div class="flex items-center gap-3 mb-3">
-					<div class="p-2 bg-blue-50 dark:bg-blue-900/20 text-blue-500 rounded-xl">
-						<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-5">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 01-.825-.242m9.345-8.334a2.126 2.126 0 00-.476-.095 48.64 48.64 0 00-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0011.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" />
-						</svg>
-					</div>
-					<span class="text-sm font-medium text-gray-500 dark:text-gray-400">Чаты</span>
+	<!-- Main Stage -->
+	<div class="relative z-10 flex-1 flex min-h-0 bg-transparent">
+		
+		<!-- Left: Chat Stream (65%) -->
+		<div class="flex-1 min-w-0 px-8 py-6 overflow-y-auto scrollbar-hidden">
+			<div class="max-w-4xl max-w-[850px] mx-auto flex flex-col h-full">
+				<!-- Slot for the Prompt Input -->
+				<slot name="prompt"></slot>
+				
+				<div class="flex items-center justify-between mb-8">
+					<h2 class="text-lg font-bold text-gray-900 dark:text-white/90 font-mono tracking-tight uppercase"><span class="text-violet-500 dark:text-violet-400 mr-2">/</span>Чаты проекта</h2>
+					<div class="text-[10px] font-bold tracking-widest text-gray-400 dark:text-white/40 uppercase">{chatCount} активных</div>
 				</div>
-				<div class="text-3xl font-bold text-gray-900 dark:text-white">—</div>
-				<p class="text-xs text-gray-400 mt-1">привязано к пространству</p>
-			</div>
 
-			<!-- Status -->
-			<div class="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl p-5 shadow-xs">
-				<div class="flex items-center gap-3 mb-3">
-					<div class="p-2 bg-violet-50 dark:bg-violet-900/20 text-violet-500 rounded-xl">
-						<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-5">
-							<path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-						</svg>
+				{#if loading}
+					<div class="space-y-4">
+						<div class="h-28 bg-white dark:bg-white/[0.02] border border-gray-200 dark:border-white/[0.05] rounded-2xl animate-pulse"></div>
+						<div class="h-28 bg-white dark:bg-white/[0.02] border border-gray-200 dark:border-white/[0.05] rounded-2xl animate-pulse opacity-70"></div>
 					</div>
-					<span class="text-sm font-medium text-gray-500 dark:text-gray-400">Статус</span>
-				</div>
-				<div class="flex items-center gap-2">
-					<div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-					<span class="text-sm font-semibold text-green-600 dark:text-green-400">Активно</span>
-				</div>
-				<p class="text-xs text-gray-400 mt-1">память подключена</p>
+				{:else if projectChats.length > 0}
+					<div class="space-y-12">
+						{#if groupedChats.today.length > 0}
+							<div>
+								<h3 class="text-xs font-bold text-gray-400 dark:text-white/30 uppercase tracking-[0.2em] mb-4 pl-1">Сегодня</h3>
+								<div class="space-y-3">
+									{#each groupedChats.today as chat, idx}
+										<div class="group relative w-full p-6 rounded-2xl border border-gray-200 dark:border-white/[0.08] bg-white dark:bg-white/[0.03] drop-shadow-sm dark:drop-shadow-none hover:shadow-lg dark:hover:bg-white/[0.06] dark:hover:border-white/[0.15] transition-all duration-300 cursor-pointer overflow-hidden backdrop-blur-sm" on:click={() => goto(`/c/${chat.id}`)}>
+											<div class="absolute inset-0 bg-gradient-to-r from-violet-500 to-indigo-600 opacity-0 group-hover:opacity-[0.03] transition-opacity duration-500"></div>
+											<div class="relative z-10 flex flex-col gap-3">
+												<div class="flex items-start justify-between gap-4">
+													<div class="text-lg font-bold text-gray-900 dark:text-white truncate pr-6 group-hover:text-black dark:group-hover:text-white transition-colors">{chat.title}</div>
+													{#if idx === 0}
+														<span class="shrink-0 text-[11px] font-bold uppercase tracking-wider bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 px-3 py-1.5 rounded-lg border border-violet-200 dark:border-violet-500/30">Продолжить</span>
+													{/if}
+												</div>
+													<div class="flex items-center justify-between mt-1">
+													<div class="flex gap-2">
+														{#if chat.tags && chat.tags.length > 0}
+															{#each chat.tags.slice(0,3) as tag}
+																<span class="text-[10px] font-medium text-gray-500 dark:text-white/60 bg-gray-100 dark:bg-white/5 px-2 py-0.5 rounded-md border border-gray-200 dark:border-white/10">{tag.name || tag}</span>
+															{/each}
+														{:else}
+															<span class="text-[10px] font-medium text-gray-400 dark:text-white/30 bg-gray-50 dark:bg-white/[0.02] px-2 py-0.5 rounded-md border border-gray-200 dark:border-white/[0.05]">Общий</span>
+														{/if}
+													</div>
+													<div class="text-[10px] font-medium text-gray-400 dark:text-white/30 bg-gray-50 dark:bg-white/5 px-2 py-1 rounded-md">{safeDate(chat.updated_at)?.toLocaleTimeString('ru-RU', {hour: '2-digit', minute:'2-digit'}) ?? '—'}</div>
+												</div>
+											</div>
+										</div>
+									{/each}
+								</div>
+							</div>
+						{/if}
+
+						{#if groupedChats.week.length > 0}
+							<div>
+								<h3 class="text-xs font-bold text-gray-400 dark:text-white/30 uppercase tracking-[0.2em] mb-4 pl-1">На этой неделе</h3>
+								<div class="space-y-3 opacity-90 dark:opacity-80 group-hover/list:opacity-100 transition-opacity">
+									{#each groupedChats.week as chat}
+										<div class="group relative w-full p-5 rounded-xl border border-gray-300/80 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] hover:bg-white dark:hover:bg-white/[0.05] hover:border-gray-400 dark:hover:border-white/[0.12] transition-all cursor-pointer backdrop-blur-sm shadow-sm" on:click={() => goto(`/c/${chat.id}`)}>
+											<div class="flex items-center justify-between gap-4">
+												<div class="text-base font-semibold text-gray-800 dark:text-white/90 truncate group-hover:text-gray-900 dark:group-hover:text-white transition-colors">{chat.title}</div>
+												<div class="flex items-center gap-3">
+													<div class="flex gap-1.5 hidden sm:flex">
+														{#if chat.tags}
+															{#each chat.tags.slice(0,2) as tag}
+																<span class="text-[9px] text-gray-400 dark:text-white/40 bg-gray-50 dark:bg-white/5 px-1.5 py-0.5 rounded border border-gray-100 dark:border-white-10/5">{tag.name || tag}</span>
+															{/each}
+														{/if}
+													</div>
+													<div class="text-[10px] text-gray-400 dark:text-white/30 font-medium">{safeDate(chat.updated_at)?.toLocaleDateString('ru-RU', {weekday: 'short'}) ?? '—'}</div>
+												</div>
+											</div>
+										</div>
+									{/each}
+								</div>
+							</div>
+						{/if}
+					</div>
+				{:else}
+					<div class="flex flex-col items-center justify-center py-32 text-center">
+						<div class="p-6 rounded-3xl bg-gray-100 dark:bg-white/[0.01] border border-gray-200 dark:border-white/[0.03] shadow-md dark:shadow-2xl mb-5">
+							<svg class="size-10 text-gray-400 dark:text-white/20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m18-4l-8.5-8.5a1.5 1.5 0 0 0-2 0L3 11"/></svg>
+						</div>
+						<p class="text-gray-500 dark:text-white/50 text-base font-light">В пространстве пока пусто</p>
+					</div>
+				{/if}
 			</div>
 		</div>
 
-		<!-- Quick Start CTA -->
-		<div class="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden mb-8">
-			<div class="absolute -top-10 -right-10 size-40 bg-white/10 rounded-full blur-2xl"></div>
-			<div class="absolute -bottom-10 -left-10 size-32 bg-white/5 rounded-full blur-xl"></div>
-			<div class="relative z-10">
-				<div class="flex items-center gap-3 mb-2">
-					<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-6">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
-					</svg>
-					<h3 class="text-xl font-bold">Начни работу в этом пространстве</h3>
+			<!-- Right: Knowledge Base -->
+		<div class="w-[380px] shrink-0 border-l border-gray-200/60 dark:border-white/[0.04] bg-white/40 dark:bg-white/[0.01] flex flex-col h-full backdrop-blur-md">
+			<div class="px-5 py-4 border-b border-gray-200/60 dark:border-white/[0.03]">
+				<div class="flex items-center justify-between mb-3">
+					<h2 class="text-xs font-bold text-gray-900 dark:text-white/90 tracking-widest uppercase flex items-center gap-2">
+						<svg class="size-3.5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18"/></svg>
+						Память и артефакты
+						<span class="text-gray-400 dark:text-white/30 text-[10px] font-medium">· {filteredMemory.length}</span>
+					</h2>
+					<button class="text-[9px] uppercase font-bold tracking-widest text-red-500/60 hover:text-red-600 dark:text-red-500/40 dark:hover:text-red-400 px-2 py-0.5 rounded hover:bg-red-50 dark:hover:bg-red-500/5 transition" on:click={wipeMemory}>Очистить</button>
 				</div>
-				<p class="text-white/80 text-sm max-w-md">Напишите запрос в поле ввода внизу — ИИ будет автоматически учитывать весь накопленный контекст этого пространства.</p>
+				<div class="flex gap-2">
+					<input type="text" class="flex-1 bg-white dark:bg-white/[0.04] border border-gray-200 dark:border-white/[0.08] focus:border-emerald-500/50 rounded-lg pl-3 pr-3 py-2 text-xs text-gray-900 dark:text-white/90 placeholder:text-gray-400 dark:placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-emerald-500/20 transition-all" placeholder="Добавить факт..." bind:value={newFactText} on:keydown={handleAddFact} />
+					<button class="px-2.5 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-lg text-emerald-600 dark:text-emerald-400 transition" on:click={() => { if (newFactText.trim()) handleAddFact({ key: 'Enter' }); }}>
+						<svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+					</button>
+				</div>
+				{#if memory.length > 3}
+					<div class="mt-2 relative">
+						<input type="text" class="w-full bg-gray-50 dark:bg-white/[0.02] border border-gray-200/60 dark:border-white/[0.05] rounded-lg pl-7 pr-3 py-1.5 text-[11px] text-gray-700 dark:text-white/70 placeholder:text-gray-400 dark:placeholder:text-white/20 focus:outline-none focus:border-gray-300 dark:focus:border-white/10 transition" placeholder="Поиск..." bind:value={memorySearch} />
+						<svg class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3 text-gray-400 dark:text-white/20" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+					</div>
+				{/if}
 			</div>
-		</div>
-
-		<!-- Notes / Artifacts (Placeholder) -->
-		<div>
-			<h3 class="font-semibold text-gray-900 dark:text-gray-100 mb-3 px-1 flex items-center gap-2">
-				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-4">
-					<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-				</svg>
-				Артефакты пространства
-			</h3>
-			<div class="bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-dashed border-gray-200 dark:border-gray-800 p-8 flex flex-col items-center justify-center text-center">
-				<div class="size-10 bg-white dark:bg-gray-800 rounded-xl shadow-xs flex items-center justify-center mb-3">
-					<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-5 text-gray-400">
-						<path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-					</svg>
-				</div>
-				<p class="text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">Здесь появятся заметки и документы</p>
-				<p class="text-xs text-gray-400 max-w-[280px]">Прикрепляйте документы, ссылки и заметки к пространству для долгосрочного контекста.</p>
+			<div class="flex-1 overflow-y-auto scrollbar-hidden px-4 py-3">
+				{#if loading}
+					<div class="space-y-2.5">
+						<div class="h-14 bg-gray-100 dark:bg-white/[0.02] rounded-lg animate-pulse"></div>
+						<div class="h-16 bg-gray-100 dark:bg-white/[0.02] rounded-lg animate-pulse opacity-60"></div>
+					</div>
+				{:else if filteredMemory.length > 0}
+					<div class="space-y-1.5">
+						{#each filteredMemory as fact, idx}
+							<div class="group relative flex items-start gap-2.5 px-3.5 py-3 rounded-xl border border-transparent hover:border-gray-200 dark:hover:border-white/[0.06] hover:bg-white/80 dark:hover:bg-white/[0.03] transition-all" in:fly={{ y: 3, duration: 120, delay: idx * 15 }}>
+								<div class="size-[7px] rotate-45 bg-emerald-500 dark:bg-emerald-400 shrink-0 mt-[7px] rounded-[1px] opacity-60"></div>
+								<div class="flex-1 min-w-0">
+									<p class="text-sm text-gray-900 dark:text-white/90 leading-[1.6] break-words {isStale(fact.updated_at) ? 'opacity-40' : ''}">{fact.text || fact.memory || '—'}</p>
+									<span class="text-[10px] text-gray-400 dark:text-white/25 mt-1 block">{formatDate(fact.updated_at)}{#if isStale(fact.updated_at)} · <span class="text-amber-500/60">устарело?</span>{/if}</span>
+								</div>
+								<button class="text-gray-300 dark:text-white/10 hover:text-red-500 dark:hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 p-1 rounded shrink-0 mt-0.5" on:click={() => deleteFact(fact.id)}>
+									<svg class="size-3" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+								</button>
+							</div>
+						{/each}
+					</div>
+				{:else}
+					<div class="flex flex-col items-center justify-center h-full opacity-50">
+						<svg class="size-8 text-gray-300 dark:text-white/10 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18"/></svg>
+						<p class="text-xs text-gray-400 dark:text-white/30 font-medium">Пустая база знаний</p>
+						<p class="text-[10px] text-gray-300 dark:text-white/15 mt-1">Факты появятся автоматически из чатов</p>
+					</div>
+				{/if}
 			</div>
 		</div>
 	</div>
+</div>
+
+<!-- Graph Modal Fullscreen Overhaul -->
+{#if showGraphFullscreen}
+	<div use:portal class="fixed inset-0 z-[9999] flex items-center justify-center backdrop-blur-2xl bg-white/60 dark:bg-black/80 transition-all font-sans" in:fade={{ duration: 300 }}>
+		<div class="absolute inset-0 z-0" on:click={() => showGraphFullscreen = false}></div>
+		<div class="relative z-10 w-[95vw] h-[95vh] rounded-[2rem] bg-gray-50/90 dark:bg-[#050505]/90 border border-gray-200/50 dark:border-white/[0.08] shadow-2xl flex flex-col overflow-hidden backdrop-blur-xl ring-1 ring-black/5 dark:ring-0">
+			<!-- Header -->
+			<div class="border-b border-gray-200/60 dark:border-white/[0.05] bg-white/50 dark:bg-black/60 shrink-0">
+				<!-- Row 1: Title + Close -->
+				<div class="flex items-center justify-between px-6 pt-4 pb-2">
+					<h2 class="text-sm font-bold tracking-widest uppercase text-gray-900 dark:text-white/90 flex items-center gap-2.5">
+						<span class="size-2 rounded-full shadow-[0_0_10px_2px] shadow-violet-500/50 bg-violet-400"></span>
+						Карта знаний
+						<span class="text-[10px] text-gray-400 dark:text-white/30 font-medium tracking-wider ml-1">{chatCount} чатов · {memCount} фактов</span>
+					</h2>
+					<button class="p-2 text-gray-500 dark:text-white/40 hover:text-gray-900 dark:hover:text-white bg-gray-100 dark:bg-white/5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-xl transition-colors" on:click={() => showGraphFullscreen = false}>
+						<svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12"/></svg>
+					</button>
+				</div>
+				<!-- Row 2: Search + Filters (centered) -->
+				<div class="flex items-center justify-center gap-3 px-6 pb-3">
+					<div class="relative">
+						<input
+							type="text"
+							bind:value={graphSearch}
+							placeholder="Поиск по графу..."
+							class="w-60 bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/[0.08] rounded-xl pl-9 pr-4 py-2 text-sm text-gray-800 dark:text-white/90 placeholder:text-gray-400 dark:placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500/30 transition"
+						/>
+						<svg class="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400 dark:text-white/30" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+					</div>
+					<!-- View mode selector -->
+					<div class="flex items-center bg-gray-100 dark:bg-white/5 rounded-lg p-0.5 border border-gray-200/60 dark:border-white/[0.06]">
+						<button class="px-3 py-1.5 text-xs font-semibold rounded-md transition {graphShowChats && graphShowMemory ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm' : 'text-gray-400 dark:text-white/30 hover:text-gray-600 dark:hover:text-white/50'}"
+							on:click={() => { graphShowChats = true; graphShowMemory = true; }}>Всё</button>
+						<button class="px-3 py-1.5 text-xs font-semibold rounded-md transition {graphShowChats && !graphShowMemory ? 'bg-white dark:bg-white/10 text-indigo-600 dark:text-indigo-400 shadow-sm' : 'text-gray-400 dark:text-white/30 hover:text-gray-600 dark:hover:text-white/50'}"
+							on:click={() => { graphShowChats = true; graphShowMemory = false; }}>Только чаты</button>
+						<button class="px-3 py-1.5 text-xs font-semibold rounded-md transition {!graphShowChats && graphShowMemory ? 'bg-white dark:bg-white/10 text-emerald-600 dark:text-emerald-400 shadow-sm' : 'text-gray-400 dark:text-white/30 hover:text-gray-600 dark:hover:text-white/50'}"
+							on:click={() => { graphShowChats = false; graphShowMemory = true; }}>Только факты</button>
+					</div>
+					<!-- Recency toggle -->
+					<button class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition {graphColorRecency ? 'bg-violet-50 dark:bg-violet-500/10 border-violet-200 dark:border-violet-500/20 text-violet-600 dark:text-violet-400' : 'bg-transparent border-gray-200 dark:border-white/[0.06] text-gray-400 dark:text-white/25 hover:text-gray-600 dark:hover:text-white/40'}"
+						on:click={() => graphColorRecency = !graphColorRecency}
+						title="Яркие = недавние, тусклые = давно не трогали"
+					>
+						<svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+						Давность
+					</button>
+				</div>
+			</div>
+			<!-- Graph -->
+			<div class="flex-1 relative bg-gray-100/50 dark:bg-black/20" style="min-height: 500px;">
+				<ChatGraph chats={projectChats} memories={memory} projectTitle={project.title} colorFrom={"#6366f1"} colorTo={"#4f46e5"} compact={false} bind:searchQuery={graphSearch} bind:showChats={graphShowChats} bind:showMemory={graphShowMemory} bind:colorByRecency={graphColorRecency} />
+				<!-- Legend (bottom-right, minimal) -->
+				<div class="absolute bottom-4 right-4 px-3 py-2 bg-white/80 dark:bg-black/50 backdrop-blur-md border border-gray-200/50 dark:border-white/[0.06] rounded-xl flex gap-4 z-20 shadow-md">
+					<div class="flex items-center gap-1.5"><span class="size-2 rounded-full bg-indigo-500"></span><span class="text-[9px] text-gray-500 dark:text-white/40 font-bold uppercase tracking-wider">Центр</span></div>
+					<div class="flex items-center gap-1.5"><span class="size-2 rounded bg-blue-500"></span><span class="text-[9px] text-gray-500 dark:text-white/40 font-bold uppercase tracking-wider">Чат</span></div>
+					<div class="flex items-center gap-1.5"><span class="size-2 rotate-45 bg-emerald-500"></span><span class="text-[9px] text-gray-500 dark:text-white/40 font-bold uppercase tracking-wider">Факт</span></div>
+				</div>
+				<!-- Hint (bottom-left) -->
+				<div class="absolute bottom-4 left-4 px-3 py-2 bg-white/70 dark:bg-black/40 backdrop-blur-md border border-gray-200/50 dark:border-white/[0.06] rounded-xl z-20">
+					<span class="text-[9px] text-gray-400 dark:text-white/25 font-medium">Клик = превью · Двойной клик = открыть</span>
+				</div>
+			</div>
+		</div>
+	</div>
+{/if}
+
 {/if}

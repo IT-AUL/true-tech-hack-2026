@@ -34,6 +34,7 @@
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import Switch from '$lib/components/common/Switch.svelte';
 	import ChatBubbleOval from '$lib/components/icons/ChatBubbleOval.svelte';
+	import Sparkles from '$lib/components/icons/Sparkles.svelte';
 
 	import ModelItem from './ModelItem.svelte';
 
@@ -411,22 +412,12 @@
 	}}
 >
 	<DropdownMenu.Trigger
-		class="relative w-full {($settings?.highContrastMode ?? false)
-			? ''
-			: 'outline-hidden focus:outline-hidden'}"
-		aria-label={selectedModel
-			? $i18n.t('Selected model: {{modelName}}', { modelName: selectedModel.label })
-			: placeholder}
+		class="relative outline-hidden focus:outline-hidden"
+		aria-label={selectedModel ? $i18n.t('Selected model: {{modelName}}', { modelName: selectedModel.label }) : placeholder}
 		id="model-selector-{id}-button"
 	>
 		<div
-			class="flex w-full text-left px-2 py-1 rounded-lg bg-transparent truncate {triggerClassName} justify-between items-center gap-1
-				border border-transparent hover:border-gray-200 dark:hover:border-gray-700
-				hover:bg-gray-50 dark:hover:bg-gray-800/50
-				transition-all duration-150
-				{($settings?.highContrastMode ?? false)
-				? 'dark:placeholder-gray-100 placeholder-gray-800'
-				: 'placeholder-gray-400'}"
+			class="flex items-center gap-1.5 text-left px-2 py-1 rounded-lg bg-transparent truncate {triggerClassName} hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
 			on:mouseenter={async () => {
 				models.set(
 					await getModels(
@@ -438,15 +429,19 @@
 		>
 			{#if selectedModel}
 				<span class="flex items-center gap-1.5 truncate">
-					{#if value === 'auto'}
-						<span class="text-sm leading-none">✨</span>
+					{#if selectedModel.value === 'auto'}
+						<div class="size-[14px] flex items-center justify-center rounded-full bg-gray-900 dark:bg-white shadow-xs">
+							<Sparkles className="size-2 text-white dark:text-gray-900" />
+						</div>
+					{:else}
+						<span class="text-xs leading-none">✨</span>
 					{/if}
-					<span class="truncate">{selectedModel.label}</span>
+					<span class="truncate text-[11px] font-medium text-gray-600 dark:text-gray-300 group-hover:text-black dark:group-hover:text-white transition-colors">{selectedModel.label}</span>
 				</span>
 			{:else}
-				<span class="text-gray-400">{placeholder}</span>
+				<span class="text-[11px] font-medium text-gray-400">{placeholder}</span>
 			{/if}
-			<ChevronDown className="self-center shrink-0 size-3 opacity-50" strokeWidth="2.5" />
+			<ChevronDown className="self-center shrink-0 size-2.5 opacity-50" strokeWidth="2.5" />
 		</div>
 	</DropdownMenu.Trigger>
 

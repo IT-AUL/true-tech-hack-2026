@@ -164,31 +164,33 @@
 
 {#if visible && (displayHints.length > 0 || isLoading)}
 	<div
-		class="w-full px-2 py-1 flex flex-col gap-0.5"
+		class="w-full px-3 py-2 flex flex-col gap-1 border-t border-gray-100 dark:border-white/[0.04]"
 		role="listbox"
 		aria-label="Подсказки"
 	>
 		{#if isLoading && displayHints.length === 0}
-			<div class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs text-gray-400 dark:text-gray-500">
-				<div class="size-2 border-[1.5px] border-gray-300 dark:border-gray-600 border-t-indigo-400 rounded-full animate-spin"></div>
-				<span>Подбираю варианты...</span>
+			<div class="flex items-center gap-2 px-3 py-2 text-xs text-gray-400 dark:text-gray-500 font-medium">
+				<div class="size-3 border-[2px] border-gray-200 dark:border-gray-700 border-t-violet-500 dark:border-t-violet-400 rounded-full animate-spin"></div>
+				<span>Анализирую контекст...</span>
 			</div>
 		{:else}
 			{#each displayHints as hint, idx}
 				<button
 					type="button"
-					class="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[13px] text-gray-500 dark:text-gray-400
-						hover:bg-white/60 dark:hover:bg-gray-800/50
-						hover:text-gray-800 dark:hover:text-gray-200
-						active:scale-[0.998]
-						transition-all duration-100 group cursor-pointer"
+					class="group relative flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-[13px] text-gray-600 dark:text-gray-300
+						hover:shadow-sm overflow-hidden
+						active:scale-[0.99]
+						transition-all duration-300 cursor-pointer"
 					on:click={() => selectHint(hint)}
 					role="option"
 					aria-selected="false"
 				>
-					<Sparkles className="size-3 shrink-0 opacity-40 group-hover:opacity-80 transition-opacity text-indigo-400" />
-					<span class="truncate flex-1">{hint}</span>
-					<kbd class="text-[9px] text-gray-300 dark:text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 font-mono">Tab</kbd>
+					<div class="absolute inset-0 bg-gradient-to-r from-violet-500/0 via-violet-500/[0.03] to-indigo-500/[0.08] dark:from-violet-500/0 dark:via-violet-500/[0.05] dark:to-indigo-500/[0.1] opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+					<div class="absolute inset-x-0 bottom-0 h-[1px] bg-gradient-to-r from-transparent via-violet-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+					
+					<Sparkles className="relative z-10 size-3.5 shrink-0 text-violet-400/70 dark:text-violet-500/60 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors" />
+					<span class="relative z-10 truncate flex-1 font-medium group-hover:text-gray-900 dark:group-hover:text-white transition-all transform group-hover:translate-x-0.5 duration-300">{hint}</span>
+					<kbd class="relative z-10 hidden sm:inline-flex items-center justify-center h-5 px-1.5 text-[9px] font-bold text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-white/5 rounded border border-gray-200 dark:border-white/10 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-x-1 group-hover:translate-x-0 font-mono tracking-wider">TAB</kbd>
 				</button>
 			{/each}
 		{/if}

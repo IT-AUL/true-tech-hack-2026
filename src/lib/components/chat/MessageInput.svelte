@@ -34,8 +34,13 @@
 		showSettings,
 		selectedTerminalId,
 		TTSWorker,
-		temporaryChatEnabled
+		temporaryChatEnabled,
+		chatId,
+		selectedProjectId
 	} from '$lib/stores';
+	import ModelSelector from './ModelSelector.svelte';
+	import ChatBubbleDotted from '../icons/ChatBubbleDotted.svelte';
+	import ChatBubbleDottedChecked from '../icons/ChatBubbleDottedChecked.svelte';
 
 	import {
 		convertHeicToJpeg,
@@ -138,6 +143,7 @@
 	let showTerminalMenu = false;
 
 	export let taskMode: 'auto' | 'chat' | 'code' | 'analysis' | 'product' = 'auto';
+	export let transparentBackground = false;
 
 	export let messageQueue: { id: string; prompt: string; files: any[] }[] = [];
 	export let onQueueSendNow: (id: string) => void = () => {};
@@ -1241,38 +1247,46 @@
 
 						<div
 							id="message-input-container"
-							class="flex-1 flex flex-col relative w-full shadow hover:shadow-md rounded-[28px] border transition-all duration-300 transform pt-0 {$temporaryChatEnabled
-								? 'border-dashed border-gray-200 dark:border-gray-750 focus-within:border-gray-300 focus-within:dark:border-gray-650'
-								: 'border-gray-200/80 dark:border-gray-800/80 focus-within:border-gray-300 focus-within:dark:border-gray-700 focus-within:ring-4 focus-within:ring-black/5 dark:focus-within:ring-white/5'} px-3 bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl focus-within:shadow-lg dark:text-gray-100"
+							class="flex-1 flex flex-col relative w-full rounded-2xl transition-all duration-200 pt-0 px-3 {transparentBackground 
+								? 'bg-transparent border border-transparent shadow-none' 
+								: ($temporaryChatEnabled
+									? 'border border-dashed border-gray-200 dark:border-gray-750 focus-within:border-gray-300 dark:focus-within:border-gray-650 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl shadow-sm focus-within:shadow-md'
+									: 'border border-gray-200/60 dark:border-gray-800/60 focus-within:border-gray-300 dark:focus-within:border-gray-700 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl shadow-sm focus-within:shadow-md')} dark:text-gray-100"
 							dir={$settings?.chatDirection ?? 'auto'}
 						>
-							<div class="w-full flex-none mt-2.5 flex justify-start pl-1">
-								<TaskRouterSelector bind:mode={taskMode} />
-							</div>
 
 							{#if atSelectedModel !== undefined}
-								<div class="px-3 pt-3 text-left w-full flex flex-col z-10">
-									<div class="flex items-center justify-between w-full">
-										<div class="pl-[1px] flex items-center gap-2 text-sm dark:text-gray-500">
-											<img
-												alt="model profile"
-												class="size-3.5 max-w-[28px] object-cover rounded-full"
-												src={`${WEBUI_API_BASE_URL}/models/model/profile/image?id=${$models.find((model) => model.id === atSelectedModel.id).id}&lang=${$i18n.language}`}
-											/>
-											<div class="translate-y-[0.5px]">
-												<span class="">{atSelectedModel.name}</span>
-											</div>
+								<div class="px-3 pt-3 pb-1 text-left w-full flex z-10">
+									<div class="flex items-center gap-2 bg-gradient-to-r from-violet-500/10 to-indigo-500/10 dark:from-violet-500/20 dark:to-indigo-500/20 border border-violet-500/20 dark:border-violet-500/30 rounded-xl px-2.5 py-1.5 shadow-sm backdrop-blur-sm">
+										<div class="flex items-center gap-2 text-[13px] font-bold text-violet-700 dark:text-violet-300">
+											{#if atSelectedModel.id === 'auto'}
+												<div class="relative size-5 rounded-full bg-gray-900 dark:bg-white flex items-center justify-center shadow-sm">
+													<Sparkles className="size-3 text-white dark:text-gray-900" />
+												</div>
+												<div class="font-semibold text-gray-800 dark:text-gray-200">
+													{atSelectedModel.name}
+												</div>
+											{:else}
+												<div class="relative">
+													<img
+														alt="model profile"
+														class="size-5 object-cover rounded-full shadow-[0_0_8px_rgba(0,0,0,0.1)] ring-1 ring-white/50 dark:ring-black/50"
+														src={`${WEBUI_API_BASE_URL}/models/model/profile/image?id=${$models.find((model) => model.id === atSelectedModel.id)?.id}&lang=${$i18n.language}`}
+													/>
+													<div class="absolute -bottom-0.5 -right-0.5 size-2.5 bg-emerald-500 rounded-full border-[1.5px] border-white dark:border-gray-900"></div>
+												</div>
+												<span class="tracking-wide align-middle">{atSelectedModel.name}</span>
+											{/if}
 										</div>
-										<div>
-											<button
-												class="flex items-center dark:text-gray-500"
-												on:click={() => {
-													atSelectedModel = undefined;
-												}}
-											>
-												<XMark />
-											</button>
-										</div>
+										<div class="w-[1px] h-4 bg-violet-500/20 dark:bg-violet-400/20 mx-0.5"></div>
+										<button
+											class="flex items-center justify-center size-5 rounded-full text-violet-600/60 dark:text-violet-400/60 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/20 dark:hover:text-rose-400 transition-colors"
+											on:click={() => {
+												atSelectedModel = undefined;
+											}}
+										>
+											<XMark className="size-3.5" strokeWidth="2.5" />
+										</button>
 									</div>
 								</div>
 							{/if}
@@ -1601,8 +1615,16 @@
 								}}
 							/>
 
-							<div class=" flex justify-between mt-0.5 mb-2.5 mx-0.5 max-w-full" dir="ltr">
-								<div class="ml-1 self-end flex items-center flex-1 max-w-[80%]">
+							<div class="flex justify-between mt-0.5 mb-2 mx-0.5 max-w-full" dir="ltr">
+								<div class="ml-0.5 self-end flex items-center flex-1 max-w-[80%] gap-0.5">
+									<!-- Model selector pill -->
+									<div class="shrink-0">
+										<ModelSelector bind:selectedModels showSetDefault={!$chatId} />
+									</div>
+
+									<div class="flex self-center w-[1px] h-4 mx-0.5 bg-gray-200/50 dark:bg-gray-800/50"></div>
+
+									<!-- Attach button -->
 									<InputMenu
 										bind:files
 										selectedModels={atSelectedModel ? [atSelectedModel.id] : selectedModels}
@@ -1657,11 +1679,35 @@
 									>
 										<div
 											id="input-menu-button"
-											class="bg-transparent hover:bg-gray-100 text-gray-700 dark:text-white dark:hover:bg-gray-800 rounded-full size-8 flex justify-center items-center outline-hidden focus:outline-hidden"
+											class="bg-transparent hover:bg-gray-100 text-gray-500 dark:text-gray-400 dark:hover:bg-gray-800 rounded-lg size-7 flex justify-center items-center transition"
 										>
-											<PlusAlt className="size-5.5" />
+											<PlusAlt className="size-4.5" />
 										</div>
 									</InputMenu>
+
+									<!-- Incognito toggle -->
+									{#if !$chatId}
+										<Tooltip content={$temporaryChatEnabled ? $i18n.t('Incognito On') : $i18n.t('Incognito')} placement="top">
+											<button
+												type="button"
+												class="rounded-lg size-7 flex justify-center items-center transition {$temporaryChatEnabled ? 'bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400' : 'bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400'}"
+												on:click={async () => {
+													await temporaryChatEnabled.set(!$temporaryChatEnabled);
+													if ($temporaryChatEnabled) {
+														window.history.replaceState(null, '', '?temporary-chat=true');
+													} else {
+														window.history.replaceState(null, '', location.pathname);
+													}
+												}}
+											>
+												{#if $temporaryChatEnabled}
+													<ChatBubbleDottedChecked className="size-3.5" strokeWidth="1.5" />
+												{:else}
+													<ChatBubbleDotted className="size-3.5" strokeWidth="1.5" />
+												{/if}
+											</button>
+										</Tooltip>
+									{/if}
 
 									{#if showWebSearchButton || showImageGenerationButton || showCodeInterpreterButton || showToolsButton || (toggleFilters && toggleFilters.length > 0)}
 										<div
@@ -1868,27 +1914,16 @@
 									</div>
 								</div>
 
-								<div class="self-end flex space-x-1 mr-1 shrink-0 gap-[0.5px]">
+								<div class="self-end flex items-center space-x-1.5 mr-1 mb-1 shrink-0">
 									{#if (taskIds && taskIds.length > 0) || (history.currentId && history.messages[history.currentId]?.done != true) || generating}
 										<div class=" flex items-center">
 											<Tooltip content={$i18n.t('Stop')}>
 												<button
-													class="bg-white hover:bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-800 transition rounded-full p-1.5"
-													on:click={() => {
-														stopResponse();
-													}}
+													class="group flex items-center justify-center size-8 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-600 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 dark:text-rose-400 transition-all duration-300 hover:shadow-sm active:scale-95"
+													on:click={() => { stopResponse(); }}
 												>
-													<svg
-														xmlns="http://www.w3.org/2000/svg"
-														viewBox="0 0 24 24"
-														fill="currentColor"
-														class="size-5"
-													>
-														<path
-															fill-rule="evenodd"
-															d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm6-2.438c0-.724.588-1.312 1.313-1.312h4.874c.725 0 1.313.588 1.313 1.313v4.874c0 .725-.588 1.313-1.313 1.313H9.564a1.312 1.312 0 01-1.313-1.313V9.564z"
-															clip-rule="evenodd"
-														/>
+													<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-4.5 group-hover:scale-110 transition-transform">
+														<path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm6-2.438c0-.724.588-1.312 1.313-1.312h4.874c.725 0 1.313.588 1.313 1.313v4.874c0 .725-.588 1.313-1.313 1.313H9.564a1.312 1.312 0 01-1.313-1.313V9.564z" clip-rule="evenodd" />
 													</svg>
 												</button>
 											</Tooltip>
@@ -1899,14 +1934,12 @@
 											<Tooltip content={$i18n.t('Create note')} className=" flex items-center">
 												<button
 													id="create-note-button"
-													class=" text-gray-500 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 transition rounded-full p-1.5 -mr-1 self-center"
+													class="group flex items-center justify-center size-8 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-white/10 dark:hover:text-white transition-all duration-300 hover:shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
 													type="button"
 													disabled={prompt === '' && files.length === 0}
-													on:click={() => {
-														createNote();
-													}}
+													on:click={() => { createNote(); }}
 												>
-													<Note className="size-4.5 translate-y-[0.5px]" />
+													<Note className="size-4.5 group-hover:scale-110 transition-transform" />
 												</button>
 											</Tooltip>
 										{/if}
@@ -1922,7 +1955,7 @@
 												<Tooltip content={$i18n.t('Dictate')}>
 													<button
 														id="voice-input-button"
-														class=" text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200 transition rounded-full p-1.5 self-center mr-0.5"
+														class="group flex items-center justify-center size-8 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-white/10 dark:hover:text-white transition-all duration-300 hover:shadow-sm active:scale-95"
 														type="button"
 														on:click={async () => {
 															try {
@@ -1973,7 +2006,7 @@
 												<!-- {$i18n.t('Call')} -->
 												<Tooltip content={$i18n.t('Voice mode')}>
 													<button
-														class=" bg-black text-white hover:bg-gray-900 dark:bg-white dark:text-black dark:hover:bg-gray-100 transition rounded-full p-1.5 self-center"
+														class="group flex items-center justify-center size-8 rounded-full bg-gray-100/50 hover:bg-gray-200 text-gray-700 dark:bg-white/5 dark:hover:bg-white/10 dark:text-white/80 transition-all duration-300 hover:shadow-sm active:scale-95"
 														type="button"
 														on:click={async () => {
 															if (selectedModels.length > 1) {
@@ -2038,31 +2071,19 @@
 														? $i18n.t('Waiting for upload...')
 														: $i18n.t('Send message')}
 												>
-													<button
-														id="send-message-button"
-														class="{!(prompt === '' && files.length === 0) || uploadPending
-															? 'bg-black text-white hover:bg-gray-900 dark:bg-white dark:text-black dark:hover:bg-gray-100 '
-															: 'text-white bg-gray-200 dark:text-gray-900 dark:bg-gray-700 disabled'} transition rounded-full p-1.5 self-center"
-														type="submit"
-														disabled={(prompt === '' && files.length === 0) || uploadPending}
-													>
-														{#if uploadPending}
-															<Spinner className="size-5" />
-														{:else}
-															<svg
-																xmlns="http://www.w3.org/2000/svg"
-																viewBox="0 0 16 16"
-																fill="currentColor"
-																class="size-5"
-															>
-																<path
-																	fill-rule="evenodd"
-																	d="M8 14a.75.75 0 0 1-.75-.75V4.56L4.03 7.78a.75.75 0 0 1-1.06-1.06l4.5-4.5a.75.75 0 0 1 1.06 0l4.5 4.5a.75.75 0 0 1-1.06 1.06L8.75 4.56v8.69A.75.75 0 0 1 8 14Z"
-																	clip-rule="evenodd"
-																/>
-															</svg>
-														{/if}
-													</button>
+												<button
+													class="group flex items-center justify-center size-8 rounded-full transition-all duration-300 active:scale-95 {uploadPending ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 shadow-sm' : (prompt === '' && files.length === 0) ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-white/5 cursor-not-allowed' : 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow opacity-90 hover:opacity-100 shadow-violet-500/25 hover:shadow-md hover:brightness-110'}"
+													type="submit"
+													disabled={(prompt === '' && files.length === 0) || uploadPending}
+												>
+													{#if uploadPending}
+														<Spinner className="size-4.5" />
+													{:else}
+														<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="size-4.5 group-hover:translate-x-[1px] group-hover:-translate-y-[1px] transition-transform">
+															<path fill-rule="evenodd" d="M8 14a.75.75 0 0 1-.75-.75V4.56L4.03 7.78a.75.75 0 0 1-1.06-1.06l4.5-4.5a.75.75 0 0 1 1.06 0l4.5 4.5a.75.75 0 0 1-1.06 1.06L8.75 4.56v8.69A.75.75 0 0 1 8 14Z" clip-rule="evenodd" />
+														</svg>
+													{/if}
+												</button>
 												</Tooltip>
 											</div>
 										{/if}

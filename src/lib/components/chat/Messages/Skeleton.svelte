@@ -2,37 +2,18 @@
 	export let size = 'md';
 </script>
 
-<span
-	class="relative flex {size === 'md'
-		? 'size-3 my-2'
-		: size === 'xs'
-			? 'size-1.5 my-1'
-			: 'size-2 my-1'} mx-1"
->
-	<span
-		class="absolute inline-flex h-full w-full animate-pulse rounded-full bg-gray-700 dark:bg-gray-200 opacity-75"
-	></span>
-	<span
-		class="relative inline-flex {size === 'md'
-			? 'size-3'
-			: size === 'xs'
-				? 'size-1.5'
-				: 'size-2'} rounded-full bg-black dark:bg-white animate-size"
-	></span>
-</span>
+<div class="flex items-center gap-[5px] min-h-[24px] py-1">
+	{#if size === 'xs'}
+		<div class="size-1 rounded-full bg-gray-400 dark:bg-gray-500 animate-pulse"></div>
+		<div class="size-1 rounded-full bg-gray-400 dark:bg-gray-500 animate-pulse delay-75"></div>
+		<div class="size-1 rounded-full bg-gray-400 dark:bg-gray-500 animate-pulse delay-150"></div>
+	{:else}
+		<div class="size-2.5 rounded-full bg-violet-500/80 dark:bg-violet-400/90 shadow-[0_0_8px_rgba(139,92,246,0.5)] animate-bounce" style="animation-duration: 1s;"></div>
+		<div class="size-2.5 rounded-full bg-sky-500/80 dark:bg-sky-400/90 shadow-[0_0_8px_rgba(14,165,233,0.5)] animate-bounce" style="animation-delay: 0.15s; animation-duration: 1s;"></div>
+		<div class="size-2.5 rounded-full bg-cyan-500/80 dark:bg-cyan-400/90 shadow-[0_0_8px_rgba(6,182,212,0.5)] animate-bounce" style="animation-delay: 0.3s; animation-duration: 1s;"></div>
+	{/if}
+</div>
 
 <style>
-	@keyframes size {
-		0%,
-		100% {
-			transform: scale(1);
-		}
-		50% {
-			transform: scale(1.25);
-		}
-	}
-
-	.animate-size {
-		animation: size 1.5s ease-in-out infinite;
-	}
+	/* Use tailwind's bounce or built in pulse */
 </style>

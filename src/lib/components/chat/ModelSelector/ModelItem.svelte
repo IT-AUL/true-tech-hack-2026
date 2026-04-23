@@ -16,6 +16,7 @@
 	import { toast } from 'svelte-sonner';
 	import Tag from '$lib/components/icons/Tag.svelte';
 	import Label from '$lib/components/icons/Label.svelte';
+	import Sparkles from '$lib/components/icons/Sparkles.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -76,34 +77,43 @@
 
 		<div class="flex items-center gap-2">
 			<div class="flex items-center min-w-fit">
-				<Tooltip content={$user?.role === 'admin' ? (item?.value ?? '') : ''} placement="top-start">
-					<img
-						src={item.value === 'auto'
-							? '/favicon.png'
-							: `${WEBUI_API_BASE_URL}/models/model/profile/image?id=${item.model.id}&lang=${$i18n.language}`}
-						alt={$i18n.t('{{modelName}} profile image', { modelName: item.label })}
-						class="rounded-full size-5 flex items-center"
-						loading="lazy"
-						on:error={(e) => {
-							e.currentTarget.src = '/favicon.png';
-						}}
-					/>
-				</Tooltip>
+				{#if item.value === 'auto'}
+					<div class="size-5 flex items-center justify-center rounded-full bg-gray-900 dark:bg-white shadow-[0_1px_3px_rgba(0,0,0,0.1)]">
+						<Sparkles className="size-3 text-white dark:text-gray-900" />
+					</div>
+				{:else}
+					<Tooltip content={$user?.role === 'admin' ? (item?.value ?? '') : ''} placement="top-start">
+						<img
+							src={`${WEBUI_API_BASE_URL}/models/model/profile/image?id=${item.model.id}&lang=${$i18n.language}`}
+							alt={$i18n.t('{{modelName}} profile image', { modelName: item.label })}
+							class="rounded-full size-5 object-cover flex items-center"
+							loading="lazy"
+							on:error={(e) => {
+								e.currentTarget.src = '/favicon.png';
+							}}
+						/>
+					</Tooltip>
+				{/if}
 			</div>
 
 			<div class="flex items-center">
-				<Tooltip content={`${item.label} (${item.value})`} placement="top-start">
-					<div class="line-clamp-1">
-						{item.label}
+				{#if item.value === 'auto'}
+					<div class="flex items-center gap-2">
+						<div class="font-medium text-gray-900 dark:text-gray-100">
+							{item.label}
+						</div>
+						<div class="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800/50 border border-gray-200/50 dark:border-gray-700/50 text-[10px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+							Auto
+						</div>
 					</div>
-				</Tooltip>
+				{:else}
+					<Tooltip content={`${item.label} (${item.value})`} placement="top-start">
+						<div class="line-clamp-1">
+							{item.label}
+						</div>
+					</Tooltip>
+				{/if}
 			</div>
-
-			{#if item.value === 'auto'}
-				<span class="text-[0.65rem] text-gray-400 dark:text-gray-500 font-normal">
-					— {$i18n.t('auto-select')}
-				</span>
-			{/if}
 
 			<div class=" shrink-0 flex items-center gap-2">
 				<!-- {JSON.stringify(item.info)} -->

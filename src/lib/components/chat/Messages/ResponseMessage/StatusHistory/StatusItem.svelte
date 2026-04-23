@@ -125,13 +125,17 @@
 				</div>
 			</div>
 		{:else}
-			<div class="flex flex-col justify-center -space-y-0.5">
+			<div class="flex items-center gap-2 px-2.5 py-1.5 bg-white/60 dark:bg-[#1a1a1a] rounded-lg border border-gray-200/50 dark:border-white/[0.04] shadow-sm w-fit group">
+				{#if (done || status?.done) === false}
+					<div class="size-2 rounded-full bg-sky-500/80 animate-pulse ring-4 ring-sky-500/20"></div>
+				{:else}
+					<div class="size-2 rounded-full bg-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.4)]"></div>
+				{/if}
 				<div
 					class="{(done || status?.done) === false
 						? 'shimmer'
-						: ''} text-gray-500 dark:text-gray-500 text-base line-clamp-1 text-wrap"
+						: ''} text-sm font-medium text-gray-700 dark:text-gray-300 line-clamp-1 tracking-wide"
 				>
-					<!-- $i18n.t(`Searching "{{searchQuery}}"`) -->
 					{#if status?.description?.includes('{{searchQuery}}')}
 						{$i18n.t(status?.description, {
 							searchQuery: status?.query
