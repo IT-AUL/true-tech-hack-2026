@@ -42,6 +42,10 @@
 		code_interpreter: {
 			label: $i18n.t('Code Interpreter'),
 			description: $i18n.t('Execute code')
+		},
+		documents: {
+			label: $i18n.t('Documents'),
+			description: $i18n.t('Create and update DOCX/XLSX files via tool calling')
 		}
 	};
 

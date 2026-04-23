@@ -34,6 +34,7 @@ from open_webui.models.users import UserModel
 from open_webui.tools.builtin import (
     add_memory,
     calculate_timestamp,
+    create_document,
     delete_memory,
     edit_image,
     execute_code,
@@ -55,6 +56,7 @@ from open_webui.tools.builtin import (
     search_memories,
     search_notes,
     search_web,
+    update_document,
     view_channel_message,
     view_channel_thread,
     view_chat,
@@ -464,6 +466,10 @@ def get_builtin_tools(
         and features.get('code_interpreter')
     ):
         builtin_functions.append(execute_code)
+
+    # Document tools - create/update DOCX/XLSX files via tool calling
+    if is_builtin_tool_enabled('documents'):
+        builtin_functions.extend([create_document, update_document])
 
     # Notes tools - search, view, create, and update user's notes (if builtin category enabled AND notes enabled globally)
     if is_builtin_tool_enabled('notes') and getattr(request.app.state.config, 'ENABLE_NOTES', False):

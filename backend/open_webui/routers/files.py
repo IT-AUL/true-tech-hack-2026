@@ -649,10 +649,18 @@ async def get_file_content_by_id(
                 if attachment:
                     headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded_filename}"
                 else:
+                    headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded_filename}"
                     if content_type == 'application/pdf' or filename.lower().endswith('.pdf'):
-                        headers['Content-Disposition'] = f"inline; filename*=UTF-8''{encoded_filename}"
                         content_type = 'application/pdf'
-                    elif content_type != 'text/plain':
+
+                    # Force attachment for office and text documents to ensure download
+                    if content_type in [
+                        'application/pdf',
+                        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        'text/plain',
+                        'text/markdown',
+                    ] or filename.lower().endswith(('.pdf', '.docx', '.xlsx', '.txt', '.md')):
                         headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded_filename}"
 
                 return FileResponse(file_path, headers=headers, media_type=content_type)
