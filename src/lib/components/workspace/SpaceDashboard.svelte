@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { getContext, onMount, onDestroy } from 'svelte';
 	import { fly, fade } from 'svelte/transition';
-	import { getProjectMemory, getProjectChats, wipeProjectMemory, deleteProjectMemoryById } from '$lib/apis/projects';
+	import { getProjectMemory, getProjectChats, getProjectFiles, wipeProjectMemory, deleteProjectMemoryById } from '$lib/apis/projects';
 	import { goto } from '$app/navigation';
 	import { selectedProjectId, projects, showSidebar, mobile } from '$lib/stores';
 	import { toast } from 'svelte-sonner';
+	import { WEBUI_API_BASE_URL } from '$lib/constants';
 	import ChatGraph from './ChatGraph.svelte';
 	import Sidebar from '../icons/Sidebar.svelte';
 
@@ -14,11 +15,14 @@
 
 	let memory = [];
 	let projectChats = [];
+	let projectFiles = [];
 	let loading = true;
 	let memorySearch = '';
+	let fileSearch = '';
 	
 	let memCount = 0;
 	let chatCount = 0;
+	let fileCount = 0;
 	
 	let showGraphFullscreen = false;
 	let newFactText = '';
@@ -60,16 +64,19 @@
 
 	async function loadAll() {
 		loading = true;
-		const [memRes, chatRes] = await Promise.all([
+		const [memRes, chatRes, fileRes] = await Promise.all([
 			getProjectMemory(localStorage.token, project.id).catch(() => null),
 			getProjectChats(localStorage.token, project.id).catch(() => []),
+			getProjectFiles(localStorage.token, project.id).catch(() => [])
 		]);
 		memory = Array.isArray(memRes?.memories) ? memRes.memories : Array.isArray(memRes) ? memRes : [];
 		projectChats = Array.isArray(chatRes) ? chatRes : [];
+		projectFiles = Array.isArray(fileRes) ? fileRes : [];
 		loading = false;
 		
 		memCount = memory.length;
 		chatCount = projectChats.length;
+		fileCount = projectFiles.length;
 	}
 
 	$: filteredMemory = memory.filter(m => {
@@ -169,7 +176,7 @@
 	</div>
 
 	<!-- Header -->
-	<div class="relative z-10 w-full px-8 py-5 border-b border-gray-200/50 dark:border-white/[0.04] flex items-center justify-between bg-white/40 dark:bg-black/20 backdrop-blur-3xl transition-colors">
+	<div id="tour-space-header" class="relative z-10 w-full px-8 py-5 border-b border-gray-200/50 dark:border-white/[0.04] flex items-center justify-between bg-white/40 dark:bg-black/20 backdrop-blur-3xl transition-colors">
 		<div class="flex items-center gap-4">
 			{#if $mobile && !$showSidebar}
 				<button class="text-gray-500 hover:text-gray-900 dark:text-white/60 dark:hover:text-white transition" on:click={() => showSidebar.set(!$showSidebar)}>
@@ -184,12 +191,12 @@
 			<div>
 				<h1 class="text-xl font-bold tracking-tight text-gray-900 dark:text-white/95">{project.title}</h1>
 				<div class="flex items-center gap-3 mt-0.5">
-					<span class="text-[11px] text-gray-400 dark:text-white/30 font-medium">{chatCount} чатов · {memCount} фактов · обновлено {lastActiveStr}</span>
+					<span class="text-[11px] text-gray-400 dark:text-white/30 font-medium">{chatCount} чатов · {memCount} фактов · {fileCount} файлов · обновлено {lastActiveStr}</span>
 				</div>
 			</div>
 		</div>
 
-		<button class="flex items-center gap-2 px-4 py-2 font-medium text-xs text-white bg-gray-900 hover:bg-gray-800 dark:bg-white/[0.06] dark:hover:bg-white/[0.1] dark:text-white/80 rounded-xl border border-gray-800 dark:border-white/[0.08] transition-all shadow-sm" on:click={() => showGraphFullscreen = true}>
+		<button id="tour-space-mindmap" class="flex items-center gap-2 px-4 py-2 font-medium text-xs text-white bg-gray-900 hover:bg-gray-800 dark:bg-white/[0.06] dark:hover:bg-white/[0.1] dark:text-white/80 rounded-xl border border-gray-800 dark:border-white/[0.08] transition-all shadow-sm" on:click={() => showGraphFullscreen = true}>
 			<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-3.5"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6a7.5 7.5 0 107.5 7.5h-7.5V6zM13.5 10.5H21a7.5 7.5 0 00-7.5-7.5v7.5z" /></svg>
 			Карта знаний
 		</button>
@@ -199,7 +206,7 @@
 	<div class="relative z-10 flex-1 flex min-h-0 bg-transparent">
 		
 		<!-- Left: Chat Stream (65%) -->
-		<div class="flex-1 min-w-0 px-8 py-6 overflow-y-auto scrollbar-hidden">
+		<div id="tour-space-chats" class="flex-1 min-w-0 px-8 py-6 overflow-y-auto scrollbar-hidden">
 			<div class="max-w-4xl max-w-[850px] mx-auto flex flex-col h-full">
 				<!-- Slot for the Prompt Input -->
 				<slot name="prompt"></slot>
@@ -279,20 +286,25 @@
 						<div class="p-6 rounded-3xl bg-gray-100 dark:bg-white/[0.01] border border-gray-200 dark:border-white/[0.03] shadow-md dark:shadow-2xl mb-5">
 							<svg class="size-10 text-gray-400 dark:text-white/20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m18-4l-8.5-8.5a1.5 1.5 0 0 0-2 0L3 11"/></svg>
 						</div>
-						<p class="text-gray-500 dark:text-white/50 text-base font-light">В пространстве пока пусто</p>
+						<h3 class="text-xl font-bold text-gray-900 dark:text-white/90 mb-2">Здесь появятся рабочие обсуждения</h3>
+						<p class="text-gray-500 dark:text-white/40 max-w-sm mx-auto mb-8 font-medium">Создайте первый чат, чтобы начать собирать контекст пространства.</p>
+						<button class="px-8 py-3 bg-violet-600 hover:bg-violet-700 text-white font-bold rounded-2xl shadow-lg shadow-violet-500/20 transition active:scale-95" on:click={() => {
+							const input = document.getElementById('tour-chat-input');
+							if (input) input.scrollIntoView({ behavior: 'smooth' });
+						}}>Новый чат</button>
 					</div>
 				{/if}
 			</div>
 		</div>
 
 			<!-- Right: Knowledge Base -->
-		<div class="w-[380px] shrink-0 border-l border-gray-200/60 dark:border-white/[0.04] bg-white/40 dark:bg-white/[0.01] flex flex-col h-full backdrop-blur-md">
+		<div id="tour-space-memory" class="w-[380px] shrink-0 border-l border-gray-200/60 dark:border-white/[0.04] bg-white/40 dark:bg-white/[0.01] flex flex-col h-full backdrop-blur-md">
 			<div class="px-5 py-4 border-b border-gray-200/60 dark:border-white/[0.03]">
 				<div class="flex items-center justify-between mb-3">
 					<h2 class="text-xs font-bold text-gray-900 dark:text-white/90 tracking-widest uppercase flex items-center gap-2">
 						<svg class="size-3.5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18"/></svg>
 						Память и артефакты
-						<span class="text-gray-400 dark:text-white/30 text-[10px] font-medium">· {filteredMemory.length}</span>
+						<span class="text-gray-400 dark:text-white/30 text-[10px] font-medium">· {filteredMemory.length + projectFiles.length}</span>
 					</h2>
 					<button class="text-[9px] uppercase font-bold tracking-widest text-red-500/60 hover:text-red-600 dark:text-red-500/40 dark:hover:text-red-400 px-2 py-0.5 rounded hover:bg-red-50 dark:hover:bg-red-500/5 transition" on:click={wipeMemory}>Очистить</button>
 				</div>
@@ -315,26 +327,64 @@
 						<div class="h-14 bg-gray-100 dark:bg-white/[0.02] rounded-lg animate-pulse"></div>
 						<div class="h-16 bg-gray-100 dark:bg-white/[0.02] rounded-lg animate-pulse opacity-60"></div>
 					</div>
-				{:else if filteredMemory.length > 0}
-					<div class="space-y-1.5">
-						{#each filteredMemory as fact, idx}
-							<div class="group relative flex items-start gap-2.5 px-3.5 py-3 rounded-xl border border-transparent hover:border-gray-200 dark:hover:border-white/[0.06] hover:bg-white/80 dark:hover:bg-white/[0.03] transition-all" in:fly={{ y: 3, duration: 120, delay: idx * 15 }}>
-								<div class="size-[7px] rotate-45 bg-emerald-500 dark:bg-emerald-400 shrink-0 mt-[7px] rounded-[1px] opacity-60"></div>
-								<div class="flex-1 min-w-0">
-									<p class="text-sm text-gray-900 dark:text-white/90 leading-[1.6] break-words {isStale(fact.updated_at) ? 'opacity-40' : ''}">{fact.text || fact.memory || '—'}</p>
-									<span class="text-[10px] text-gray-400 dark:text-white/25 mt-1 block">{formatDate(fact.updated_at)}{#if isStale(fact.updated_at)} · <span class="text-amber-500/60">устарело?</span>{/if}</span>
-								</div>
-								<button class="text-gray-300 dark:text-white/10 hover:text-red-500 dark:hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 p-1 rounded shrink-0 mt-0.5" on:click={() => deleteFact(fact.id)}>
-									<svg class="size-3" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-								</button>
+				{:else if filteredMemory.length > 0 || projectFiles.length > 0}
+					<div class="space-y-4">
+						{#if projectFiles.length > 0}
+							<div class="space-y-1.5 pt-1">
+								<h3 class="text-[10px] font-bold text-gray-400 dark:text-white/20 uppercase tracking-widest mb-2 px-1">Файлы и документы</h3>
+								{#each projectFiles as file}
+									<div class="group flex items-center gap-3 p-3 rounded-[14px] border border-gray-200 dark:border-white/[0.04] bg-white/40 dark:bg-[#111111]/40 hover:bg-white dark:hover:bg-[#1a1a1a] hover:border-violet-500/30 transition-all duration-300 cursor-pointer shadow-sm" on:click={() => {
+										window.open(`${WEBUI_API_BASE_URL}/files/${file.id}/content?token=${localStorage.token}&attachment=true`, '_blank');
+									}}>
+										<div class="size-9 rounded-xl bg-violet-100 dark:bg-violet-500/10 flex items-center justify-center shrink-0 text-lg shadow-inner">
+											{#if file.meta?.content_type?.startsWith('image/')}
+												🖼️
+											{:else if file.filename.endsWith('.pptx') || file.filename.endsWith('.ppt')}
+												🎞️
+											{:else if file.filename.endsWith('.pdf')}
+												📄
+											{:else}
+												📁
+											{/if}
+										</div>
+										<div class="flex-1 min-w-0">
+											<div class="text-[13px] font-semibold text-gray-900 dark:text-gray-200 truncate group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors uppercase tracking-tight">{file.filename}</div>
+											<div class="flex items-center gap-2 mt-0.5">
+												<span class="text-[10px] font-bold text-gray-400 dark:text-white/20 uppercase tracking-widest">{file.meta?.content_type?.split('/')?.[1] || 'DOC'}</span>
+												<span class="text-[10px] text-gray-300 dark:text-white/10 uppercase tracking-tighter">· {formatDate(file.created_at)}</span>
+											</div>
+										</div>
+										<div class="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg bg-gray-50 dark:bg-white/5 text-gray-400 dark:text-white/40">
+											<svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 12l4.5 4.5m0 0l4.5-4.5M12 3v13.5" /></svg>
+										</div>
+									</div>
+								{/each}
 							</div>
-						{/each}
+						{/if}
+
+						{#if memory.length > 0}
+							<div class="space-y-1.5">
+								<h3 class="text-[10px] font-bold text-gray-400 dark:text-white/20 uppercase tracking-widest mb-2 px-1">База знаний</h3>
+								{#each filteredMemory as fact, idx}
+									<div class="group relative flex items-start gap-2.5 px-3.5 py-3 rounded-xl border border-transparent hover:border-gray-200 dark:hover:border-white/[0.06] hover:bg-white/80 dark:hover:bg-white/[0.03] transition-all" in:fly={{ y: 3, duration: 120, delay: idx * 15 }}>
+										<div class="size-[7px] rotate-45 bg-emerald-500 dark:bg-emerald-400 shrink-0 mt-[7px] rounded-[1px] opacity-60"></div>
+										<div class="flex-1 min-w-0">
+											<p class="text-sm text-gray-900 dark:text-white/90 leading-[1.6] break-words {isStale(fact.updated_at) ? 'opacity-40' : ''}">{fact.text || fact.memory || '—'}</p>
+											<span class="text-[10px] text-gray-400 dark:text-white/25 mt-1 block">{formatDate(fact.updated_at)}{#if isStale(fact.updated_at)} · <span class="text-amber-500/60">устарело?</span>{/if}</span>
+										</div>
+										<button class="text-gray-300 dark:text-white/10 hover:text-red-500 dark:hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 p-1 rounded shrink-0 mt-0.5" on:click|stopPropagation={() => deleteFact(fact.id)}>
+											<svg class="size-3" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+										</button>
+									</div>
+								{/each}
+							</div>
+						{/if}
 					</div>
 				{:else}
-					<div class="flex flex-col items-center justify-center h-full opacity-50">
+					<div class="flex flex-col items-center justify-center h-full opacity-50 px-6 text-center">
 						<svg class="size-8 text-gray-300 dark:text-white/10 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18"/></svg>
-						<p class="text-xs text-gray-400 dark:text-white/30 font-medium">Пустая база знаний</p>
-						<p class="text-[10px] text-gray-300 dark:text-white/15 mt-1">Факты появятся автоматически из чатов</p>
+						<p class="text-xs text-gray-400 dark:text-white/30 font-bold uppercase tracking-wider">AI пока ничего не запомнил</p>
+						<p class="text-[10px] text-gray-300 dark:text-white/15 mt-2 leading-relaxed">Добавьте первый факт вручную или начните чат — важные знания будут появляться здесь автоматически.</p>
 					</div>
 				{/if}
 			</div>

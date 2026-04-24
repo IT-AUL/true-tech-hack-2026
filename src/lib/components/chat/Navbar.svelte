@@ -111,8 +111,9 @@
 
 		<!-- Left: Breadcrumbs / Routing -->
 		<div class="flex-1 flex items-center min-w-0 pr-4 max-w-[40%]">
-			{#if $mobile && !$showSidebar}
+			{#if !$showSidebar}
 				<button
+					id="tour-sidebar-toggle"
 					class="flex items-center justify-center size-8 mr-2 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800/60 transition shrink-0"
 					on:click={() => showSidebar.set(!$showSidebar)}
 				>

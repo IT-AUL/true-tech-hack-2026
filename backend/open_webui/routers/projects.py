@@ -21,6 +21,9 @@ Chats
   GET    /projects/{id}/chats           – List chats in the project
   POST   /projects/{id}/chats/{chat_id} – Assign an existing chat to the project
   DELETE /projects/{id}/chats/{chat_id} – Remove chat from project
+
+Files
+  GET    /projects/{id}/files           – List all files associated with chats in the project
 """
 
 import logging
@@ -34,6 +37,7 @@ from open_webui.memory.mem0_manager import (
     get_all_project_memories,
 )
 from open_webui.models.chats import Chat, ChatTitleIdResponse
+from open_webui.models.files import Files, FileModelResponse
 from open_webui.models.projects import ProjectForm, ProjectModel, Projects, ProjectUpdateForm
 from open_webui.utils.auth import get_verified_user
 from sqlalchemy.orm import Session
@@ -226,3 +230,54 @@ async def remove_chat_from_project(
     chat.project_id = None
     db.commit()
     return True
+
+
+# ---------------------------------------------------------------------------
+# File endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get('/{project_id}/files', response_model=list[FileModelResponse])
+async def list_project_files(
+    project_id: str,
+    user=Depends(get_verified_user),
+    db: Session = Depends(get_session),
+):
+    """Return all files associated with chats in the project."""
+    _require_project_access(project_id, user, db)
+
+    # Retrieve all files associated with chats belonging to this project
+    chats = db.query(Chat).filter_by(project_id=project_id, user_id=user.id).all()
+
+    file_ids = set()
+    for chat in chats:
+        chat_data = chat.chat or {}
+
+        # Check top-level files if they exist
+        files_toplevel = chat_data.get('files', [])
+        for f in files_toplevel:
+            if isinstance(f, dict) and 'id' in f:
+                file_ids.add(f['id'])
+            elif isinstance(f, str):
+                file_ids.add(f)
+
+        # Check files inside messages
+        history = chat_data.get('history', {})
+        messages = history.get('messages', {})
+        for msg_id, msg in messages.items():
+            if isinstance(msg, dict):
+                msg_files = msg.get('files', [])
+                for f in msg_files:
+                    if isinstance(f, dict) and 'id' in f:
+                        file_ids.add(f['id'])
+                    elif isinstance(f, str):
+                        file_ids.add(f)
+
+                # Also check inline embedded files in the message or models.
+                # If there are any other file references, they might be in msg structure.
+
+    if not file_ids:
+        return []
+
+    project_files = Files.get_files_by_ids(list(file_ids), db=db)
+    return project_files

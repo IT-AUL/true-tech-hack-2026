@@ -460,7 +460,15 @@
 			}
 		});
 
-		showSidebar.set(!$mobile ? localStorage.sidebar === 'true' : false);
+		const shouldShow = !$mobile ? localStorage.sidebar === 'true' : false;
+		if (!$mobile && window.location.pathname === '/' && !$selectedProjectId) {
+			showSidebar.set(false);
+		} else {
+			showSidebar.set(shouldShow);
+		}
+
+		// Always initialize projects/spaces since they are visible in SpacesColumn
+		initProjects();
 
 		const unsubscribers = [
 			mobile.subscribe((value) => {
@@ -741,17 +749,17 @@
 		data-state={$showSidebar}
 	>
 		<div
-			class="my-auto flex flex-row h-screen max-h-[100dvh] {$selectedProjectId ? 'w-[72px]' : 'w-[var(--sidebar-width)]'} z-50 {$showSidebar
+			class="my-auto flex flex-row h-screen max-h-[100dvh] w-[var(--sidebar-width)] z-50 {$showSidebar
 				? ''
 				: 'invisible'}"
 		>
 			<SpacesColumn />
-			{#if !$selectedProjectId}
 			<div class="flex flex-col flex-1 min-w-0 overflow-x-hidden scrollbar-hidden bg-gray-50/50 dark:bg-gray-950/50">
 				<div class="sidebar px-3 pt-3 pb-2 flex justify-between items-center sticky top-0 z-10">
 					<!-- Sidebar Toggle Button (moved to top left since logo is gone) -->
 					<Tooltip content={$showSidebar ? $i18n.t('Close Sidebar') : $i18n.t('Open Sidebar')} placement="bottom">
 						<button
+							id="tour-sidebar-toggle-close"
 							class="flex rounded-xl size-9 justify-center items-center bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition {isWindows ? 'cursor-pointer' : 'cursor-[w-resize]'}"
 							on:click={() => { showSidebar.set(!$showSidebar); }}
 							aria-label={$showSidebar ? $i18n.t('Close Sidebar') : $i18n.t('Open Sidebar')}
@@ -764,6 +772,10 @@
 						class="{scrollTop > 0 ? 'visible' : 'invisible'} sidebar-bg-gradient-to-b bg-linear-to-b from-gray-50 dark:from-gray-950 to-transparent from-50% pointer-events-none absolute inset-0 -z-10 -mb-6"
 					></div>
 				</div>
+
+				{#if !$selectedProjectId}
+					<div></div>
+				{/if}
 
 				<div
 					class="relative flex flex-col flex-1 overflow-y-auto scrollbar-hidden pt-1 pb-3"
@@ -1042,7 +1054,6 @@
 					</div>
 				</div>
 			</div>
-			{/if}
 		</div>
 	</div>
 

@@ -1126,7 +1126,7 @@
 />
 
 {#if loaded}
-	<div class="w-full font-primary">
+	<div id="tour-chat-input" class="w-full font-primary">
 		<div class=" mx-auto inset-x-0 bg-transparent flex justify-center">
 			<div
 				class="flex flex-col px-3 {($settings?.widescreenMode ?? null)
@@ -1616,38 +1616,35 @@
 							/>
 
 							<div class="flex justify-between mt-0.5 mb-2 mx-0.5 max-w-full" dir="ltr">
-								<div class="ml-0.5 self-end flex items-center flex-1 max-w-[80%] gap-0.5">
-									<!-- Model selector pill -->
-									<div class="shrink-0">
-										<ModelSelector bind:selectedModels showSetDefault={!$chatId} />
-									</div>
+								<div class="ml-0.5 self-end flex items-center gap-0.5">
+									<ModelSelector bind:selectedModels showSetDefault={!$chatId} />
 
 									<div class="flex self-center w-[1px] h-4 mx-0.5 bg-gray-200/50 dark:bg-gray-800/50"></div>
 
 									<!-- Attach button -->
-									<InputMenu
-										bind:files
-										selectedModels={atSelectedModel ? [atSelectedModel.id] : selectedModels}
-										{fileUploadCapableModels}
-										{screenCaptureHandler}
-										{inputFilesHandler}
-										uploadFilesHandler={() => {
-											filesInputElement.click();
-										}}
-										uploadGoogleDriveHandler={async () => {
-											try {
-												const fileData = await createPicker();
-												if (fileData) {
-													const file = new File([fileData.blob], fileData.name, {
-														type: fileData.blob.type
-													});
-													await uploadFileHandler(file);
-												} else {
-													console.log('No file was selected from Google Drive');
-												}
-											} catch (error) {
-												console.error('Google Drive Error:', error);
-												toast.error(
+										<InputMenu
+											bind:files
+											selectedModels={atSelectedModel ? [atSelectedModel.id] : selectedModels}
+											{fileUploadCapableModels}
+											{screenCaptureHandler}
+											{inputFilesHandler}
+											uploadFilesHandler={() => {
+												filesInputElement.click();
+											}}
+											uploadGoogleDriveHandler={async () => {
+												try {
+													const fileData = await createPicker();
+													if (fileData) {
+														const file = new File([fileData.blob], fileData.name, {
+															type: fileData.blob.type
+														});
+														await uploadFileHandler(file);
+													} else {
+														// No file was selected from Google Drive
+													}
+												} catch (error) {
+													console.error('Google Drive Error:', error);
+													toast.error(
 													$i18n.t('Error accessing Google Drive: {{error}}', {
 														error: error.message
 													})
@@ -1678,7 +1675,7 @@
 										}}
 									>
 										<div
-											id="input-menu-button"
+											id="tour-input-menu"
 											class="bg-transparent hover:bg-gray-100 text-gray-500 dark:text-gray-400 dark:hover:bg-gray-800 rounded-lg size-7 flex justify-center items-center transition"
 										>
 											<PlusAlt className="size-4.5" />
@@ -1954,7 +1951,7 @@
 												<!-- {$i18n.t('Record voice')} -->
 												<Tooltip content={$i18n.t('Dictate')}>
 													<button
-														id="voice-input-button"
+														id="tour-voice-control"
 														class="group flex items-center justify-center size-8 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-white/10 dark:hover:text-white transition-all duration-300 hover:shadow-sm active:scale-95"
 														type="button"
 														on:click={async () => {
@@ -2006,6 +2003,7 @@
 												<!-- {$i18n.t('Call')} -->
 												<Tooltip content={$i18n.t('Voice mode')}>
 													<button
+														id="tour-voice-mode"
 														class="group flex items-center justify-center size-8 rounded-full bg-gray-100/50 hover:bg-gray-200 text-gray-700 dark:bg-white/5 dark:hover:bg-white/10 dark:text-white/80 transition-all duration-300 hover:shadow-sm active:scale-95"
 														type="button"
 														on:click={async () => {
@@ -2072,6 +2070,7 @@
 														: $i18n.t('Send message')}
 												>
 												<button
+													id="tour-send-button"
 													class="group flex items-center justify-center size-8 rounded-full transition-all duration-300 active:scale-95 {uploadPending ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 shadow-sm' : (prompt === '' && files.length === 0) ? 'text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-white/5 cursor-not-allowed' : 'bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow opacity-90 hover:opacity-100 shadow-violet-500/25 hover:shadow-md hover:brightness-110'}"
 													type="submit"
 													disabled={(prompt === '' && files.length === 0) || uploadPending}

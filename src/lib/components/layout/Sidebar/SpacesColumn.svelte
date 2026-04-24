@@ -17,18 +17,16 @@
 	import { getSpaceEmoji } from '$lib/utils';
 </script>
 
-<div class="w-[68px] h-full flex flex-col items-center py-2.5 bg-white/50 dark:bg-gray-950/50 backdrop-blur-sm border-r border-gray-200/40 dark:border-gray-800/40 shrink-0 z-50">
+<div id="tour-spaces-column" class="w-[68px] h-full flex flex-col items-center py-2.5 bg-white/50 dark:bg-gray-950/50 backdrop-blur-sm border-r border-gray-200/40 dark:border-gray-800/40 shrink-0 z-50">
 
-	<!-- Logo / Home -->
 	<button
 		class="size-10 rounded-[13px] flex items-center justify-center shrink-0 transition-all duration-200
-			{!$selectedProjectId ? 'bg-gray-900 dark:bg-white shadow-md' : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'}"
+			{!$selectedProjectId ? 'bg-white dark:bg-white/10 shadow-sm ring-1 ring-gray-900/5 dark:ring-white/10' : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'}"
 		on:click={() => { selectedProjectId.set(null); goto('/'); }}
 	>
 		<img
-			src="{WEBUI_BASE_URL}/static/vibehub_logo_short.svg"
-			class="size-5"
-			style="filter: {$selectedProjectId ? 'brightness(0)' : 'none'};"
+			src="/vibehub_logo_short.svg"
+			class="size-6 mx-auto opacity-90 hover:opacity-100 transition-opacity invert dark:invert-0"
 			alt="VibeHub"
 		/>
 	</button>
@@ -67,6 +65,7 @@
 		<!-- Add Space -->
 		<Tooltip content="Новое пространство" placement="right">
 			<button
+				id="tour-add-space"
 				class="size-10 rounded-[13px] flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 bg-transparent hover:bg-gray-100 dark:hover:bg-gray-800/60 border border-dashed border-gray-300/60 dark:border-gray-700/60 transition-all"
 				on:click={() => { goto('/workspace/onboarding'); }}
 			>
@@ -107,23 +106,6 @@
 		</div>
 	{/if}
 
-	<!-- Sidebar toggle (only when no space selected) -->
-	{#if !$selectedProjectId}
-		<div class="my-1">
-			<button
-				class="size-8 rounded-lg flex items-center justify-center text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400 transition"
-				on:click={() => showSidebar.set(!$showSidebar)}
-			>
-				<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-3.5">
-					{#if $showSidebar}
-						<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-					{:else}
-						<path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-					{/if}
-				</svg>
-			</button>
-		</div>
-	{/if}
 
 	<!-- User -->
 	<div class="mt-auto pb-0.5">

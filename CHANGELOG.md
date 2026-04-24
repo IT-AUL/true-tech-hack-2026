@@ -12,6 +12,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.8.12-gpthub.31] - 2026-04-24
+
+### Added
+
+- **Token-Based File Auth**: Добавлена поддержка аутентификации через query-параметр `?token=` в `get_current_user`. Это необходимо для открытия файлов в новой вкладке (`window.open`) — браузер не позволяет передавать заголовок `Authorization` при таком переходе.
+- **Product Tour**: Добавлен каталог `src/lib/components/product-tour/` — компоненты онбординга для нового пользователя.
+
+### Changed
+
+- **FileItem Downloads**: Клик по прикреплённому файлу в чате теперь открывает документ по прямому URL бэкенда с токеном аутентификации в query-параметре вместо относительного пути фронтенда, что устраняло 404 при переходе.
+- **SpaceDashboard File Downloads**: Ссылки на файлы в разделе «Файлы и документы» пространства переведены на `WEBUI_API_BASE_URL` с инжекцией токена, что исправляет открытие на хардкоженном порту 8080.
+
+### Fixed
+
+- **Project Files Endpoint** (`/projects/{id}/files`): Исправлена логика получения файлов пространства. Файлы теперь извлекаются напрямую из JSON истории чатов (`chat['history']['messages'][*]['files']`), а не из таблицы `ChatFile`, которая в текущей архитектуре не заполняется — это устранило пустой список документов в дашборде.
+- **Sidebar Logo**: Исправлен путь к логотипу VibeHub в `SpacesColumn.svelte` — `/static/vibehub_logo_short.svg` → `/vibehub_logo_short.svg` (SvelteKit раздаёт `static/` напрямую из корня).
+
 ## [0.8.12-gpthub.30] - 2026-04-23
 
 ### Added

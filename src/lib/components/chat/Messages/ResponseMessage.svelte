@@ -818,19 +818,22 @@
 							{#if message.content === '' && !message.done && !message.error}
 								{#if message.autoRoutePending && message.model === 'auto' && !hasVisibleStatus}
 									<div
-										class="my-2 max-w-2xl w-fit rounded-[14px] border border-gray-200/50 dark:border-white/[0.04] bg-white/50 dark:bg-[#141414] px-4 py-2.5 flex items-center gap-3 shadow-sm"
+										class="my-2.5 w-fit rounded-2xl border border-gray-100 dark:border-white/[0.03] bg-white/30 dark:bg-[#181818]/60 backdrop-blur-md px-3.5 py-2.5 flex items-center gap-3 shadow-sm"
 										aria-busy="true"
 									>
 										<div class="flex items-center gap-1">
-											<div class="size-1.5 rounded-full bg-violet-500/80 dark:bg-violet-400/90 animate-bounce" style="animation-duration: 1s;"></div>
-											<div class="size-1.5 rounded-full bg-sky-500/80 dark:bg-sky-400/90 animate-bounce" style="animation-delay: 0.15s; animation-duration: 1s;"></div>
-											<div class="size-1.5 rounded-full bg-cyan-500/80 dark:bg-cyan-400/90 animate-bounce" style="animation-delay: 0.3s; animation-duration: 1s;"></div>
+											<div class="size-1.5 rounded-full bg-gray-400 dark:bg-gray-500 animate-[bounce_1.5s_infinite]"></div>
+											<div class="size-1.5 rounded-full bg-gray-400 dark:bg-gray-500 animate-[bounce_1.5s_infinite_0.2s]"></div>
+											<div class="size-1.5 rounded-full bg-gray-400 dark:bg-gray-500 animate-[bounce_1.5s_infinite_0.4s]"></div>
 										</div>
-										<span
-											class="text-[13px] text-gray-600 dark:text-gray-300 font-medium tracking-wide"
-										>
-											{$i18n.t('Choosing a route...')}
-										</span>
+										<div class="flex items-center gap-2">
+											<span class="text-[12px] text-gray-700 dark:text-gray-300 font-medium">
+												{$i18n.t('Smart Routing')}
+											</span>
+											<span class="text-[11px] text-gray-400 dark:text-gray-500">
+												{$i18n.t('Selecting best model...')}
+											</span>
+										</div>
 									</div>
 								{:else if (message?.statusHistory ?? []).some((s) => s?.routing?.category === 'image_gen')}
 									{#if !(message?.files ?? []).some((f) => f?.type === 'image')}

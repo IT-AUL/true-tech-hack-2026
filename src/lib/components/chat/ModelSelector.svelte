@@ -36,7 +36,7 @@
 	}
 </script>
 
-<div class="flex items-center gap-1">
+<div id="tour-model-selector" class="flex items-center gap-1">
 	{#each selectedModels as selectedModel, selectedModelIdx}
 		<div class="flex items-center gap-1 shrink-0">
 			<Selector
